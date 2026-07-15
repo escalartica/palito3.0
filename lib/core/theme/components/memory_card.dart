@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/memory_model.dart';
 import '../../../features/home/memory_detail_page.dart';
- // Asegúrate de que esta ruta sea correcta
+// Asegúrate de que esta ruta sea correcta según donde guardaste tu nuevo widget
+
+import '../../../features/memory_form/widgets/smart_image.dart';
 
 // 1. Variante Compacta (Para listas)
 class MemoryCardCompact extends StatelessWidget {
@@ -10,6 +12,9 @@ class MemoryCardCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tomamos la primera imagen si existe
+    final firstImageUrl = memory.imageUrls.isNotEmpty ? memory.imageUrls.first : null;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       decoration: BoxDecoration(
@@ -17,7 +22,7 @@ class MemoryCardCompact extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )
@@ -40,8 +45,12 @@ class MemoryCardCompact extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: memory.imageUrl != null && memory.imageUrl!.isNotEmpty
-                          ? Image.network(memory.imageUrl!, width: 56, height: 56, fit: BoxFit.cover)
+                      child: firstImageUrl != null
+                          ? SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover),
+                            )
                           : Container(width: 56, height: 56, color: Colors.grey.shade200),
                     ),
                     if (memory.isRecent)
@@ -49,7 +58,11 @@ class MemoryCardCompact extends StatelessWidget {
                         right: 0, top: 0,
                         child: Container(
                           width: 12, height: 12,
-                          decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent, 
+                            shape: BoxShape.circle, 
+                            border: Border.all(color: Colors.white, width: 2)
+                          ),
                         ),
                       ),
                   ],
@@ -78,6 +91,8 @@ class MemoryCardLarge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final firstImageUrl = (memory != null && memory!.imageUrls.isNotEmpty) ? memory!.imageUrls.first : null;
+
     return Container(
       width: 280,
       margin: const EdgeInsets.only(left: 24),
@@ -86,7 +101,7 @@ class MemoryCardLarge extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 15,
             offset: const Offset(0, 5),
           )
@@ -101,10 +116,10 @@ class MemoryCardLarge extends StatelessWidget {
             context,
             MaterialPageRoute(builder: (context) => MemoryDetailPage(memory: memory!)),
           ),
-          child: memory != null && memory!.imageUrl != null
+          child: firstImageUrl != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: Image.network(memory!.imageUrl!, fit: BoxFit.cover),
+                  child: SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover),
                 )
               : Center(child: Text(memory?.title ?? "Recuerdo destacado")),
         ),

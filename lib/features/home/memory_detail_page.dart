@@ -5,6 +5,8 @@ import '../../../core/theme/tokens/app_spacing.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/providers/memory_provider.dart';
 import 'memory_form_page.dart';
+// Importa tu widget inteligente
+import '../memory_form/widgets/smart_image.dart'; 
 
 class MemoryDetailPage extends ConsumerWidget {
   final MemoryModel memory;
@@ -18,6 +20,9 @@ class MemoryDetailPage extends ConsumerWidget {
       (m) => m.id == memory.id,
       orElse: () => memory,
     );
+
+    final firstImageUrl = currentMemory.imageUrls.isNotEmpty ? currentMemory.imageUrls.first : null;
+    final description = currentMemory.specificFields['description'] ?? 'Sin descripción';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -41,8 +46,8 @@ class MemoryDetailPage extends ConsumerWidget {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: currentMemory.imageUrl != null && currentMemory.imageUrl!.isNotEmpty
-                  ? Image.network(currentMemory.imageUrl!, fit: BoxFit.cover)
+              background: firstImageUrl != null
+                  ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover) // CORREGIDO
                   : Container(color: Colors.grey.shade200),
             ),
           ),
@@ -61,7 +66,7 @@ class MemoryDetailPage extends ConsumerWidget {
                   const SizedBox(height: 24),
                   Text("Tu opinión", style: AppTypography.titleMedium),
                   const SizedBox(height: 8),
-                  Text(currentMemory.description, style: AppTypography.bodyLarge),
+                  Text(description, style: AppTypography.bodyLarge),
                 ],
               ),
             ),

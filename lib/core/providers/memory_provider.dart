@@ -5,24 +5,10 @@ import '../models/memory_model.dart';
 class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   MemoryNotifier() : super(mockMemories); 
 
-  // Método para añadir un recuerdo
-  void addMemory({
-    required String title, 
-    required String description, 
-    required String restaurantName, 
-    String? imageUrl,
-    String category = "General",
-  }) {
-    final newMemory = MemoryModel(
-      id: DateTime.now().toString(),
-      title: title,
-      description: description,
-      restaurantName: restaurantName,
-      imageUrl: imageUrl,
-      date: DateTime.now(),
-      category: category,
-    );
-    
+  // Método para añadir un recuerdo recibiendo el modelo completo
+  // Este método recibe el MemoryModel que contiene los campos comunes
+  // y el mapa 'specificFields' con los datos dinámicos (croquetas, tortilla, etc.)
+  void addMemory(MemoryModel newMemory) {
     state = [...state, newMemory];
   }
 
@@ -31,24 +17,10 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
     state = state.where((memory) => memory.id != id).toList();
   }
 
-  // Método para actualizar un recuerdo existente
-  void updateMemory({
-    required String id,
-    required String title,
-    required String description,
-    required String restaurantName,
-    String? imageUrl,
-    required String category,
-  }) {
-    state = state.map((m) => m.id == id ? MemoryModel(
-      id: id,
-      title: title,
-      description: description,
-      restaurantName: restaurantName,
-      imageUrl: imageUrl,
-      date: m.date, // Preservamos la fecha de creación original
-      category: category,
-    ) : m).toList();
+  // Método para actualizar un recuerdo existente recibiendo el modelo completo
+  // El modelo actualizado incluye el mapa 'specificFields' modificado
+  void updateMemory(MemoryModel updatedMemory) {
+    state = state.map((m) => m.id == updatedMemory.id ? updatedMemory : m).toList();
   }
 }
 

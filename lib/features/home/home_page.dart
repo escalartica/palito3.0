@@ -6,6 +6,7 @@ import '../../../core/theme/components/home_widgets.dart';
 import '../../../core/theme/components/memory_card.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/dock_provider.dart';
+import '../home/memory_form_page.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -24,6 +25,28 @@ class HomePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
+      // MEJORA DE NAVEGACIÓN INTELIGENTE
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF2C3E50),
+        onPressed: () {
+          // Buscamos si la categoría actualmente seleccionada en el filtro existe en nuestra lista gastronómica
+          Category? activeCategory;
+          if (selectedCategory != "Todos") {
+            activeCategory = gastronomicCategories.firstWhere(
+              (cat) => cat.name == selectedCategory,
+              orElse: () => gastronomicCategories.first,
+            );
+          }
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MemoryFormPage(initialCategory: activeCategory),
+            ),
+          );
+        },
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
       body: NotificationListener<UserScrollNotification>(
         onNotification: (notification) {
           if (notification.direction == ScrollDirection.reverse) {
@@ -71,7 +94,6 @@ class HomePage extends ConsumerWidget {
             ...filteredMemories.map((memory) => Dismissible(
               key: Key(memory.id),
               direction: DismissDirection.endToStart,
-              // Añadimos confirmación visual antes de borrar
               confirmDismiss: (direction) async {
                 return await showDialog(
                   context: context,
@@ -93,7 +115,7 @@ class HomePage extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 20),
                 margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.9),
+                  color: Colors.redAccent.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),

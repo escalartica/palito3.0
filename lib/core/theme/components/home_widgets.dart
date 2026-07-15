@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/memory_model.dart'; // Asegúrate de ajustar la ruta si es necesario
+import '../../models/memory_model.dart'; 
 
 class HomeHero extends StatelessWidget {
   final MemoryModel? memory;
@@ -8,8 +8,11 @@ class HomeHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Definimos los valores por defecto si no hay memoria
-    final imageUrl = memory?.imageUrl ?? 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=800';
+    // Obtenemos la primera imagen si existe, o usamos la predeterminada
+    final imageUrl = (memory != null && memory!.imageUrls.isNotEmpty) 
+        ? memory!.imageUrls.first 
+        : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=800';
+        
     final title = memory?.title ?? "Tu mejor experiencia gastronómica";
 
     return Container(
@@ -24,7 +27,7 @@ class HomeHero extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(32),
           gradient: LinearGradient(
-            colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
+            colors: [Colors.black.withOpacity(0.6), Colors.transparent],
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
           ),

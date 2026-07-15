@@ -1,24 +1,33 @@
 class MemoryModel {
   final String id;
+  // Campos comunes obligatorios
   final String title;
-  final String description;
   final String restaurantName;
-  final String? imageUrl;
+  final String location; // Puede ser coordenada GPS o dirección manual
+  final bool wouldReturn; // ¿Volverías?
+  final double rating; // Puntuación 0.0 a 10.0
+  final List<String> imageUrls; // Soporte para múltiples fotos
+  final String? videoUrl; // Campo añadido para el video corto de cata
   final DateTime date;
   final String category;
+  
+  // Campo para campos dinámicos específicos de cada categoría
+  final Map<String, dynamic> specificFields;
 
   MemoryModel({
     required this.id,
     required this.title,
-    required this.description,
     required this.restaurantName,
-    this.imageUrl,
+    required this.location,
+    required this.wouldReturn,
+    required this.rating,
+    required this.imageUrls,
+    this.videoUrl,
     required this.date,
     this.category = "General",
+    this.specificFields = const {},
   });
 
-  /// Determina si el recuerdo fue creado en los últimos 5 minutos.
-  /// Esto nos sirve para el efecto de "Diario Vivo".
   bool get isRecent {
     final difference = DateTime.now().difference(date);
     return difference.inMinutes < 5;
@@ -28,32 +37,43 @@ class MemoryModel {
     return {
       'id': id,
       'title': title,
-      'description': description,
       'restaurantName': restaurantName,
-      'imageUrl': imageUrl,
+      'location': location,
+      'wouldReturn': wouldReturn,
+      'rating': rating,
+      'imageUrls': imageUrls,
+      'videoUrl': videoUrl,
       'date': date.toIso8601String(),
       'category': category,
+      'specificFields': specificFields,
     };
   }
 
-  // Corregido: añadido restaurantName aquí también
   MemoryModel copyWith({
     String? id,
     String? title,
-    String? description,
     String? restaurantName,
-    String? imageUrl,
+    String? location,
+    bool? wouldReturn,
+    double? rating,
+    List<String>? imageUrls,
+    String? videoUrl,
     DateTime? date,
     String? category,
+    Map<String, dynamic>? specificFields,
   }) {
     return MemoryModel(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description ?? this.description,
       restaurantName: restaurantName ?? this.restaurantName,
-      imageUrl: imageUrl ?? this.imageUrl,
+      location: location ?? this.location,
+      wouldReturn: wouldReturn ?? this.wouldReturn,
+      rating: rating ?? this.rating,
+      imageUrls: imageUrls ?? this.imageUrls,
+      videoUrl: videoUrl ?? this.videoUrl,
       date: date ?? this.date,
       category: category ?? this.category,
+      specificFields: specificFields ?? this.specificFields,
     );
   }
 }
