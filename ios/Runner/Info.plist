@@ -74,5 +74,11 @@
     <string>Necesitamos acceso al micrófono para grabar videos de tus platos favoritos.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Necesitamos acceso a la galería para que puedas seleccionar fotos de tus platos.</string>
+    
+    <!-- Permisos de Ubicación añadidos -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
 </dict>
 </plist>

@@ -1,16 +1,36 @@
+class LocationData {
+  final String address;
+  final double? lat;
+  final double? lng;
+
+  LocationData({required this.address, this.lat, this.lng});
+
+  Map<String, dynamic> toMap() => {
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+      };
+
+  factory LocationData.fromMap(Map<String, dynamic> map) => LocationData(
+        address: map['address'] ?? '',
+        lat: map['lat'] as double?,
+        lng: map['lng'] as double?,
+      );
+}
+
 class MemoryModel {
   final String id;
   // Campos comunes obligatorios
   final String title;
   final String restaurantName;
-  final String location; // Puede ser coordenada GPS o dirección manual
+  final LocationData location; // Ahora es un objeto que contiene dirección y coordenadas
   final bool wouldReturn; // ¿Volverías?
   final double rating; // Puntuación 0.0 a 10.0
   final List<String> imageUrls; // Soporte para múltiples fotos
   final String? videoUrl; // Campo añadido para el video corto de cata
   final DateTime date;
   final String category;
-  
+
   // Campo para campos dinámicos específicos de cada categoría
   final Map<String, dynamic> specificFields;
 
@@ -38,7 +58,7 @@ class MemoryModel {
       'id': id,
       'title': title,
       'restaurantName': restaurantName,
-      'location': location,
+      'location': location.toMap(), // Guardamos como un mapa
       'wouldReturn': wouldReturn,
       'rating': rating,
       'imageUrls': imageUrls,
@@ -53,7 +73,7 @@ class MemoryModel {
     String? id,
     String? title,
     String? restaurantName,
-    String? location,
+    LocationData? location,
     bool? wouldReturn,
     double? rating,
     List<String>? imageUrls,

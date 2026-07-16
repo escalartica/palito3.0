@@ -5,7 +5,7 @@ final List<MemoryModel> mockMemories = [
     id: '1',
     title: 'Sushi en Tokio',
     restaurantName: 'Sushi Dai',
-    location: 'Tokio, Japón',
+    location: LocationData(address: 'Tokio, Japón'), // Envuelto en LocationData
     wouldReturn: true,
     rating: 10.0,
     imageUrls: [],
@@ -17,7 +17,7 @@ final List<MemoryModel> mockMemories = [
     id: '2',
     title: 'Pizza en Nápoles',
     restaurantName: 'L\'Antica Pizzeria da Michele',
-    location: 'Nápoles, Italia',
+    location: LocationData(address: 'Nápoles, Italia'), // Envuelto en LocationData
     wouldReturn: true,
     rating: 9.5,
     imageUrls: [],

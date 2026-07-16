@@ -24,7 +24,7 @@ class CategoryFormFactory {
   static Widget _buildSelector(Map<String, dynamic> data, Function(String, dynamic) onUpdate, String key, String label, List<String> options) {
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(labelText: label),
-      value: data[key],
+      initialValue: data[key],
       items: options.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
       onChanged: (v) => onUpdate(key, v),
     );
