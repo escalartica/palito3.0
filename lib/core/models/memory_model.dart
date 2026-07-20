@@ -20,18 +20,15 @@ class LocationData {
 
 class MemoryModel {
   final String id;
-  // Campos comunes obligatorios
   final String title;
   final String restaurantName;
-  final LocationData location; // Ahora es un objeto que contiene dirección y coordenadas
-  final bool wouldReturn; // ¿Volverías?
-  final double rating; // Puntuación 0.0 a 10.0
-  final List<String> imageUrls; // Soporte para múltiples fotos
-  final String? videoUrl; // Campo añadido para el video corto de cata
+  final LocationData location;
+  final bool wouldReturn;
+  final double rating;
+  final List<String> imageUrls;
+  final String? videoUrl;
   final DateTime date;
   final String category;
-
-  // Campo para campos dinámicos específicos de cada categoría
   final Map<String, dynamic> specificFields;
 
   MemoryModel({
@@ -48,9 +45,34 @@ class MemoryModel {
     this.specificFields = const {},
   });
 
+  // Getter de conveniencia para obtener la ubicación limpia
+  String get displayAddress {
+    if (location.address.toLowerCase() == restaurantName.toLowerCase()) {
+      return "Ubicación no especificada";
+    }
+    return location.address;
+  }
+
   bool get isRecent {
     final difference = DateTime.now().difference(date);
     return difference.inMinutes < 5;
+  }
+
+  // Fábrica para reconstruir el objeto desde un Map (datos guardados)
+  factory MemoryModel.fromMap(Map<String, dynamic> map) {
+    return MemoryModel(
+      id: map['id'] as String,
+      title: map['title'] as String,
+      restaurantName: map['restaurantName'] as String,
+      location: LocationData.fromMap(map['location'] as Map<String, dynamic>),
+      wouldReturn: map['wouldReturn'] as bool,
+      rating: (map['rating'] as num).toDouble(),
+      imageUrls: List<String>.from(map['imageUrls'] ?? []),
+      videoUrl: map['videoUrl'] as String?,
+      date: DateTime.parse(map['date'] as String),
+      category: map['category'] as String,
+      specificFields: Map<String, dynamic>.from(map['specificFields'] ?? {}),
+    );
   }
 
   Map<String, dynamic> toJson() {
@@ -58,7 +80,7 @@ class MemoryModel {
       'id': id,
       'title': title,
       'restaurantName': restaurantName,
-      'location': location.toMap(), // Guardamos como un mapa
+      'location': location.toMap(),
       'wouldReturn': wouldReturn,
       'rating': rating,
       'imageUrls': imageUrls,

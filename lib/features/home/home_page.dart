@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/data/categories.dart'; 
 import '../../../core/theme/components/home_widgets.dart';
 import '../../../core/theme/components/memory_card.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/dock_provider.dart';
-import '../home/memory_form_page.dart';
+
+// Paleta de colores
+const Color palitoYellow = Color(0xFFFFD400); 
+const Color palitoPink = Color(0xFFE91E63);   
+const Color palitoDark = Color(0xFF1A1A1A);   
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -16,118 +21,106 @@ class HomePage extends ConsumerWidget {
     final memories = ref.watch(memoryProvider);
     final selectedCategory = ref.watch(selectedCategoryProvider);
     
-    // Filtramos la lista según la categoría seleccionada
     final filteredMemories = selectedCategory == "Todos"
         ? memories
         : memories.where((m) => m.category == selectedCategory).toList();
 
-    final featuredMemories = memories.take(3).toList();
-
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      // MEJORA DE NAVEGACIÓN INTELIGENTE
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF2C3E50),
-        onPressed: () {
-          // Buscamos si la categoría actualmente seleccionada en el filtro existe en nuestra lista gastronómica
-          Category? activeCategory;
-          if (selectedCategory != "Todos") {
-            activeCategory = gastronomicCategories.firstWhere(
-              (cat) => cat.name == selectedCategory,
-              orElse: () => gastronomicCategories.first,
-            );
-          }
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => MemoryFormPage(initialCategory: activeCategory),
-            ),
-          );
-        },
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if (notification.direction == ScrollDirection.reverse) {
-            ref.read(dockVisibleProvider.notifier).state = false;
-          } else if (notification.direction == ScrollDirection.forward) {
-            ref.read(dockVisibleProvider.notifier).state = true;
-          }
-          return true;
-        },
-        child: ListView(
-          children: [
-            HomeHero(memory: memories.isNotEmpty ? memories.last : null),
-            
-            const SectionHeader("Para repetir"),
-            SizedBox(
-              height: 220,
-              child: featuredMemories.isEmpty 
-                ? const Padding(
-                    padding: EdgeInsets.only(left: 24),
-                    child: Center(child: Text("Aún no tienes recuerdos destacados")),
-                  )
-                : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: featuredMemories.length,
-                    itemBuilder: (context, index) => MemoryCardLarge(memory: featuredMemories[index]),
-                  ),
-            ),
-            const SectionHeader("Últimos recuerdos"),
-            
-            // FILTROS (CHIPS)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFilterChip("Todos", selectedCategory, ref),
-                    ...gastronomicCategories.map((cat) => _buildFilterChip(cat.name, selectedCategory, ref)),
-                  ],
+      backgroundColor: const Color(0xFFFFFDF5),
+      body: Stack(
+        children: [
+          NotificationListener<UserScrollNotification>(
+            onNotification: (notification) {
+              if (notification.direction == ScrollDirection.reverse) {
+                ref.read(dockVisibleProvider.notifier).state = false;
+              } else if (notification.direction == ScrollDirection.forward) {
+                ref.read(dockVisibleProvider.notifier).state = true;
+              }
+              return true;
+            },
+            child: ListView(
+              children: [
+                // Hero ocupa el 70% de pantalla
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: HomeHero(memory: filteredMemories.isNotEmpty ? filteredMemories.last : null),
                 ),
-              ),
-            ),
+                
+                _buildSectionHeader("Últimos recuerdos"),
+                
+                SizedBox(
+                  height: 60,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _buildFilterChip("Todos", selectedCategory, ref),
+                        ...gastronomicCategories.map((cat) => _buildFilterChip(cat.name, selectedCategory, ref)),
+                      ],
+                    ),
+                  ),
+                ),
 
-            // LISTA FILTRADA CON BORRADO PROFESIONAL
-            ...filteredMemories.map((memory) => Dismissible(
-              key: Key(memory.id),
-              direction: DismissDirection.endToStart,
-              confirmDismiss: (direction) async {
-                return await showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Eliminar recuerdo"),
-                    content: const Text("¿Seguro que quieres borrar este recuerdo de forma permanente?"),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text("Cancelar")),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: const Text("Eliminar", style: TextStyle(color: Colors.red)),
+                filteredMemories.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(40.0),
+                        child: Center(child: Text("Aún no tienes recuerdos aquí")),
+                      )
+                    : Column(
+                        children: filteredMemories.reversed.map((memory) => Dismissible(
+                          key: Key(memory.id),
+                          direction: DismissDirection.endToStart,
+                          onDismissed: (_) => ref.read(memoryProvider.notifier).removeMemory(memory.id),
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                            decoration: BoxDecoration(color: palitoPink.withOpacity(0.9), borderRadius: BorderRadius.circular(12)),
+                            child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),
+                          ),
+                          child: MemoryCardCompact(memory: memory),
+                        )).toList(),
                       ),
-                    ],
+                const SizedBox(height: 120),
+              ],
+            ),
+          ),
+          
+          // Nuevo botón de acción flotante (FAB) profesional con sombra dura
+          Positioned(
+            bottom: 120,
+            right: 24,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(
+                    color: palitoDark,
+                    offset: Offset(4, 4),
                   ),
-                );
-              },
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(Icons.delete_outline, color: Colors.white, size: 30),
+                ],
               ),
-              onDismissed: (direction) {
-                ref.read(memoryProvider.notifier).removeMemory(memory.id);
-              },
-              child: MemoryCardCompact(memory: memory),
-            )),
-            const SizedBox(height: 120),
-          ],
-        ),
+              child: FloatingActionButton(
+                backgroundColor: palitoYellow,
+                elevation: 0,
+                onPressed: () => context.push('/new-memory'),
+                shape: const CircleBorder(side: BorderSide(color: palitoDark, width: 2.5)),
+                child: const Icon(Icons.add, color: palitoDark, size: 32),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, top: 24, bottom: 12),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: palitoDark, letterSpacing: -0.5),
       ),
     );
   }
@@ -135,13 +128,23 @@ class HomePage extends ConsumerWidget {
   Widget _buildFilterChip(String label, String selected, WidgetRef ref) {
     final isSelected = label == selected;
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (_) => ref.read(selectedCategoryProvider.notifier).state = label,
-        selectedColor: const Color(0xFF2C3E50),
-        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+      padding: const EdgeInsets.only(right: 12, bottom: 4),
+      child: GestureDetector(
+        onTap: () => ref.read(selectedCategoryProvider.notifier).state = label,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? palitoPink : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palitoDark, width: 2.5),
+            boxShadow: [BoxShadow(color: palitoDark.withOpacity(0.2), offset: const Offset(4, 4))],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(color: isSelected ? Colors.white : palitoDark, fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+        ),
       ),
     );
   }

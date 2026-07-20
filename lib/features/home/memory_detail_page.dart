@@ -5,7 +5,6 @@ import '../../../core/theme/tokens/app_spacing.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/providers/memory_provider.dart';
 import 'memory_form_page.dart';
-// Importa tu widget inteligente
 import '../memory_form/widgets/smart_image.dart'; 
 
 class MemoryDetailPage extends ConsumerWidget {
@@ -23,6 +22,9 @@ class MemoryDetailPage extends ConsumerWidget {
 
     final firstImageUrl = currentMemory.imageUrls.isNotEmpty ? currentMemory.imageUrls.first : null;
     final description = currentMemory.specificFields['description'] ?? 'Sin descripción';
+    
+    // Lógica para evitar mostrar información duplicada
+    final bool showRestaurantSubtitle = currentMemory.title.toLowerCase() != currentMemory.restaurantName.toLowerCase();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -47,7 +49,7 @@ class MemoryDetailPage extends ConsumerWidget {
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: firstImageUrl != null
-                  ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover) // CORREGIDO
+                  ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
                   : Container(color: Colors.grey.shade200),
             ),
           ),
@@ -58,15 +60,25 @@ class MemoryDetailPage extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(currentMemory.title, style: AppTypography.headlineLarge),
-                  const SizedBox(height: 8),
-                  Text(
-                    "En: ${currentMemory.restaurantName}", 
-                    style: AppTypography.bodyMedium.copyWith(color: Colors.grey.shade600),
-                  ),
+                  
+                  // Solo mostramos el subtítulo si aporta información nueva
+                  if (showRestaurantSubtitle) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      "En: ${currentMemory.restaurantName}", 
+                      style: AppTypography.bodyMedium.copyWith(color: Colors.grey.shade600),
+                    ),
+                  ],
+                  
                   const SizedBox(height: 24),
                   Text("Tu opinión", style: AppTypography.titleMedium),
                   const SizedBox(height: 8),
                   Text(description, style: AppTypography.bodyLarge),
+                  
+                  const SizedBox(height: 16),
+                  Text("Ubicación", style: AppTypography.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(currentMemory.location.address, style: AppTypography.bodyMedium),
                 ],
               ),
             ),

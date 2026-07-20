@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/memory_model.dart';
 import '../../../features/home/memory_detail_page.dart';
-// Asegúrate de que esta ruta sea correcta según donde guardaste tu nuevo widget
-
 import '../../../features/memory_form/widgets/smart_image.dart';
 
 // 1. Variante Compacta (Para listas)
@@ -72,7 +70,11 @@ class MemoryCardCompact extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(memory.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(memory.restaurantName, style: const TextStyle(color: Colors.grey)),
+                    // CORRECCIÓN: Ahora mostramos la categoría en lugar de repetir el nombre del restaurante
+                    Text(
+                      memory.category, 
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
                   ],
                 ),
               ],

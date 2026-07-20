@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'core/models/memory_model.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/components/app_dock.dart';
-import 'core/providers/dock_provider.dart'; // Asegúrate de importar el provider
+import 'core/providers/dock_provider.dart'; 
 import 'features/home/home_page.dart';
 import 'features/home/memory_detail_page.dart';
 import 'features/home/memory_form_page.dart';
@@ -59,7 +59,6 @@ final _router = GoRouter(
           body: Stack(
             children: [
               child,
-              // Usamos Consumer para que el Dock reaccione al scroll sin recargar todo el scaffold
               Align(
                 alignment: Alignment.bottomCenter,
                 child: Consumer(
@@ -123,14 +122,8 @@ int _calculateSelectedIndex(BuildContext context) {
 void _onItemTapped(int index, BuildContext context) {
   HapticFeedback.lightImpact();
   switch (index) {
-    case 0:
-      context.go('/');
-      break;
-    case 1:
-      context.go('/explore');
-      break;
-    case 2:
-      context.go('/profile');
-      break;
+    case 0: context.go('/'); break;
+    case 1: context.go('/explore'); break;
+    case 2: context.go('/profile'); break;
   }
 }

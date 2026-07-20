@@ -7,6 +7,7 @@ import '../../../../../core/theme/tokens/app_spacing.dart';
 import '../../../../../core/theme/tokens/app_typography.dart';
 import '../../../../../core/theme/tokens/app_colors.dart';
 import '../../../../../core/theme/components/memory_card.dart';
+import '../../core/providers/memory_provider.dart';
 
 class CategoryListPage extends ConsumerWidget {
   final Category category;
