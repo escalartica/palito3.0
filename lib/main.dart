@@ -10,6 +10,7 @@ import 'core/providers/dock_provider.dart';
 import 'features/home/home_page.dart';
 import 'features/home/memory_detail_page.dart';
 import 'features/home/memory_form_page.dart';
+import 'features/map/map_page.dart'; 
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,9 +72,10 @@ final _router = GoRouter(
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
                         child: AppDock(
+                          // Mapa (0), Gamer (1), Perfil (2)
                           items: const [
-                            Icons.home_rounded,
-                            Icons.explore_rounded,
+                            Icons.map_rounded,
+                            Icons.videogame_asset_rounded,
                             Icons.person_rounded,
                           ],
                           currentIndex: _calculateSelectedIndex(context),
@@ -94,10 +96,14 @@ final _router = GoRouter(
           builder: (context, state) => const HomePage(),
         ),
         GoRoute(
-          path: '/explore',
+          path: '/map',
+          builder: (context, state) => const MapPage(), // Ahora apunta a MapPage
+        ),
+        GoRoute(
+          path: '/gamer',
           builder: (context, state) => const Scaffold(
             backgroundColor: Color(0xFFFDFBF7),
-            body: Center(child: Text("Explorar sabores")),
+            body: Center(child: Text("Zona Gamer")),
           ),
         ),
         GoRoute(
@@ -114,7 +120,8 @@ final _router = GoRouter(
 
 int _calculateSelectedIndex(BuildContext context) {
   final String location = GoRouterState.of(context).uri.path;
-  if (location.startsWith('/explore')) return 1;
+  if (location.startsWith('/map')) return 0;
+  if (location.startsWith('/gamer')) return 1;
   if (location.startsWith('/profile')) return 2;
   return 0;
 }
@@ -122,8 +129,8 @@ int _calculateSelectedIndex(BuildContext context) {
 void _onItemTapped(int index, BuildContext context) {
   HapticFeedback.lightImpact();
   switch (index) {
-    case 0: context.go('/'); break;
-    case 1: context.go('/explore'); break;
+    case 0: context.go('/map'); break;
+    case 1: context.go('/gamer'); break;
     case 2: context.go('/profile'); break;
   }
 }

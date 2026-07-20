@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/mock_data.dart';
 import '../models/memory_model.dart';
@@ -10,6 +11,9 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
 
   Future<void> _loadInitialData() async {
     final savedMemories = await StorageService.loadMemories();
+    debugPrint("DEBUG: Memorias cargadas del storage: ${savedMemories.length}");
+    
+    // Si savedMemories viene vacía, revisa StorageService.loadMemories()
     state = savedMemories.isNotEmpty ? savedMemories : mockMemories;
   }
 

@@ -45,7 +45,6 @@ class MemoryModel {
     this.specificFields = const {},
   });
 
-  // Getter de conveniencia para obtener la ubicación limpia
   String get displayAddress {
     if (location.address.toLowerCase() == restaurantName.toLowerCase()) {
       return "Ubicación no especificada";
@@ -58,7 +57,6 @@ class MemoryModel {
     return difference.inMinutes < 5;
   }
 
-  // Fábrica para reconstruir el objeto desde un Map (datos guardados)
   factory MemoryModel.fromMap(Map<String, dynamic> map) {
     return MemoryModel(
       id: map['id'] as String,
