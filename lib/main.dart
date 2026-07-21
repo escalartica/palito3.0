@@ -11,6 +11,8 @@ import 'features/home/home_page.dart';
 import 'features/home/memory_detail_page.dart';
 import 'features/home/memory_form_page.dart';
 import 'features/map/map_page.dart'; 
+import 'features/gamer/gamer_page.dart'; // <-- Importación de tu Zona Gamer
+import 'features/profile/profile_page.dart'; 
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +53,12 @@ final _router = GoRouter(
       path: '/new-memory',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const MemoryFormPage(),
+    ),
+    // Ruta independiente a nivel raíz para que la Zona Gamer oculte el dock por completo
+    GoRoute(
+      path: '/gamer',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const GamerPage(),
     ),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
@@ -97,21 +105,11 @@ final _router = GoRouter(
         ),
         GoRoute(
           path: '/map',
-          builder: (context, state) => const MapPage(), // Ahora apunta a MapPage
-        ),
-        GoRoute(
-          path: '/gamer',
-          builder: (context, state) => const Scaffold(
-            backgroundColor: Color(0xFFFDFBF7),
-            body: Center(child: Text("Zona Gamer")),
-          ),
+          builder: (context, state) => const MapPage(),
         ),
         GoRoute(
           path: '/profile',
-          builder: (context, state) => const Scaffold(
-            backgroundColor: Color(0xFFFDFBF7),
-            body: Center(child: Text("Mi Perfil")),
-          ),
+          builder: (context, state) => const ProfilePage(), 
         ),
       ],
     ),
@@ -130,7 +128,7 @@ void _onItemTapped(int index, BuildContext context) {
   HapticFeedback.lightImpact();
   switch (index) {
     case 0: context.go('/map'); break;
-    case 1: context.go('/gamer'); break;
+    case 1: context.go('/gamer'); break; // Al usar context.go('/gamer') abrirá la ruta raíz sin dock
     case 2: context.go('/profile'); break;
   }
 }

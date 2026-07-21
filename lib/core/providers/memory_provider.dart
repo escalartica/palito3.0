@@ -13,7 +13,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
     final savedMemories = await StorageService.loadMemories();
     debugPrint("DEBUG: Memorias cargadas del storage: ${savedMemories.length}");
     
-    // Si savedMemories viene vacía, revisa StorageService.loadMemories()
+    // Si savedMemories viene vacía, carga mockMemories
     state = savedMemories.isNotEmpty ? savedMemories : mockMemories;
   }
 

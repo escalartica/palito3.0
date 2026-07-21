@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
@@ -53,7 +54,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
       _restaurantController.text = m.restaurantName;
       _currentLocation = m.location;
       _locationController.text = m.location.address;
-      _descController.text = m.specificFields['description'] ?? '';
+      _descController.text = m.specificFields['description'] ?? m.specificFields['nota'] ?? '';
       _wouldReturnState = m.wouldReturn;
       _rating = m.rating;
       _dynamicData = Map<String, dynamic>.from(m.specificFields);
@@ -89,11 +90,60 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
     }
   }
 
-  Future<void> _pickMedia(ImageSource source, bool isVideo) async {
+  // Selector dual flotante para elegir entre Cámara y Galería
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFFFFDF5),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Seleccionar fotografía",
+                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFFFECE6),
+                    child: Icon(Icons.camera_alt_rounded, color: Color(0xFFFF4D29)),
+                  ),
+                  title: Text("Hacer una foto", style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickMedia(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE8F5E9),
+                    child: Icon(Icons.photo_library_rounded, color: Color(0xFF2E7D32)),
+                  ),
+                  title: Text("Elegir de la galería", style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickMedia(ImageSource.gallery);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickMedia(ImageSource source) async {
     final picker = ImagePicker();
-    final XFile? pickedFile = isVideo 
-        ? await picker.pickVideo(source: source, maxDuration: const Duration(seconds: 15))
-        : await picker.pickImage(source: source, imageQuality: 80);
+    final XFile? pickedFile = await picker.pickImage(source: source, imageQuality: 80);
     if (pickedFile != null && mounted) {
       setState(() { 
         _tempMediaFile = File(pickedFile.path);
@@ -111,8 +161,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            title: Text(_isEditing ? "Editar" : "Nuevo Recuerdo", style: const TextStyle(fontWeight: FontWeight.w900)),
+            title: Text(_isEditing ? "Editar Recuerdo" : "Nuevo Recuerdo", style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
             backgroundColor: const Color(0xFFFFFDF5),
+            pinned: true,
           ),
           SliverPadding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -125,7 +176,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
                   onChanged: (val) => setState(() { _selectedCategory = val!; _dynamicData.clear(); }),
                 ),
                 const SizedBox(height: 16),
-                TextField(controller: _restaurantController, decoration: const InputDecoration(labelText: 'Restaurante', border: OutlineInputBorder())),
+                TextField(controller: _restaurantController, decoration: const InputDecoration(labelText: 'Restaurante / Lugar', border: OutlineInputBorder())),
                 const SizedBox(height: 16),
                 const Text("Ubicación", style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -135,23 +186,90 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
                     IconButton(icon: const Icon(Icons.my_location), onPressed: _getCurrentLocation),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                
+                // Contenedor Multimedia Mejorado con Selector Dual
                 InkWell(
-                  onTap: () => _pickMedia(ImageSource.gallery, false),
+                  onTap: _showImageSourceDialog,
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    height: 200, width: double.infinity,
-                    decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.black, width: 2), borderRadius: BorderRadius.circular(12)),
-                    // Lógica para mostrar imagen editada o nueva
-                    child: _tempMediaFile != null 
-                        ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.file(_tempMediaFile!, fit: BoxFit.cover))
-                        : (_existingImagePath != null 
-                            ? ClipRRect(borderRadius: BorderRadius.circular(10), child: SmartImage(imagePath: _existingImagePath))
-                            : const Icon(Icons.add_a_photo, size: 50)),
+                    height: 220, 
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white, 
+                      border: Border.all(color: Colors.grey.shade300, width: 1.5), 
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (_tempMediaFile != null)
+                            Image.file(_tempMediaFile!, fit: BoxFit.cover)
+                          else if (_existingImagePath != null && _existingImagePath!.isNotEmpty)
+                            SmartImage(imagePath: _existingImagePath, fit: BoxFit.cover)
+                          else
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const CircleAvatar(
+                                  radius: 28,
+                                  backgroundColor: Color(0xFFFFF3D6),
+                                  child: Icon(Icons.add_a_photo_rounded, size: 28, color: Color(0xFFB38F00)),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  "Añadir foto del plato o lugar",
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          if (_tempMediaFile != null || (_existingImagePath != null && _existingImagePath!.isNotEmpty))
+                            Positioned(
+                              bottom: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.7),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.edit, size: 14, color: Colors.white),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "Cambiar",
+                                      style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+                
+                const SizedBox(height: 16),
                 if (generator != null) ...generator.buildFields(_dynamicData, (key, value) {
                   setState(() => _dynamicData[key] = value);
                 }, _otroSaborController),
+                
                 const SizedBox(height: 20),
                 const Text("Puntuación", style: TextStyle(fontWeight: FontWeight.bold)),
                 Slider(value: _rating, min: 0, max: 10, divisions: 10, onChanged: (v) => setState(() { _rating = v; })),
@@ -181,7 +299,6 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
     
     List<String> finalImagePaths = widget.memory?.imageUrls ?? [];
     if (_tempMediaFile != null) {
-      // USAMOS EL ImageSaver CORREGIDO QUE DEVUELVE SOLO EL NOMBRE DEL ARCHIVO
       final permanentFileName = await ImageSaver.saveImagePermanently(_tempMediaFile!.path);
       finalImagePaths = [permanentFileName];
     } else if (_existingImagePath != null) {
@@ -198,6 +315,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
       } catch (e) {
         finalLocation = LocationData(address: _locationController.text);
       }
+    }
+
+    // Guardamos la descripción en specificFields para que persista correctamente
+    if (_descController.text.trim().isNotEmpty) {
+      _dynamicData['description'] = _descController.text.trim();
     }
 
     final newMemory = MemoryModel(
