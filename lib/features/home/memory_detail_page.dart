@@ -392,7 +392,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
     );
   }
 
-  // Métodos auxiliares para limpiar strings y formatear claves técnicas
   String _formatKey(String key) {
     if (key.isEmpty) return '';
     final formatted = key.replaceAll('_', ' ');
@@ -402,7 +401,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
   String _cleanValue(dynamic value) {
     if (value == null) return '';
     String text = value.toString();
-    // Limpia corchetes de listas si vienen en crudo ej: "[Feliz]" -> "Feliz"
     text = text.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').replaceAll("'", '');
     return text.trim();
   }

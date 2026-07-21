@@ -24,7 +24,7 @@ class SmartImage extends StatelessWidget {
       return Image.network(
         imagePath!,
         fit: fit,
-        errorBuilder: (_, _, _) => const Icon(Icons.error, color: Colors.red),
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.error, color: Colors.red),
       );
     }
 
@@ -48,7 +48,7 @@ class SmartImage extends StatelessWidget {
             return Image.file(
               file,
               fit: fit,
-              errorBuilder: (_, _, _) => const Icon(Icons.broken_image, color: Colors.orange),
+              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.orange),
             );
           } else {
             debugPrint("SmartImage: Archivo no encontrado en ${file.path}");

@@ -51,7 +51,7 @@ class MemoryGalleryWidget extends StatelessWidget {
             leading: const Icon(Icons.play_circle_fill, color: Colors.indigoAccent, size: 40),
             title: const Text("Ver momento ambiente"),
             subtitle: const Text("Toca para revivir el sonido y el entorno"),
-            tileColor: Colors.indigoAccent.withOpacity(0.1),
+            tileColor: Colors.indigoAccent.withValues(alpha: 0.1),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ],

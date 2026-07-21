@@ -11,7 +11,7 @@ import 'features/home/home_page.dart';
 import 'features/home/memory_detail_page.dart';
 import 'features/home/memory_form_page.dart';
 import 'features/map/map_page.dart'; 
-import 'features/gamer/gamer_page.dart'; // <-- Importación de tu Zona Gamer
+import 'features/gamer/gamer_page.dart'; 
 import 'features/profile/profile_page.dart'; 
 
 void main() {
@@ -60,6 +60,15 @@ final _router = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const GamerPage(),
     ),
+    // Ruta independiente a nivel raíz para que el Mapa oculte el dock por completo
+    GoRoute(
+      path: '/map',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final initialCategory = state.extra as String?;
+        return MapPage(initialCategory: initialCategory);
+      },
+    ),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
       builder: (context, state, child) {
@@ -104,10 +113,6 @@ final _router = GoRouter(
           builder: (context, state) => const HomePage(),
         ),
         GoRoute(
-          path: '/map',
-          builder: (context, state) => const MapPage(),
-        ),
-        GoRoute(
           path: '/profile',
           builder: (context, state) => const ProfilePage(), 
         ),
@@ -128,7 +133,7 @@ void _onItemTapped(int index, BuildContext context) {
   HapticFeedback.lightImpact();
   switch (index) {
     case 0: context.go('/map'); break;
-    case 1: context.go('/gamer'); break; // Al usar context.go('/gamer') abrirá la ruta raíz sin dock
+    case 1: context.go('/gamer'); break; 
     case 2: context.go('/profile'); break;
   }
 }

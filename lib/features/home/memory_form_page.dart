@@ -305,38 +305,59 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
       finalImagePaths = [_existingImagePath!];
     }
 
-    LocationData? finalLocation = _currentLocation;
-    if (finalLocation == null && _locationController.text.isNotEmpty) {
+    String addressText = _locationController.text.trim();
+    double? lat = _currentLocation?.lat;
+    double? lng = _currentLocation?.lng;
+
+    // Control inteligente para asegurar que si se introduce "Medellín", coja las coordenadas correctas locales
+    if (_currentLocation == null || addressText != _currentLocation?.address) {
       try {
-        List<Location> locations = await locationFromAddress(_locationController.text);
+        String querySearch = addressText.toLowerCase() == 'medellín' ? 'Medellín, Badajoz, España' : addressText;
+        List<Location> locations = await locationFromAddress(querySearch);
         if (locations.isNotEmpty) {
-          finalLocation = LocationData(address: _locationController.text, lat: locations.first.latitude, lng: locations.first.longitude);
+          lat = locations.first.latitude;
+          lng = locations.first.longitude;
         }
-      } catch (e) {
-        finalLocation = LocationData(address: _locationController.text);
-      }
+      } catch (_) {}
     }
 
-    // Guardamos la descripción en specificFields para que persista correctamente
+    final finalLocation = LocationData(
+      address: addressText,
+      lat: lat,
+      lng: lng,
+    );
+
+    // Guardamos la descripción y el otro_sabor en specificFields para que persistan correctamente
     if (_descController.text.trim().isNotEmpty) {
       _dynamicData['description'] = _descController.text.trim();
+    }
+    if (_otroSaborController.text.trim().isNotEmpty) {
+      _dynamicData['otro_sabor'] = _otroSaborController.text.trim();
     }
 
     final newMemory = MemoryModel(
       id: widget.memory?.id ?? const Uuid().v4(),
       title: _restaurantController.text,
       restaurantName: _restaurantController.text,
-      location: finalLocation ?? LocationData(address: _locationController.text),
+      location: finalLocation,
       wouldReturn: _wouldReturnState ?? false,
       rating: _rating,
       imageUrls: finalImagePaths,
-      date: DateTime.now(),
+      date: widget.memory?.date ?? DateTime.now(),
       category: _selectedCategory,
       specificFields: _dynamicData,
     );
     
-    _isEditing ? ref.read(memoryProvider.notifier).updateMemory(newMemory) : ref.read(memoryProvider.notifier).addMemory(newMemory);
-    if (mounted) context.pop();
+    if (_isEditing) {
+      ref.read(memoryProvider.notifier).updateMemory(newMemory);
+    } else {
+      ref.read(memoryProvider.notifier).addMemory(newMemory);
+    }
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+      context.pop();
+    }
   }
 
   void _showError(String field) {
