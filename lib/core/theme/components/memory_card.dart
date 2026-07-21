@@ -3,7 +3,11 @@ import '../../models/memory_model.dart';
 import '../../../features/home/memory_detail_page.dart';
 import '../../../features/memory_form/widgets/smart_image.dart';
 
-// 1. Variante Compacta (Para listas)
+// Paleta de colores neo-brutalista
+const Color palitoDark = Color(0xFF1A1A1A);
+const Color palitoYellow = Color(0xFFFFD400);
+
+// 1. Variante Compacta (Para listas principales)
 class MemoryCardCompact extends StatelessWidget {
   final MemoryModel memory;
   const MemoryCardCompact({super.key, required this.memory});
@@ -17,20 +21,21 @@ class MemoryCardCompact extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palitoDark, width: 2.5),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
+            color: palitoDark,
+            offset: Offset(4, 4),
+            blurRadius: 0,
+          ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => MemoryDetailPage(memory: memory)),
@@ -41,42 +46,90 @@ class MemoryCardCompact extends StatelessWidget {
               children: [
                 Stack(
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: firstImageUrl != null
-                          ? SizedBox(
-                              width: 56,
-                              height: 56,
-                              child: SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover),
-                            )
-                          : Container(width: 56, height: 56, color: Colors.grey.shade200),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: palitoDark, width: 2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: firstImageUrl != null
+                            ? SizedBox(
+                                width: 60,
+                                height: 60,
+                                child: SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover),
+                              )
+                            : Container(width: 60, height: 60, color: Colors.grey.shade200),
+                      ),
                     ),
                     if (memory.isRecent)
                       Positioned(
-                        right: 0, top: 0,
+                        right: -2, top: -2,
                         child: Container(
-                          width: 12, height: 12,
+                          width: 14, height: 14,
                           decoration: BoxDecoration(
-                            color: Colors.greenAccent, 
+                            color: palitoYellow, 
                             shape: BoxShape.circle, 
-                            border: Border.all(color: Colors.white, width: 2)
+                            border: Border.all(color: palitoDark, width: 2)
                           ),
                         ),
                       ),
                   ],
                 ),
                 const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(memory.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    // CORRECCIÓN: Ahora mostramos la categoría en lugar de repetir el nombre del restaurante
-                    Text(
-                      memory.category, 
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        memory.title, 
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: palitoDark,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFDF5),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: palitoDark, width: 1.5),
+                            ),
+                            child: Text(
+                              memory.category, 
+                              style: const TextStyle(
+                                color: palitoDark, 
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (memory.rating > 0) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                            const SizedBox(width: 2),
+                            Text(
+                              memory.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: palitoDark,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: palitoDark),
               ],
             ),
           ),
@@ -101,29 +154,64 @@ class MemoryCardLarge extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
+        border: Border.all(color: palitoDark, width: 2.5),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          )
+            color: palitoDark,
+            offset: Offset(4, 4),
+            blurRadius: 0,
+          ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(21),
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(21),
           onTap: memory == null ? null : () => Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => MemoryDetailPage(memory: memory!)),
           ),
-          child: firstImageUrl != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover),
-                )
-              : Center(child: Text(memory?.title ?? "Recuerdo destacado")),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(21),
+                  child: firstImageUrl != null
+                      ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
+                      : Container(color: Colors.grey.shade100, child: const Center(child: Icon(Icons.image, size: 40, color: Colors.grey))),
+                ),
+              ),
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(21),
+                    gradient: LinearGradient(
+                      colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: Text(
+                  memory?.title ?? "Recuerdo destacado",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

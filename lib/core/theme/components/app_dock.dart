@@ -1,7 +1,10 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/dock_provider.dart';
+
+// Paleta de colores neo-brutalista
+const Color palitoDark = Color(0xFF1A1A1A);
+const Color palitoYellow = Color(0xFFFFD400);
 
 class AppDock extends ConsumerWidget {
   final List<IconData> items;
@@ -26,41 +29,46 @@ class AppDock extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: Colors.black, width: 2.5),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: palitoDark, width: 2.5),
           boxShadow: const [
             BoxShadow(
-              color: Colors.black,
+              color: palitoDark,
               offset: Offset(4, 4),
+              blurRadius: 0,
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-              color: Colors.white.withValues(alpha: 0.8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(items.length, (index) {
-                  final isSelected = currentIndex == index;
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(items.length, (index) {
+              final isSelected = currentIndex == index;
 
-                  return GestureDetector(
-                    onTap: () => onTap(index),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Icon(
-                        items[index],
-                        size: 28,
-                        color: isSelected ? Colors.black : Colors.grey.shade600,
-                      ),
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onTap(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? palitoYellow : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected ? palitoDark : Colors.transparent, 
+                      width: 2,
                     ),
-                  );
-                }),
-              ),
-            ),
+                  ),
+                  child: Icon(
+                    items[index],
+                    size: 26,
+                    color: palitoDark,
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),

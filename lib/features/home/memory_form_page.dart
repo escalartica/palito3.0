@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/utils/image_saver.dart'; 
 import '../../core/providers/dock_provider.dart'; 
 import '../../core/data/categories.dart';
@@ -53,7 +52,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
       final m = widget.memory!;
       _restaurantController.text = m.restaurantName;
       _currentLocation = m.location;
-      _locationController.text = m.location.address ?? '';
+      _locationController.text = m.location.address;
       _descController.text = m.specificFields['description'] ?? '';
       _wouldReturnState = m.wouldReturn;
       _rating = m.rating;
@@ -74,13 +73,6 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
     _descController.dispose();
     _otroSaborController.dispose();
     super.dispose();
-  }
-
-  Future<String> _saveImagePermanently(File tempFile) async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final fileName = "${const Uuid().v4()}.jpg";
-    final savedImage = await tempFile.copy('${appDir.path}/$fileName');
-    return savedImage.path;
   }
 
   Future<void> _getCurrentLocation() async {
@@ -189,8 +181,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage> {
     
     List<String> finalImagePaths = widget.memory?.imageUrls ?? [];
     if (_tempMediaFile != null) {
-      final permanentPath = await _saveImagePermanently(_tempMediaFile!);
-      finalImagePaths = [permanentPath];
+      // USAMOS EL ImageSaver CORREGIDO QUE DEVUELVE SOLO EL NOMBRE DEL ARCHIVO
+      final permanentFileName = await ImageSaver.saveImagePermanently(_tempMediaFile!.path);
+      finalImagePaths = [permanentFileName];
     } else if (_existingImagePath != null) {
       finalImagePaths = [_existingImagePath!];
     }
