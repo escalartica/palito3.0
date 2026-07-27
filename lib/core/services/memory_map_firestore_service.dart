@@ -1,0 +1,1872 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+
+import '../models/memory_model.dart';
+
+/// ===========================================================================
+/// MEMORY MAP FIRESTORE SERVICE
+/// ===========================================================================
+///
+/// Fuente principal:
+///
+/// users/{uid}/memories/{memoryId}
+///
+/// Colección secundaria:
+///
+/// users/{uid}/locations/{memoryId}
+///
+/// La colección `memories` es la fuente principal de verdad.
+///
+/// `locations` se mantiene sincronizada como estructura secundaria para:
+///
+/// - compatibilidad,
+/// - migraciones,
+/// - consultas específicas,
+/// - funcionalidades relacionadas con mapas.
+///
+/// ===========================================================================
+
+class MemoryMapFirestoreService {
+  MemoryMapFirestoreService({
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance;
+
+  final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
+
+  // ==========================================================================
+  // CONFIGURACIÓN
+  // ==========================================================================
+
+  static const String _usersCollection = 'users';
+  static const String _memoriesCollection = 'memories';
+  static const String _locationsCollection = 'locations';
+
+  // ==========================================================================
+  // USUARIO ACTUAL
+  // ==========================================================================
+
+  User? get _currentUser => _auth.currentUser;
+
+  String? get _currentUserId {
+    final String? uid = _currentUser?.uid;
+
+    if (uid == null || uid.trim().isEmpty) {
+      return null;
+    }
+
+    return uid.trim();
+  }
+
+  // ==========================================================================
+  // REFERENCIAS
+  // ==========================================================================
+
+  CollectionReference<Map<String, dynamic>>?
+      get _userMemoriesCollection {
+    final String? uid = _currentUserId;
+
+    if (uid == null) {
+      return null;
+    }
+
+    return _firestore
+        .collection(_usersCollection)
+        .doc(uid)
+        .collection(_memoriesCollection);
+  }
+
+  CollectionReference<Map<String, dynamic>>?
+      get _userLocationsCollection {
+    final String? uid = _currentUserId;
+
+    if (uid == null) {
+      return null;
+    }
+
+    return _firestore
+        .collection(_usersCollection)
+        .doc(uid)
+        .collection(_locationsCollection);
+  }
+
+  // ==========================================================================
+  // UTILIDADES
+  // ==========================================================================
+
+  double? _parseDouble(
+    dynamic value,
+  ) {
+    if (value is num) {
+      final double result = value.toDouble();
+
+      if (!result.isFinite) {
+        return null;
+      }
+
+      return result;
+    }
+
+    if (value is String) {
+      final String normalized = value.trim();
+
+      if (normalized.isEmpty) {
+        return null;
+      }
+
+      final double? result = double.tryParse(
+        normalized,
+      );
+
+      if (result == null || !result.isFinite) {
+        return null;
+      }
+
+      return result;
+    }
+
+    return null;
+  }
+
+  bool _areValidCoordinates(
+    double? lat,
+    double? lng,
+  ) {
+    if (lat == null || lng == null) {
+      return false;
+    }
+
+    if (!lat.isFinite || !lng.isFinite) {
+      return false;
+    }
+
+    return lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180;
+  }
+
+  String _parseString(
+    dynamic value, {
+    String fallback = '',
+  }) {
+    if (value == null) {
+      return fallback;
+    }
+
+    final String result = value.toString().trim();
+
+    if (result.isEmpty) {
+      return fallback;
+    }
+
+    return result;
+  }
+
+  Map<String, dynamic> _parseMap(
+    dynamic value,
+  ) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(
+        value,
+      );
+    }
+
+    return <String, dynamic>{};
+  }
+
+  List<String> _parseStringList(
+    dynamic value,
+  ) {
+    if (value is! List) {
+      return <String>[];
+    }
+
+    return value
+        .where(
+          (dynamic item) => item != null,
+        )
+        .map(
+          (dynamic item) => item.toString().trim(),
+        )
+        .where(
+          (String item) => item.isNotEmpty,
+        )
+        .toList();
+  }
+
+  bool _parseBool(
+    dynamic value,
+  ) {
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is num) {
+      return value != 0;
+    }
+
+    if (value is String) {
+      final String normalized = value
+          .trim()
+          .toLowerCase();
+
+      switch (normalized) {
+        case 'true':
+        case '1':
+        case 'yes':
+        case 'y':
+        case 'si':
+        case 'sí':
+        case 's':
+          return true;
+
+        case 'false':
+        case '0':
+        case 'no':
+        case 'n':
+          return false;
+      }
+    }
+
+    return false;
+  }
+
+  Timestamp? _parseTimestamp(
+    dynamic value,
+  ) {
+    if (value is Timestamp) {
+      return value;
+    }
+
+    if (value is DateTime) {
+      return Timestamp.fromDate(
+        value,
+      );
+    }
+
+    if (value is String) {
+      final String normalized = value.trim();
+
+      if (normalized.isEmpty) {
+        return null;
+      }
+
+      final DateTime? parsed =
+          DateTime.tryParse(
+        normalized,
+      );
+
+      if (parsed == null) {
+        return null;
+      }
+
+      return Timestamp.fromDate(
+        parsed,
+      );
+    }
+
+    return null;
+  }
+
+  bool _hasUsableValue(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return false;
+    }
+
+    if (value is String) {
+      return value.trim().isNotEmpty;
+    }
+
+    return true;
+  }
+
+  // ==========================================================================
+  // AUTENTICACIÓN
+  // ==========================================================================
+
+  bool _ensureAuthenticated({
+    required String operation,
+  }) {
+    final User? user = _currentUser;
+
+    if (user == null) {
+      debugPrint(
+        '⚠️ MemoryMapFirestoreService: '
+        'no hay usuario autenticado. '
+        'Operación: $operation',
+      );
+
+      return false;
+    }
+
+    debugPrint(
+      '👤 Firebase Auth: '
+      'uid=${user.uid} | '
+      'anonymous=${user.isAnonymous}',
+    );
+
+    return true;
+  }
+
+  void _logAuthState() {
+    final User? user = _currentUser;
+
+    if (user == null) {
+      debugPrint(
+        '⚠️ MemoryMapFirestoreService: '
+        'FirebaseAuth.currentUser == null',
+      );
+
+      return;
+    }
+
+    debugPrint(
+      '👤 Usuario Firebase actual: ${user.uid}',
+    );
+
+    debugPrint(
+      '📧 Email usuario Firebase: '
+      '${user.email ?? '(sin email)'}',
+    );
+
+    debugPrint(
+      '👤 Usuario anónimo: ${user.isAnonymous}',
+    );
+  }
+
+  // ==========================================================================
+  // NORMALIZACIÓN DE LOCATION
+  // ==========================================================================
+
+  Map<String, dynamic> _normalizeLocation(
+    Map<String, dynamic> data,
+  ) {
+    final Map<String, dynamic> location =
+        _parseMap(
+      data['location'],
+    );
+
+    // ------------------------------------------------------------------------
+    // ADDRESS
+    // ------------------------------------------------------------------------
+
+    String address = _parseString(
+      location['address'],
+    );
+
+    if (address.isEmpty) {
+      address = _parseString(
+        data['address'],
+      );
+    }
+
+    if (address.isEmpty) {
+      address = _parseString(
+        data['locationAddress'],
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // LATITUDE
+    // ------------------------------------------------------------------------
+
+    double? lat = _parseDouble(
+      location['lat'],
+    );
+
+    lat ??= _parseDouble(
+      data['lat'],
+    );
+
+    // ------------------------------------------------------------------------
+    // LONGITUDE
+    // ------------------------------------------------------------------------
+
+    double? lng = _parseDouble(
+      location['lng'],
+    );
+
+    lng ??= _parseDouble(
+      data['lng'],
+    );
+
+    // ------------------------------------------------------------------------
+    // VALIDACIÓN
+    // ------------------------------------------------------------------------
+
+    if (!_areValidCoordinates(
+      lat,
+      lng,
+    )) {
+      lat = null;
+      lng = null;
+    }
+
+    return <String, dynamic>{
+      'address': address,
+      'lat': lat,
+      'lng': lng,
+    };
+  }
+
+  // ==========================================================================
+  // NORMALIZAR DOCUMENTO MEMORY
+  // ==========================================================================
+
+  Map<String, dynamic> _normalizeMemoryDocument(
+    String documentId,
+    Map<String, dynamic> rawData,
+  ) {
+    final Map<String, dynamic> data =
+        Map<String, dynamic>.from(
+      rawData,
+    );
+
+    // ------------------------------------------------------------------------
+    // ID
+    // ------------------------------------------------------------------------
+
+    data['id'] = documentId;
+
+    // ------------------------------------------------------------------------
+    // LOCATION
+    // ------------------------------------------------------------------------
+
+    data['location'] = _normalizeLocation(
+      data,
+    );
+
+    // ------------------------------------------------------------------------
+    // TITLE
+    // ------------------------------------------------------------------------
+
+    String title = _parseString(
+      data['title'],
+    );
+
+    if (title.isEmpty) {
+      title = _parseString(
+        data['restaurantName'],
+      );
+    }
+
+    if (title.isEmpty) {
+      title = _parseString(
+        data['name'],
+      );
+    }
+
+    data['title'] = title;
+
+    // ------------------------------------------------------------------------
+    // RESTAURANT NAME
+    // ------------------------------------------------------------------------
+
+    String restaurantName = _parseString(
+      data['restaurantName'],
+    );
+
+    if (restaurantName.isEmpty) {
+      restaurantName = title;
+    }
+
+    data['restaurantName'] = restaurantName;
+
+    // ------------------------------------------------------------------------
+    // CATEGORY
+    // ------------------------------------------------------------------------
+
+    data['category'] = _parseString(
+      data['category'],
+      fallback: 'General',
+    );
+
+    // ------------------------------------------------------------------------
+    // RATING
+    // ------------------------------------------------------------------------
+
+    double? rating = _parseDouble(
+      data['rating'] ??
+          data['score'],
+    );
+
+    rating ??= 0.0;
+
+    if (rating < 0) {
+      rating = 0.0;
+    }
+
+    if (rating > 5) {
+      rating = 5.0;
+    }
+
+    data['rating'] = rating;
+
+    // ------------------------------------------------------------------------
+    // WOULD RETURN
+    // ------------------------------------------------------------------------
+
+    data['wouldReturn'] = _parseBool(
+      data['wouldReturn'] ??
+          data['would_return'],
+    );
+
+    // ------------------------------------------------------------------------
+    // IMAGES
+    // ------------------------------------------------------------------------
+
+    data['imageUrls'] = _parseStringList(
+      data['imageUrls'] ??
+          data['images'] ??
+          data['image_paths'],
+    );
+
+    // ------------------------------------------------------------------------
+    // VIDEO
+    // ------------------------------------------------------------------------
+
+    final String videoUrl = _parseString(
+      data['videoUrl'] ??
+          data['video'] ??
+          data['video_url'],
+    );
+
+    data['videoUrl'] = videoUrl.isEmpty
+        ? null
+        : videoUrl;
+
+    // ------------------------------------------------------------------------
+    // SPECIFIC FIELDS
+    // ------------------------------------------------------------------------
+
+    data['specificFields'] = _parseMap(
+      data['specificFields'] ??
+          data['specific_fields'],
+    );
+
+    return data;
+  }
+
+  // ==========================================================================
+  // MEMORY MODEL -> FIRESTORE
+  // ==========================================================================
+
+  Map<String, dynamic> _memoryModelToFirestoreData(
+    MemoryModel memory,
+  ) {
+    return <String, dynamic>{
+      'id': memory.id.trim(),
+
+      'title': memory.title,
+
+      'restaurantName':
+          memory.restaurantName,
+
+      'location': <String, dynamic>{
+        'address':
+            memory.location.address,
+        'lat':
+            memory.location.lat,
+        'lng':
+            memory.location.lng,
+      },
+
+      'wouldReturn':
+          memory.wouldReturn,
+
+      'rating':
+          memory.rating,
+
+      'imageUrls':
+          List<String>.from(
+        memory.imageUrls,
+      ),
+
+      'videoUrl':
+          memory.videoUrl,
+
+      'date':
+          Timestamp.fromDate(
+        memory.date,
+      ),
+
+      'category':
+          memory.category,
+
+      'specificFields':
+          Map<String, dynamic>.from(
+        memory.specificFields,
+      ),
+    };
+  }
+
+  // ==========================================================================
+  // FIRESTORE -> MEMORY MODEL
+  // ==========================================================================
+
+  MemoryModel _memoryModelFromFirestoreDocument(
+    DocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final Map<String, dynamic> rawData =
+        document.data() ??
+            <String, dynamic>{};
+
+    final Map<String, dynamic> normalizedData =
+        _normalizeMemoryDocument(
+      document.id,
+      rawData,
+    );
+
+    return MemoryModel.fromMap(
+      normalizedData,
+    );
+  }
+
+  // ==========================================================================
+  // OBTENER UNA MEMORIA
+  // ==========================================================================
+
+  Future<MemoryModel?> getMemoryById(
+    String memoryId,
+  ) async {
+    if (!_ensureAuthenticated(
+      operation: 'getMemoryById',
+    )) {
+      return null;
+    }
+
+    final String normalizedMemoryId =
+        memoryId.trim();
+
+    if (normalizedMemoryId.isEmpty) {
+      return null;
+    }
+
+    final CollectionReference<Map<String, dynamic>>?
+        collection =
+        _userMemoriesCollection;
+
+    if (collection == null) {
+      return null;
+    }
+
+    try {
+      final DocumentSnapshot<Map<String, dynamic>>
+          document =
+          await collection
+              .doc(normalizedMemoryId)
+              .get();
+
+      if (!document.exists) {
+        return null;
+      }
+
+      return _memoryModelFromFirestoreDocument(
+        document,
+      );
+    } catch (
+      e,
+      stack
+    ) {
+      debugPrint(
+        '❌ Error obteniendo memoria '
+        '$normalizedMemoryId: $e',
+      );
+
+      debugPrintStack(
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+
+  // ==========================================================================
+  // STREAM PRINCIPAL DE MEMORIAS PARA MAPA
+  // ==========================================================================
+
+  Stream<List<Map<String, dynamic>>>
+      getMemoriesStream() {
+    final CollectionReference<Map<String, dynamic>>?
+        collection =
+        _userMemoriesCollection;
+
+    if (collection == null) {
+      debugPrint(
+        '⚠️ getMemoriesStream: '
+        'no hay usuario autenticado.',
+      );
+
+      return Stream.value(
+        <Map<String, dynamic>>[],
+      );
+    }
+
+    _logAuthState();
+
+    debugPrint(
+      '🗺️ Iniciando stream Firestore:',
+    );
+
+    debugPrint(
+      '📁 users/$_currentUserId/$_memoriesCollection',
+    );
+
+    return collection.snapshots().map(
+      (
+        QuerySnapshot<Map<String, dynamic>>
+            snapshot,
+      ) {
+        final List<Map<String, dynamic>> result =
+            <Map<String, dynamic>>[];
+
+        int memoriesWithCoordinates = 0;
+
+        debugPrint(
+          '============================================================',
+        );
+
+        debugPrint(
+          '🗺️ FIRESTORE SNAPSHOT DE MEMORIAS',
+        );
+
+        debugPrint(
+          '📄 Documentos recibidos: '
+          '${snapshot.docs.length}',
+        );
+
+        for (
+          final QueryDocumentSnapshot<
+              Map<String, dynamic>> doc
+          in snapshot.docs
+        ) {
+          try {
+            final Map<String, dynamic> rawData =
+                Map<String, dynamic>.from(
+              doc.data(),
+            );
+
+            final Map<String, dynamic> data =
+                _normalizeMemoryDocument(
+              doc.id,
+              rawData,
+            );
+
+            final Map<String, dynamic> location =
+                _parseMap(
+              data['location'],
+            );
+
+            final double? lat =
+                _parseDouble(
+              location['lat'],
+            );
+
+            final double? lng =
+                _parseDouble(
+              location['lng'],
+            );
+
+            final String title =
+                _parseString(
+              data['title'],
+              fallback: '(sin título)',
+            );
+
+            final String address =
+                _parseString(
+              location['address'],
+              fallback: '(sin dirección)',
+            );
+
+            if (_areValidCoordinates(
+              lat,
+              lng,
+            )) {
+              memoriesWithCoordinates++;
+
+              debugPrint(
+                '📍 MEMORIA CON COORDENADAS',
+              );
+
+              debugPrint(
+                '   ID: ${doc.id}',
+              );
+
+              debugPrint(
+                '   Título: $title',
+              );
+
+              debugPrint(
+                '   Dirección: $address',
+              );
+
+              debugPrint(
+                '   Lat: $lat',
+              );
+
+              debugPrint(
+                '   Lng: $lng',
+              );
+            } else {
+              debugPrint(
+                '⚠️ MEMORIA SIN COORDENADAS',
+              );
+
+              debugPrint(
+                '   ID: ${doc.id}',
+              );
+
+              debugPrint(
+                '   Título: $title',
+              );
+
+              debugPrint(
+                '   Dirección: $address',
+              );
+
+              debugPrint(
+                '   location original: '
+                '${rawData['location']}',
+              );
+
+              debugPrint(
+                '   lat original: '
+                '${rawData['lat']}',
+              );
+
+              debugPrint(
+                '   lng original: '
+                '${rawData['lng']}',
+              );
+            }
+
+            result.add(
+              data,
+            );
+          } catch (
+            e,
+            stack
+          ) {
+            debugPrint(
+              '❌ Error procesando memoria '
+              '${doc.id}: $e',
+            );
+
+            debugPrintStack(
+              stackTrace: stack,
+            );
+          }
+        }
+
+        debugPrint(
+          '============================================================',
+        );
+
+        debugPrint(
+          '🗺️ RESULTADO MAPA',
+        );
+
+        debugPrint(
+          '📄 Memorias normalizadas: '
+          '${result.length}',
+        );
+
+        debugPrint(
+          '📍 Memorias con coordenadas: '
+          '$memoriesWithCoordinates/'
+          '${result.length}',
+        );
+
+        debugPrint(
+          '============================================================',
+        );
+
+        return result;
+      },
+    );
+  }
+
+  // ==========================================================================
+  // STREAM DE MEMORY MODEL
+  // ==========================================================================
+
+  Stream<List<MemoryModel>>
+      getMemoryModelsStream() {
+    final CollectionReference<Map<String, dynamic>>?
+        collection =
+        _userMemoriesCollection;
+
+    if (collection == null) {
+      debugPrint(
+        '⚠️ getMemoryModelsStream: '
+        'no hay usuario autenticado.',
+      );
+
+      return Stream.value(
+        <MemoryModel>[],
+      );
+    }
+
+    return collection.snapshots().map(
+      (
+        QuerySnapshot<Map<String, dynamic>>
+            snapshot,
+      ) {
+        final List<MemoryModel> result =
+            <MemoryModel>[];
+
+        for (
+          final QueryDocumentSnapshot<
+              Map<String, dynamic>> doc
+          in snapshot.docs
+        ) {
+          try {
+            result.add(
+              _memoryModelFromFirestoreDocument(
+                doc,
+              ),
+            );
+          } catch (
+            e,
+            stack
+          ) {
+            debugPrint(
+              '❌ Error convirtiendo memoria '
+              '${doc.id} a MemoryModel: $e',
+            );
+
+            debugPrintStack(
+              stackTrace: stack,
+            );
+          }
+        }
+
+        debugPrint(
+          '🧠 MemoryModels recibidos '
+          'de Firestore: '
+          '${result.length}',
+        );
+
+        return result;
+      },
+    );
+  }
+
+  // ==========================================================================
+  // GUARDAR MEMORY MODEL
+  // ==========================================================================
+
+  Future<void> saveMemoryModel(
+    MemoryModel memory,
+  ) async {
+    final String memoryId =
+        memory.id.trim();
+
+    if (memoryId.isEmpty) {
+      throw ArgumentError(
+        'No se puede guardar una memoria sin ID.',
+      );
+    }
+
+    await saveMemory(
+      memoryId: memoryId,
+      memoryData:
+          _memoryModelToFirestoreData(
+        memory,
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // GUARDAR MEMORIA + LOCATION
+  // ==========================================================================
+
+  Future<void> saveMemory({
+    required String memoryId,
+    required Map<String, dynamic> memoryData,
+  }) async {
+    if (!_ensureAuthenticated(
+      operation: 'saveMemory',
+    )) {
+      return;
+    }
+
+    final String normalizedMemoryId =
+        memoryId.trim();
+
+    if (normalizedMemoryId.isEmpty) {
+      throw ArgumentError(
+        'memoryId no puede estar vacío.',
+      );
+    }
+
+    try {
+      final CollectionReference<
+              Map<String, dynamic>>?
+          memoriesCollection =
+          _userMemoriesCollection;
+
+      final CollectionReference<
+              Map<String, dynamic>>?
+          locationsCollection =
+          _userLocationsCollection;
+
+      if (memoriesCollection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de memorias.',
+        );
+      }
+
+      if (locationsCollection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de localizaciones.',
+        );
+      }
+
+      // ======================================================================
+      // REFERENCIAS
+      // ======================================================================
+
+      final DocumentReference<
+              Map<String, dynamic>>
+          memoryReference =
+          memoriesCollection.doc(
+        normalizedMemoryId,
+      );
+
+      final DocumentReference<
+              Map<String, dynamic>>
+          locationReference =
+          locationsCollection.doc(
+        normalizedMemoryId,
+      );
+
+      // ======================================================================
+      // OBTENER DOCUMENTOS EXISTENTES
+      // ======================================================================
+
+      final DocumentSnapshot<
+              Map<String, dynamic>>
+          existingMemory =
+          await memoryReference.get();
+
+      final DocumentSnapshot<
+              Map<String, dynamic>>
+          existingLocation =
+          await locationReference.get();
+
+      // ======================================================================
+      // COPIA DE DATOS
+      // ======================================================================
+
+      final Map<String, dynamic> data =
+          Map<String, dynamic>.from(
+        memoryData,
+      );
+
+      // ======================================================================
+      // ID
+      // ======================================================================
+
+      data['id'] =
+          normalizedMemoryId;
+
+      // ======================================================================
+      // LOCATION
+      // ======================================================================
+
+      final Map<String, dynamic> location =
+          _normalizeLocation(
+        data,
+      );
+
+      data['location'] =
+          location;
+
+      // ======================================================================
+      // TITLE
+      // ======================================================================
+
+      String title =
+          _parseString(
+        data['title'],
+      );
+
+      if (title.isEmpty) {
+        title =
+            _parseString(
+          data['restaurantName'],
+        );
+      }
+
+      data['title'] =
+          title;
+
+      // ======================================================================
+      // RESTAURANT NAME
+      // ======================================================================
+
+      String restaurantName =
+          _parseString(
+        data['restaurantName'],
+      );
+
+      if (restaurantName.isEmpty) {
+        restaurantName =
+            title;
+      }
+
+      data['restaurantName'] =
+          restaurantName;
+
+      // ======================================================================
+      // CATEGORY
+      // ======================================================================
+
+      data['category'] =
+          _parseString(
+        data['category'],
+        fallback: 'General',
+      );
+
+      // ======================================================================
+      // WOULD RETURN
+      // ======================================================================
+
+      data['wouldReturn'] =
+          _parseBool(
+        data['wouldReturn'] ??
+            data['would_return'],
+      );
+
+      // ======================================================================
+      // RATING
+      // ======================================================================
+
+      double? rating =
+          _parseDouble(
+        data['rating'] ??
+            data['score'],
+      );
+
+      rating ??= 0.0;
+
+      if (rating < 0) {
+        rating = 0.0;
+      }
+
+      if (rating > 5) {
+        rating = 5.0;
+      }
+
+      data['rating'] =
+          rating;
+
+      // ======================================================================
+      // IMÁGENES
+      // ======================================================================
+
+      data['imageUrls'] =
+          _parseStringList(
+        data['imageUrls'] ??
+            data['images'] ??
+            data['image_paths'],
+      );
+
+      // ======================================================================
+      // VIDEO
+      // ======================================================================
+
+      final String videoUrl =
+          _parseString(
+        data['videoUrl'] ??
+            data['video'] ??
+            data['video_url'],
+      );
+
+      data['videoUrl'] =
+          videoUrl.isEmpty
+              ? null
+              : videoUrl;
+
+      // ======================================================================
+      // SPECIFIC FIELDS
+      // ======================================================================
+
+      data['specificFields'] =
+          _parseMap(
+        data['specificFields'] ??
+            data['specific_fields'],
+      );
+
+      // ======================================================================
+      // DATE
+      // ======================================================================
+      //
+      // Prioridad:
+      //
+      // 1. Fecha explícita válida enviada por el modelo.
+      // 2. Fecha existente en Firestore.
+      // 3. serverTimestamp() si es una memoria nueva.
+      //
+      // Así, editar una memoria no cambia su fecha original.
+      //
+
+      final Timestamp? parsedDate =
+          _parseTimestamp(
+        data['date'],
+      );
+
+      if (parsedDate != null) {
+        data['date'] =
+            parsedDate;
+      } else if (existingMemory.exists) {
+        final dynamic existingDate =
+            existingMemory.data()?['date'];
+
+        if (_hasUsableValue(
+          existingDate,
+        )) {
+          data['date'] =
+              existingDate;
+        } else {
+          data['date'] =
+              FieldValue.serverTimestamp();
+        }
+      } else {
+        data['date'] =
+            FieldValue.serverTimestamp();
+      }
+
+      // ======================================================================
+      // UPDATED AT
+      // ======================================================================
+
+      data['updatedAt'] =
+          FieldValue.serverTimestamp();
+
+      // ======================================================================
+      // CREATED AT
+      // ======================================================================
+
+      if (!existingMemory.exists) {
+        data['createdAt'] =
+            FieldValue.serverTimestamp();
+      }
+
+      // ======================================================================
+      // LOCATION SECUNDARIO
+      // ======================================================================
+
+      final Map<String, dynamic>
+          locationData =
+          <String, dynamic>{
+        'id':
+            normalizedMemoryId,
+        'address':
+            location['address'],
+        'lat':
+            location['lat'],
+        'lng':
+            location['lng'],
+        'updatedAt':
+            FieldValue.serverTimestamp(),
+      };
+
+      if (!existingLocation.exists) {
+        locationData['createdAt'] =
+            FieldValue.serverTimestamp();
+      }
+
+      // ======================================================================
+      // BATCH
+      // ======================================================================
+
+      final WriteBatch batch =
+          _firestore.batch();
+
+      // ----------------------------------------------------------------------
+      // MEMORIA PRINCIPAL
+      // ----------------------------------------------------------------------
+
+      batch.set(
+        memoryReference,
+        data,
+        SetOptions(
+          merge: true,
+        ),
+      );
+
+      // ----------------------------------------------------------------------
+      // LOCATION SECUNDARIO
+      // ----------------------------------------------------------------------
+
+      batch.set(
+        locationReference,
+        locationData,
+        SetOptions(
+          merge: true,
+        ),
+      );
+
+      // ======================================================================
+      // COMMIT
+      // ======================================================================
+
+      await batch.commit();
+
+      debugPrint(
+        '✅ Memoria guardada correctamente.',
+      );
+
+      debugPrint(
+        '   ID: $normalizedMemoryId',
+      );
+
+      debugPrint(
+        '   Usuario: $_currentUserId',
+      );
+
+      debugPrint(
+        '   Título: $title',
+      );
+
+      debugPrint(
+        '   Restaurante: $restaurantName',
+      );
+
+      debugPrint(
+        '   Categoría: ${data['category']}',
+      );
+
+      // ======================================================================
+      // LOG COORDENADAS
+      // ======================================================================
+
+      final double? lat =
+          _parseDouble(
+        location['lat'],
+      );
+
+      final double? lng =
+          _parseDouble(
+        location['lng'],
+      );
+
+      if (_areValidCoordinates(
+        lat,
+        lng,
+      )) {
+        debugPrint(
+          '📍 Coordenadas guardadas correctamente:',
+        );
+
+        debugPrint(
+          '   Lat: $lat',
+        );
+
+        debugPrint(
+          '   Lng: $lng',
+        );
+      } else {
+        debugPrint(
+          '⚠️ Memoria guardada sin coordenadas válidas.',
+        );
+
+        debugPrint(
+          '   Location: $location',
+        );
+      }
+
+      debugPrint(
+        '📍 Localización secundaria sincronizada.',
+      );
+    } catch (
+      e,
+      stack
+    ) {
+      debugPrint(
+        '❌ Error al guardar recuerdo '
+        'en Firestore: $e',
+      );
+
+      debugPrintStack(
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+
+  // ==========================================================================
+  // ELIMINAR MEMORIA + LOCATION
+  // ==========================================================================
+
+  Future<void> deleteMemory(
+    String memoryId,
+  ) async {
+    if (!_ensureAuthenticated(
+      operation: 'deleteMemory',
+    )) {
+      return;
+    }
+
+    final String normalizedMemoryId =
+        memoryId.trim();
+
+    if (normalizedMemoryId.isEmpty) {
+      throw ArgumentError(
+        'memoryId no puede estar vacío.',
+      );
+    }
+
+    try {
+      final CollectionReference<
+              Map<String, dynamic>>?
+          memoriesCollection =
+          _userMemoriesCollection;
+
+      final CollectionReference<
+              Map<String, dynamic>>?
+          locationsCollection =
+          _userLocationsCollection;
+
+      if (memoriesCollection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de memorias.',
+        );
+      }
+
+      if (locationsCollection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de localizaciones.',
+        );
+      }
+
+      final WriteBatch batch =
+          _firestore.batch();
+
+      batch.delete(
+        memoriesCollection.doc(
+          normalizedMemoryId,
+        ),
+      );
+
+      batch.delete(
+        locationsCollection.doc(
+          normalizedMemoryId,
+        ),
+      );
+
+      await batch.commit();
+
+      debugPrint(
+        '🗑️ Memoria eliminada correctamente:',
+      );
+
+      debugPrint(
+        '   ID: $normalizedMemoryId',
+      );
+
+      debugPrint(
+        '   Usuario: $_currentUserId',
+      );
+    } catch (
+      e,
+      stack
+    ) {
+      debugPrint(
+        '❌ Error al eliminar recuerdo: $e',
+      );
+
+      debugPrintStack(
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+
+  // ==========================================================================
+  // STREAM DE LOCATIONS
+  // ==========================================================================
+
+  Stream<List<Map<String, dynamic>>>
+      getLocationsStream() {
+    final CollectionReference<Map<String, dynamic>>?
+        collection =
+        _userLocationsCollection;
+
+    if (collection == null) {
+      debugPrint(
+        '⚠️ getLocationsStream: '
+        'no hay usuario autenticado.',
+      );
+
+      return Stream.value(
+        <Map<String, dynamic>>[],
+      );
+    }
+
+    _logAuthState();
+
+    debugPrint(
+      '📍 Iniciando stream de localizaciones:',
+    );
+
+    debugPrint(
+      '📁 users/$_currentUserId/$_locationsCollection',
+    );
+
+    return collection.snapshots().map(
+      (
+        QuerySnapshot<Map<String, dynamic>>
+            snapshot,
+      ) {
+        final List<Map<String, dynamic>> result =
+            <Map<String, dynamic>>[];
+
+        int validCoordinates = 0;
+
+        debugPrint(
+          '📍 Documentos de localizaciones: '
+          '${snapshot.docs.length}',
+        );
+
+        for (
+          final QueryDocumentSnapshot<
+              Map<String, dynamic>> doc
+          in snapshot.docs
+        ) {
+          try {
+            final Map<String, dynamic> rawData =
+                Map<String, dynamic>.from(
+              doc.data(),
+            );
+
+            final Map<String, dynamic>
+                normalizedLocation =
+                _normalizeLocation(
+              rawData,
+            );
+
+            final double? lat =
+                _parseDouble(
+              normalizedLocation['lat'],
+            );
+
+            final double? lng =
+                _parseDouble(
+              normalizedLocation['lng'],
+            );
+
+            final Map<String, dynamic> data =
+                <String, dynamic>{
+              ...rawData,
+              'id':
+                  doc.id,
+              'address':
+                  normalizedLocation['address'],
+              'lat':
+                  lat,
+              'lng':
+                  lng,
+            };
+
+            if (_areValidCoordinates(
+              lat,
+              lng,
+            )) {
+              validCoordinates++;
+            } else {
+              data['lat'] =
+                  null;
+
+              data['lng'] =
+                  null;
+            }
+
+            result.add(
+              data,
+            );
+          } catch (
+            e,
+            stack
+          ) {
+            debugPrint(
+              '❌ Error procesando localización '
+              '${doc.id}: $e',
+            );
+
+            debugPrintStack(
+              stackTrace: stack,
+            );
+          }
+        }
+
+        debugPrint(
+          '📍 Localizaciones normalizadas: '
+          '${result.length}',
+        );
+
+        debugPrint(
+          '📍 Localizaciones con coordenadas válidas: '
+          '$validCoordinates/'
+          '${result.length}',
+        );
+
+        return result;
+      },
+    );
+  }
+
+  // ==========================================================================
+  // GUARDAR LOCATION DESDE MEMORY MODEL
+  // ==========================================================================
+
+  Future<void> saveLocationFromMemory(
+    MemoryModel memory,
+  ) async {
+    final String locationId =
+        memory.id.trim();
+
+    if (locationId.isEmpty) {
+      throw ArgumentError(
+        'No se puede guardar una localización sin ID.',
+      );
+    }
+
+    await saveLocation(
+      locationId: locationId,
+      locationData:
+          memory.location.toMap(),
+    );
+  }
+
+  // ==========================================================================
+  // GUARDAR LOCATION
+  // ==========================================================================
+
+  Future<void> saveLocation({
+    required String locationId,
+    required Map<String, dynamic> locationData,
+  }) async {
+    if (!_ensureAuthenticated(
+      operation: 'saveLocation',
+    )) {
+      return;
+    }
+
+    final String normalizedLocationId =
+        locationId.trim();
+
+    if (normalizedLocationId.isEmpty) {
+      throw ArgumentError(
+        'locationId no puede estar vacío.',
+      );
+    }
+
+    try {
+      final CollectionReference<
+              Map<String, dynamic>>?
+          collection =
+          _userLocationsCollection;
+
+      if (collection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de localizaciones.',
+        );
+      }
+
+      final DocumentReference<
+              Map<String, dynamic>>
+          reference =
+          collection.doc(
+        normalizedLocationId,
+      );
+
+      final DocumentSnapshot<
+              Map<String, dynamic>>
+          existing =
+          await reference.get();
+
+      final Map<String, dynamic> data =
+          Map<String, dynamic>.from(
+        locationData,
+      );
+
+      // ======================================================================
+      // NORMALIZAR
+      // ======================================================================
+
+      final Map<String, dynamic>
+          normalizedLocation =
+          _normalizeLocation(
+        data,
+      );
+
+      data['id'] =
+          normalizedLocationId;
+
+      data['address'] =
+          normalizedLocation['address'];
+
+      data['lat'] =
+          normalizedLocation['lat'];
+
+      data['lng'] =
+          normalizedLocation['lng'];
+
+      // ======================================================================
+      // METADATOS
+      // ======================================================================
+
+      data['updatedAt'] =
+          FieldValue.serverTimestamp();
+
+      if (!existing.exists) {
+        data['createdAt'] =
+            FieldValue.serverTimestamp();
+      }
+
+      // ======================================================================
+      // GUARDAR
+      // ======================================================================
+
+      await reference.set(
+        data,
+        SetOptions(
+          merge: true,
+        ),
+      );
+
+      debugPrint(
+        '📍 Localización guardada correctamente.',
+      );
+
+      debugPrint(
+        '   ID: $normalizedLocationId',
+      );
+
+      debugPrint(
+        '   Usuario: $_currentUserId',
+      );
+
+      final double? lat =
+          _parseDouble(
+        data['lat'],
+      );
+
+      final double? lng =
+          _parseDouble(
+        data['lng'],
+      );
+
+      if (_areValidCoordinates(
+        lat,
+        lng,
+      )) {
+        debugPrint(
+          '📍 Coordenadas:',
+        );
+
+        debugPrint(
+          '   Lat: $lat',
+        );
+
+        debugPrint(
+          '   Lng: $lng',
+        );
+      } else {
+        debugPrint(
+          '⚠️ Localización guardada '
+          'sin coordenadas válidas.',
+        );
+      }
+    } catch (
+      e,
+      stack
+    ) {
+      debugPrint(
+        '❌ Error al guardar localización '
+        'en Firestore: $e',
+      );
+
+      debugPrintStack(
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+
+  // ==========================================================================
+  // ELIMINAR LOCATION SECUNDARIO
+  // ==========================================================================
+
+  Future<void> deleteLocation(
+    String locationId,
+  ) async {
+    if (!_ensureAuthenticated(
+      operation: 'deleteLocation',
+    )) {
+      return;
+    }
+
+    final String normalizedLocationId =
+        locationId.trim();
+
+    if (normalizedLocationId.isEmpty) {
+      throw ArgumentError(
+        'locationId no puede estar vacío.',
+      );
+    }
+
+    try {
+      final CollectionReference<
+              Map<String, dynamic>>?
+          collection =
+          _userLocationsCollection;
+
+      if (collection == null) {
+        throw StateError(
+          'No se pudo obtener la colección de localizaciones.',
+        );
+      }
+
+      await collection
+          .doc(
+            normalizedLocationId,
+          )
+          .delete();
+
+      debugPrint(
+        '🗑️ Localización secundaria eliminada:',
+      );
+
+      debugPrint(
+        '   ID: $normalizedLocationId',
+      );
+    } catch (
+      e,
+      stack
+    ) {
+      debugPrint(
+        '❌ Error al eliminar localización: $e',
+      );
+
+      debugPrintStack(
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+}

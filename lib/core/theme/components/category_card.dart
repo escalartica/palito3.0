@@ -3,7 +3,6 @@ import '../../../core/data/categories.dart';
 import '../../../core/theme/tokens/app_typography.dart';
 import '../../../core/theme/tokens/app_radius.dart';
 import '../../../core/theme/tokens/app_shadows.dart';
-import '../../../core/theme/tokens/app_colors.dart';
 
 
 class CategoryCard extends StatelessWidget {

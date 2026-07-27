@@ -1,48 +1,302 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../../../../core/factories/dynamic_field_factory.dart';
 
 class PlatoEstrellaFields implements DynamicFieldGenerator {
   @override
-  List<Widget> buildFields(Map<String, dynamic> data, Function(String, dynamic) onUpdate, TextEditingController otroController) {
+  List<Widget> buildFields(
+    Map<String, dynamic> data, 
+    Function(String, dynamic) onUpdate, 
+    TextEditingController otroController,
+  ) {
     return [
-      _section("📋 Datos del Plato"),
-      _text('nombre_plato', 'Nombre del plato', onUpdate),
-      _choice('tipo_plato', ['Carne', 'Pescado', 'Pasta', 'Arroz', 'Verduras', 'Cuchara', 'Brasa', 'Marisco', 'Internacional'], data, onUpdate),
-      
-      _section("🧑‍🍳 Técnica y Equilibrio"),
-      _multi('tecnica', ['Brasa perfecta', 'Baja temperatura', 'Frito impecable', 'Crujiente', 'Ahumado', 'Confitado', 'Fermentado'], data, onUpdate),
-      _choice('coccion', ['Crudo', 'Poco hecho', 'Al punto', 'Muy hecho', 'Perfecto'], data, onUpdate),
-      _choice('equilibrio', ['Perfecto', 'Muy salado', 'Muy dulce', 'Muy ácido', 'Falta intensidad'], data, onUpdate),
-
-      _section("💥 Impacto Sensorial"),
-      _choice('primer_bocado', ['Correcto', 'Interesante', 'Muy bueno', 'Sonreí', 'Acertamos'], data, onUpdate),
-      _multi('emocion', ['Reconfortado', 'Sorprendido', 'Feliz', 'Nostálgico', 'Impresionado', 'Divertido'], data, onUpdate),
-      
-      _section("🏆 Premio Palito y Decisión"),
-      _dropdown('premio', ['Obra maestra', 'Vale el viaje', 'Amor a primer bocado', 'Motivo para volver', 'Joya escondida', 'El mejor del año'], data, onUpdate),
-      _choice('momento_especial', ['Antes de probar', 'Primer bocado', 'Mitad', 'Último bocado', 'Al día siguiente'], data, onUpdate),
-      _choice('harias_por_volver', ['Lo pediré otra vez', 'Cambiaría mi ruta', 'Haría un viaje solo', 'Lo echaré de menos', 'Ya planificando'], data, onUpdate),
+      _buildCustomTextField(
+        'nombre_plato', 
+        'Datos del Plato', 
+        'Nombre del plato', 
+        data, 
+        onUpdate,
+      ),
+      _buildCompactChipGroup(
+        'tipo_plato', 
+        'Tipo de plato', 
+        [
+          {'label': 'Carne', 'icon': Icons.kebab_dining_rounded},
+          {'label': 'Pescado', 'icon': Icons.set_meal_rounded},
+          {'label': 'Pasta', 'icon': Icons.ramen_dining_rounded},
+          {'label': 'Arroz', 'icon': Icons.rice_bowl_rounded},
+          {'label': 'Verduras', 'icon': Icons.eco_outlined},
+          {'label': 'Cuchara', 'icon': Icons.soup_kitchen_rounded},
+          {'label': 'Brasa', 'icon': Icons.local_fire_department_outlined},
+          {'label': 'Marisco', 'icon': Icons.tsunami_rounded},
+          {'label': 'Internacional', 'icon': Icons.public_rounded},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'tecnica', 
+        'Técnica y Equilibrio: Técnica aplicada', 
+        [
+          {'label': 'Brasa perfecta', 'icon': Icons.local_fire_department_outlined},
+          {'label': 'Baja temperatura', 'icon': Icons.thermostat_rounded},
+          {'label': 'Frito impecable', 'icon': Icons.oil_barrel_outlined},
+          {'label': 'Crujiente', 'icon': Icons.flash_on_outlined},
+          {'label': 'Ahumado', 'icon': Icons.blur_on_rounded},
+          {'label': 'Confitado', 'icon': Icons.hourglass_top_rounded},
+          {'label': 'Fermentado', 'icon': Icons.science_outlined},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: true,
+      ),
+      _buildCompactChipGroup(
+        'coccion', 
+        'Punto de cocción', 
+        [
+          {'label': 'Crudo', 'icon': Icons.water_drop_outlined},
+          {'label': 'Poco hecho', 'icon': Icons.remove_rounded},
+          {'label': 'Al punto', 'icon': Icons.check_circle_outline_rounded},
+          {'label': 'Muy hecho', 'icon': Icons.whatshot_rounded},
+          {'label': 'Perfecto', 'icon': Icons.verified_rounded},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'equilibrio', 
+        'Equilibrio de sabores', 
+        [
+          {'label': 'Perfecto', 'icon': Icons.balance_outlined},
+          {'label': 'Muy salado', 'icon': Icons.grain_rounded},
+          {'label': 'Muy dulce', 'icon': Icons.cake_outlined},
+          {'label': 'Muy ácido', 'icon': Icons.bolt_rounded},
+          {'label': 'Falta intensidad', 'icon': Icons.trending_down_rounded},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'primer_bocado', 
+        'Impacto Sensorial: Primer bocado', 
+        [
+          {'label': 'Correcto', 'icon': Icons.check_rounded},
+          {'label': 'Interesante', 'icon': Icons.lightbulb_outline_rounded},
+          {'label': 'Muy bueno', 'icon': Icons.thumb_up_outlined},
+          {'label': 'Sonreí', 'icon': Icons.sentiment_very_satisfied_rounded},
+          {'label': 'Acertamos', 'icon': Icons.military_tech_rounded},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'emocion', 
+        'Emoción predominante', 
+        [
+          {'label': 'Reconfortado', 'icon': Icons.favorite_border_rounded},
+          {'label': 'Sorprendido', 'icon': Icons.bolt_rounded},
+          {'label': 'Feliz', 'icon': Icons.sentiment_satisfied_alt_rounded},
+          {'label': 'Nostálgico', 'icon': Icons.history_edu_rounded},
+          {'label': 'Impresionado', 'icon': Icons.auto_awesome_rounded},
+          {'label': 'Divertido', 'icon': Icons.sports_esports_outlined},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: true,
+      ),
+      _buildCompactChipGroup(
+        'premio', 
+        'Premio Palito y Decisión', 
+        [
+          {'label': 'Obra maestra', 'icon': Icons.diamond_outlined},
+          {'label': 'Vale el viaje', 'icon': Icons.directions_car_filled_outlined},
+          {'label': 'Amor a primer bocado', 'icon': Icons.favorite_rounded},
+          {'label': 'Motivo para volver', 'icon': Icons.replay_rounded},
+          {'label': 'Joya escondida', 'icon': Icons.star_border_rounded},
+          {'label': 'El mejor del año', 'icon': Icons.emoji_events_outlined},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'momento_especial', 
+        'Momento más especial', 
+        [
+          {'label': 'Antes de probar', 'icon': Icons.visibility_outlined},
+          {'label': 'Primer bocado', 'icon': Icons.star_half_rounded},
+          {'label': 'Mitad', 'icon': Icons.sync_rounded},
+          {'label': 'Último bocado', 'icon': Icons.last_page_rounded},
+          {'label': 'Al día siguiente', 'icon': Icons.wb_sunny_outlined},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
+      _buildCompactChipGroup(
+        'harias_por_volver', 
+        '¿Qué harías por volver?', 
+        [
+          {'label': 'Lo pediré otra vez', 'icon': Icons.repeat_rounded},
+          {'label': 'Cambiaría mi ruta', 'icon': Icons.alt_route_rounded},
+          {'label': 'Haría un viaje solo', 'icon': Icons.directions_walk_rounded},
+          {'label': 'Lo echaré de menos', 'icon': Icons.cloud_off_rounded},
+          {'label': 'Ya planificando', 'icon': Icons.calendar_today_rounded},
+        ], 
+        data, 
+        onUpdate,
+        isMulti: false,
+      ),
     ];
   }
 
-  // Widgets auxiliares (reutilizando tu lógica de diseño)
-  Widget _section(String title) => Padding(padding: const EdgeInsets.only(top: 25, bottom: 10), child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple)));
-  
-  Widget _text(String key, String label, Function(String, dynamic) onUpdate) => Padding(padding: const EdgeInsets.only(bottom: 10), child: TextFormField(decoration: InputDecoration(labelText: label), onChanged: (v) => onUpdate(key, v)));
-  
-  Widget _choice(String key, List<String> opts, Map<String, dynamic> data, Function(String, dynamic) onUpdate) => 
-    Wrap(spacing: 8, children: opts.map((o) => ChoiceChip(label: Text(o), selected: data[key] == o, onSelected: (s) => onUpdate(key, s ? o : null))).toList());
+  Widget _buildCompactChipGroup(
+    String key, 
+    String label, 
+    List<Map<String, dynamic>> options, 
+    Map<String, dynamic> data, 
+    Function(String, dynamic) onUpdate, {
+    required bool isMulti,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label, 
+            style: GoogleFonts.outfit(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: options.map((optionData) {
+              final String option = optionData['label'] as String;
+              final IconData icon = optionData['icon'] as IconData;
+              
+              bool isSelected = false;
+              if (isMulti) {
+                final List selectedItems = data[key] is List ? List.from(data[key]) : [];
+                isSelected = selectedItems.contains(option);
+              } else {
+                isSelected = data[key] == option;
+              }
 
-  Widget _multi(String key, List<String> opts, Map<String, dynamic> data, Function(String, dynamic) onUpdate) =>
-    Wrap(spacing: 8, children: opts.map((o) {
-      final list = (data[key] as List?) ?? [];
-      return FilterChip(label: Text(o), selected: list.contains(o), onSelected: (s) {
-        final l = List.from(list);
-        s ? l.add(o) : l.remove(o);
-        onUpdate(key, l);
-      });
-    }).toList());
+              return InkWell(
+                onTap: () {
+                  if (isMulti) {
+                    final List selectedItems = data[key] is List ? List.from(data[key]) : [];
+                    final newList = List.from(selectedItems);
+                    if (isSelected) {
+                      newList.remove(option);
+                    } else {
+                      newList.add(option);
+                    }
+                    onUpdate(key, newList);
+                  } else {
+                    onUpdate(key, isSelected ? null : option);
+                  }
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFFFFD400) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF0F172A), 
+                      width: isSelected ? 2.0 : 1.0,
+                    ),
+                    boxShadow: isSelected 
+                        ? const [BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon, 
+                        size: 14, 
+                        color: const Color(0xFF0F172A),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        option,
+                        style: GoogleFonts.inter(
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: const Color(0xFF0F172A),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _dropdown(String key, List<String> opts, Map<String, dynamic> data, Function(String, dynamic) onUpdate) =>
-    DropdownButtonFormField(value: data[key], isExpanded: true, items: opts.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(), onChanged: (v) => onUpdate(key, v));
+  Widget _buildCustomTextField(
+    String key, 
+    String label, 
+    String hint, 
+    Map<String, dynamic> data, 
+    Function(String, dynamic) onUpdate,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label, 
+            style: GoogleFonts.outfit(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              boxShadow: const [
+                BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+              ],
+            ),
+            child: TextFormField(
+              initialValue: data[key],
+              style: GoogleFonts.inter(
+                color: const Color(0xFF0F172A), 
+                fontWeight: FontWeight.w600, 
+                fontSize: 13,
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 12),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              onChanged: (v) => onUpdate(key, v),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

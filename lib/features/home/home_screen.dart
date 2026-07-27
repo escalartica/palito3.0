@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'widgets/hero_card.dart';
 import 'widgets/capture_fab.dart';
 
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -13,8 +14,8 @@ class HomeScreen extends StatelessWidget {
           // Capa de contenido editorial
           GestureDetector(
             onHorizontalDragEnd: (details) {
-              if (details.primaryVelocity! > 0) print("Navegar a Pasaporte");
-              if (details.primaryVelocity! < 0) print("Navegar a Radar");
+              if (details.primaryVelocity! > 0) debugPrint("Navegar a Pasaporte");
+              if (details.primaryVelocity! < 0) debugPrint("Navegar a Radar");
             },
             child: const HeroCard(),
           ),

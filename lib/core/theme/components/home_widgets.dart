@@ -53,8 +53,8 @@ class HomeHero extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Colors.black.withOpacity(0.85), 
-                      Colors.black.withOpacity(0.3),
+                      Colors.black.withValues(alpha: 0.85),
+                      Colors.black.withValues(alpha: 0.3),
                       Colors.transparent,
                     ],
                     begin: Alignment.bottomCenter,

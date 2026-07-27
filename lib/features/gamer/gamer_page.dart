@@ -3,28 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../gamer/zona_gamer_card.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:palito_3_0/core/providers/gamer_provider.dart';
 
-class GamerPage extends StatefulWidget {
+class GamerPage extends ConsumerStatefulWidget {
   const GamerPage({super.key});
 
   @override
-  State<GamerPage> createState() => _GamerPageState();
+  ConsumerState<GamerPage> createState() => _GamerPageState();
 }
 
-class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
+class _GamerPageState extends ConsumerState<GamerPage> with TickerProviderStateMixin {
   int _selectedMode = 0; // 0: Ruleta Pro (Elige Plato), 1: Juicio Picante (Retos)
   
   List<Map<String, dynamic>> _players = [
-    {"name": "Tú", "icon": Icons.person_rounded, "color": const Color(0xFFFFD400), "points": 0, "medals": 0},
-    {"name": "Tu Pareja", "icon": Icons.favorite_rounded, "color": const Color(0xFFFF4D29), "points": 0, "medals": 0},
-    {"name": "🤖 Palito", "icon": Icons.smart_toy_rounded, "color": const Color(0xFF0F172A), "points": 0, "medals": 0},
-    {"name": "Celia", "icon": Icons.star_rounded, "color": const Color(0xFF38BDF8), "points": 0, "medals": 0},
-    {"name": "Chary", "icon": Icons.local_fire_department_rounded, "color": const Color(0xFFEC4899), "points": 0, "medals": 0},
-    {"name": "Vero", "icon": Icons.bolt_rounded, "color": const Color(0xFF10B981), "points": 0, "medals": 0},
+    {"name": "CeH", "icon": Icons.person_rounded, "color": const Color(0xFFFFD400), "points": 0, "medals": 0},
+    {"name": "Eme", "icon": Icons.favorite_rounded, "color": const Color(0xFFFF4D29), "points": 0, "medals": 0},
+    {"name": "🤖 Palito App", "icon": Icons.smart_toy_rounded, "color": const Color(0xFF0F172A), "points": 0, "medals": 0},
   ];
 
   final TextEditingController _nameController = TextEditingController();
@@ -42,14 +40,144 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
   final List<Map<String, String>> _history = [];
   final Map<String, int> _punishmentCounts = {};
+   
+  final List<Map<String, dynamic>> _achievements = [
+    {
+      "id": "king_flavor",
+      "title": "Rey del Sabor",
+      "desc": "Alcanzar los 40 puntos o más en la sesión.",
+      "icon": Icons.workspace_premium_rounded,
+      "color": Colors.amber,
+      "unlocked": false,
+    },
+    {
+      "id": "spicy_streak",
+      "title": "Racha Picante",
+      "desc": "Acumular una racha de más de 10 decisiones.",
+      "icon": Icons.local_fire_department_rounded,
+      "color": Colors.deepOrange,
+      "unlocked": false,
+    },
+    {
+      "id": "soul_table",
+      "title": "Alma de la Mesa",
+      "desc": "Interactuar con todos los comensales.",
+      "icon": Icons.groups_rounded,
+      "color": Colors.purple,
+      "unlocked": false,
+    },
+  ];
+
+  void _checkAndUnlockAchievements(int maxPoints, int streak, {bool fromLoad = false}) {
+    setState(() {
+      for (var achievement in _achievements) {
+        if (achievement["unlocked"] == false) {
+          bool conditionMet = false;
+          
+          if (achievement["id"] == "king_flavor" && maxPoints >= 40) {
+            conditionMet = true;
+          } else if (achievement["id"] == "spicy_streak" && streak >= 10) {
+            conditionMet = true;
+          } else if (achievement["id"] == "soul_table" && _decisionsCount >= 5) {
+            conditionMet = true;
+          }
+
+          if (conditionMet) {
+            achievement["unlocked"] = true;
+            if (!fromLoad) {
+              _showAchievementUnlockedDialog(
+                achievement["title"], 
+                achievement["desc"], 
+                achievement["icon"], 
+                achievement["color"]
+              );
+            }
+          }
+        }
+      }
+    });
+  }
+
+  void _showAchievementUnlockedDialog(String title, String desc, IconData icon, Color color) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 40, color: color),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "¡Logro Desbloqueado!",
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: color),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              desc,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: Text("¡Genial!", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   final List<String> _palitoChallenges = [
-    "🏆 ¡Pide un plato sorpresa y exígeles una nota mínima de 9!",
+    "🏆 ¡Pide un plato sorpresa !",
     "💸 ¡Toca pagar la primera ronda de bebidas de toda la mesa!",
     "🍰 ¡Elige el postre a ciegas sin mirar la carta y acierta los ingredientes!",
     "🔍 ¡Haz una cata técnica obligatoria al plato del compañero de al lado!",
     "🎙️ ¡Inaugura el banquete haciendo un brindis épico dedicado a Palito!",
     "🌶️ ¡Prueba el bocado más picante o exótico disponible en la comanda!",
+    "🥔 ¡Encuentra la mejor patata de toda la mesa y proclámala oficialmente!",
+    "🕵️ ¡Adivina el ingrediente secreto de un plato sin preguntar a nadie!",
+    "🤫 ¡Elige un plato para compartir sin decirle a nadie qué es!",
+    "📸 ¡Haz la foto gastronómica más artística de la noche!",
+    "👃 ¡Huele un plato con los ojos cerrados e intenta adivinar qué lleva!",
+    "🔄 ¡Intercambia tu plato con alguien durante un bocado!",
+    "🎯 ¡Pide algo que jamás hayas probado antes!",
+    "🧠 ¡Describe tu plato sin mencionar ninguno de sus ingredientes!",
+    "🎤 ¡Presenta el siguiente plato como si fueras el chef de un restaurante Michelin!",
+    "🧂 ¡Adivina si el plato necesita más sal antes de probarlo!",
+    "🗺️ ¡Busca en el menú un plato típico de una región que nunca hayas visitado!",
+    "💎 ¡Declara cuál es el bocado más valioso de la mesa y explica por qué!",
+    "🔥 ¡Encuentra el plato con más personalidad de toda la comanda!",
+    "❤️ ¡Regala tu mejor bocado a la persona que elijas!",
+    "🎭 ¡Describe tu plato usando solo tres palabras dramáticas!",
+    "📖 ¡Inventa una historia de 20 segundos sobre el origen de tu plato!",
+    "🧐 ¡Analiza un plato como si fueras un detective buscando pistas!",
+    "🥇 ¡Elige al campeón absoluto de la mesa y corona tu Plato de la Noche!",
+    "🎰 ¡Deja que Palito decida tu próximo bocado!",
+    "🚨 ¡ALERTA PALITO! Tienes que probar el plato que menos te apetezca!",
   ];
 
   String? _currentChallenge;
@@ -110,6 +238,10 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
           }).toList();
         });
       }
+
+      int highestPoints = _players.fold(0, (max, p) => (p["points"] as int) > max ? (p["points"] as int) : max);
+      _checkAndUnlockAchievements(highestPoints, _decisionsCount, fromLoad: true);
+
     } catch (e) {
       debugPrint("Error cargando datos: $e");
     }
@@ -129,8 +261,20 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
       }).toList();
 
       prefs.setString('palito_players_data', jsonEncode(serialized));
+
+      final service = ref.read(gamerServiceProvider);
+      int totalScore = _players.fold(0, (sum, p) => sum + (p["points"] as int));
+      await service.updateGamerStats(
+        score: totalScore,
+        streak: _decisionsCount,
+        unlockedChallenges: _palitoChallenges,
+      );
+
+      int highestPoints = _players.fold(0, (max, p) => (p["points"] as int) > max ? (p["points"] as int) : max);
+      _checkAndUnlockAchievements(highestPoints, _decisionsCount);
+
     } catch (e) {
-      debugPrint("Error guardando datos: $e");
+      debugPrint("Error guardando datos y sincronizando con Firestore: $e");
     }
   }
 
@@ -187,6 +331,9 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
       _decisionsCount = 0;
       _selectedWinner = null;
       _currentChallenge = null;
+      for (var ach in _achievements) {
+        ach["unlocked"] = false;
+      }
     });
     _savePersistedData();
     HapticFeedback.mediumImpact();
@@ -435,7 +582,7 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                       const Icon(Icons.military_tech_rounded, color: Color(0xFFFF9F1C), size: 28),
                       const SizedBox(width: 10),
                       Text(
-                        "Insignias de la Mesa",
+                        "Insignias y Logros de la Mesa",
                         style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
                       ),
                     ],
@@ -448,7 +595,7 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                "Ranking ordenado por puntuación y medallas obtenidas en la sesión.",
+                "Ranking ordenado por puntuación, medallas e insignias desbloqueadas.",
                 style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 16),
@@ -498,6 +645,41 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                 ),
               )),
               const SizedBox(height: 16),
+              Text(
+                "Logros Especiales Globales",
+                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 10),
+              ..._achievements.map((ach) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: ach["unlocked"] ? (ach["color"] as Color).withValues(alpha: 0.08) : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ach["unlocked"] ? (ach["color"] as Color).withValues(alpha: 0.3) : Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(ach["icon"], color: ach["unlocked"] ? ach["color"] : Colors.grey.shade400, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(ach["title"], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14, color: ach["unlocked"] ? const Color(0xFF0F172A) : Colors.grey.shade500)),
+                          Text(ach["desc"], style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      ach["unlocked"] ? Icons.check_circle_rounded : Icons.lock_rounded,
+                      color: ach["unlocked"] ? ach["color"] : Colors.grey.shade400,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 16),
             ],
           ),
         );
@@ -506,6 +688,9 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
   }
 
   void _showZonaGamerProModal() {
+    int totalSessionPoints = _players.fold(0, (sum, p) => sum + (p["points"] as int));
+    if (totalSessionPoints == 0) totalSessionPoints = 1;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -542,10 +727,11 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 12),
               Text(
-                "Configuración avanzada y estadísticas globales de la sesión actual en Palito.",
+                "Estadísticas globales en tiempo real y rendimiento analítico de la sesión en Palito.",
                 style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 20),
+              
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -581,7 +767,52 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                   ],
                 ),
               ),
+              
               const SizedBox(height: 20),
+              Text(
+                "Distribución de Puntos por Comensal",
+                style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 10),
+
+              ..._players.map((player) {
+                int points = player["points"] ?? 0;
+                double percentage = (points / totalSessionPoints).clamp(0.0, 1.0);
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(player["icon"], size: 14, color: player["color"]),
+                              const SizedBox(width: 6),
+                              Text(player["name"], style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13, color: const Color(0xFF0F172A))),
+                            ],
+                          ),
+                          Text("$points pts (${player["medals"]} 🏆)", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: percentage,
+                          minHeight: 8,
+                          backgroundColor: Colors.grey.shade100,
+                          valueColor: AlwaysStoppedAnimation<Color>(player["color"]),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -596,13 +827,13 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                     Navigator.pop(context);
                     _showBadgesModal();
                   },
-                  child: Text("Ver Ranking Completo de Insignias", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: Text("Ver Podio e Insignias", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 15)),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 46,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.red.shade200),
@@ -613,7 +844,7 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                     Navigator.pop(context);
                     _resetSessionScores();
                   },
-                  child: Text("🔄 Reiniciar Puntuaciones de Sesión", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red.shade600)),
+                  child: Text("🔄 Reiniciar Sesión", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red.shade600)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -624,8 +855,8 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
     );
   }
 
-  void _spinGame() {
-    if (_players.isEmpty || _isSpinning) return;
+   void _spinGame() {
+    if (_players.isEmpty || _isSpinning || !mounted) return;
 
     setState(() {
       _isSpinning = true;
@@ -635,23 +866,31 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
     HapticFeedback.heavyImpact();
 
     final random = Random();
-    int totalSteps = 22 + random.nextInt(10);
-    int step = 0;
+    final int totalSteps = 22 + random.nextInt(10);
 
-    void nextStep() {
-      if (!mounted) return;
-      setState(() {
-        _highlightedIndex = (_highlightedIndex + 1) % _players.length;
-      });
-      HapticFeedback.selectionClick();
+    Future<void> runSpin() async {
+      try {
+        for (int step = 0; step <= totalSteps; step++) {
+          if (!mounted) return;
 
-      if (step < totalSteps) {
-        step++;
-        int delay = 35 + (pow(step, 1.35) * 3).toInt();
-        Future.delayed(Duration(milliseconds: delay), nextStep);
-      } else {
-        final winner = _players[_highlightedIndex];
+          setState(() {
+            _highlightedIndex = (_highlightedIndex + 1) % _players.length;
+          });
+
+          HapticFeedback.selectionClick();
+
+          if (step < totalSteps) {
+            final int delay = 35 + (pow(step, 1.35) * 3).toInt();
+            await Future.delayed(Duration(milliseconds: delay));
+          }
+        }
+
+        if (!mounted || _players.isEmpty) return;
+
+        final winnerIndex = _highlightedIndex % _players.length;
+        final winner = _players[winnerIndex];
         final winnerName = winner["name"];
+        int pointsWon = 0;
 
         setState(() {
           _isSpinning = false;
@@ -660,18 +899,29 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
           if (_selectedMode == 0) {
             _currentChallenge = null;
+            pointsWon = 5;
+            winner["points"] = (winner["points"] ?? 0) + pointsWon;
+
             _history.insert(0, {
               "winner": winnerName,
               "detail": "🍽️ ¡Le toca elegir plato!",
               "time": TimeOfDay.now().format(context),
             });
-            _showFeedbackSnackbar("🍽️ ¡A $winnerName le toca elegir plato!");
+
+            _showFeedbackSnackbar(
+              "🍽️ ¡A $winnerName le toca elegir plato!",
+            );
           } else {
-            final challenge = _palitoChallenges[random.nextInt(_palitoChallenges.length)];
+            final challenge = _palitoChallenges[
+              random.nextInt(_palitoChallenges.length)
+            ];
+
             _currentChallenge = challenge;
-            _punishmentCounts[winnerName] = (_punishmentCounts[winnerName] ?? 0) + 1;
-            
-            winner["points"] = (winner["points"] ?? 0) + 10;
+            _punishmentCounts[winnerName] =
+                (_punishmentCounts[winnerName] ?? 0) + 1;
+
+            pointsWon = 10;
+            winner["points"] = (winner["points"] ?? 0) + pointsWon;
             winner["medals"] = (winner["medals"] ?? 0) + 1;
 
             _history.insert(0, {
@@ -681,16 +931,63 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
             });
           }
 
-          if (_history.length > 5) _history.removeLast();
+          if (_history.length > 5) {
+            _history.removeLast();
+          }
         });
 
-        _savePersistedData();
+        await _savePersistedData();
+
+        if (!mounted) return;
+
+        final int totalSessionPoints = _players.fold(
+          0,
+          (sum, p) => sum + (p["points"] as int),
+        );
+
+        try {
+          await ref.read(gamerServiceProvider).updateGamerStats(
+            score: totalSessionPoints,
+            streak: _decisionsCount,
+            unlockedChallenges: ['king_flavor', 'spicy_streak'],
+          );
+
+          if (!mounted) return;
+
+          await ref.read(gamerServiceProvider).logGameSessionEvent(
+            winnerName: winnerName,
+            eventDetail: _selectedMode == 0
+                ? "Ruleta Pro: Elección de Plato"
+                : "Juicio Picante",
+            pointsAwarded: pointsWon,
+          );
+        } catch (e) {
+          debugPrint("Error sincronizando evento de ruleta: $e");
+        }
+
+        if (!mounted) return;
+
         _winnerScaleController.forward(from: 0.0);
         HapticFeedback.vibrate();
+      } catch (e, stackTrace) {
+        debugPrint("Error durante el giro de la ruleta: $e");
+        debugPrintStack(stackTrace: stackTrace);
+
+        if (!mounted) return;
+
+        setState(() {
+          _isSpinning = false;
+          _selectedWinner = null;
+          _currentChallenge = null;
+        });
+
+        _showFeedbackSnackbar(
+          "⚠️ No se pudo completar el giro. Inténtalo de nuevo.",
+        );
       }
     }
 
-    nextStep();
+    runSpin();
   }
 
   void _showAddPlayerDialog() {
@@ -845,7 +1142,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Selector de Modos de Juego (Diseño limpio en pastilla)
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -931,7 +1227,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
               const SizedBox(height: 20),
 
-              // Visualizador Central de Ganador (Elegante y Orgánico)
               ScaleTransition(
                 scale: _selectedWinner != null ? _winnerScaleAnimation : const AlwaysStoppedAnimation(1.0),
                 child: AnimatedContainer(
@@ -1034,7 +1329,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
               const SizedBox(height: 24),
 
-              // Botón de Acción Principal con Efecto Pulso
               ScaleTransition(
                 scale: _isSpinning ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
                 child: SizedBox(
@@ -1065,7 +1359,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
               const SizedBox(height: 28),
 
-              // Sección Comensales en la Mesa (Estilo Scroll Horizontal de Avatares Flotantes)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1082,7 +1375,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 12),
 
-              // Fila de Comensales Deslizante (Limpia y Minimalista)
               SizedBox(
                 height: 94,
                 child: ListView.builder(
@@ -1110,7 +1402,7 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             color: isHighlighted 
                                 ? const Color(0xFFFFD400).withValues(alpha: 0.3)
-                                : (isWinner ? Colors.white : Colors.white),
+                                : Colors.white,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: isHighlighted || isWinner ? const Color(0xFFFF9F1C) : Colors.grey.shade200,
@@ -1155,7 +1447,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
               const SizedBox(height: 28),
 
-              // Tarjeta Interactiva Zona Gamer Card
               ZonaGamerCard(
                 title: "Zona Gamer",
                 subtitle: "Experiencia Pro",
@@ -1165,7 +1456,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
 
               const SizedBox(height: 28),
 
-              // Historial Pro de la Sesión
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1233,7 +1523,6 @@ class _GamerPageState extends State<GamerPage> with TickerProviderStateMixin {
               
               const SizedBox(height: 24),
 
-              // Botón Añadir Reto Personalizado al vuelo
               SizedBox(
                 width: double.infinity,
                 height: 48,

@@ -44,10 +44,10 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
     final String? otroSabor = currentMemory.specificFields['otro_sabor'];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F6F0),
+      backgroundColor: const Color(0xFFFFFDF5),
       body: CustomScrollView(
         slivers: [
-          // Cabecera expansible con gradiente inmersivo
+          // Cabecera expansible con estilo neobrutalista
           SliverAppBar(
             expandedHeight: 340,
             pinned: true,
@@ -55,10 +55,17 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
             elevation: 0,
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: CircleAvatar(
-                backgroundColor: Colors.black.withValues(alpha: 0.5),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+                  ],
+                ),
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 16),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A), size: 16),
                   onPressed: () => Navigator.pop(context),
                 ),
               ),
@@ -66,10 +73,17 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 12.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withValues(alpha: 0.5),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+                    ],
+                  ),
                   child: IconButton(
-                    icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                    icon: const Icon(Icons.edit_rounded, color: Color(0xFF0F172A), size: 18),
                     tooltip: 'Editar recuerdo',
                     onPressed: () {
                       Navigator.push(
@@ -90,16 +104,16 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                   firstImageUrl != null && firstImageUrl.isNotEmpty
                       ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
                       : Container(
-                          color: Colors.grey.shade300,
-                          child: const Icon(Icons.restaurant_rounded, size: 70, color: Colors.grey),
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.restaurant_rounded, size: 70, color: Color(0xFF0F172A)),
                         ),
-                  const DecoratedBox(
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black54],
-                        stops: [0.6, 1.0],
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                        stops: const [0.6, 1.0],
                       ),
                     ),
                   ),
@@ -108,41 +122,39 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
             ),
           ),
 
-          // Contenedor principal con efecto tarjeta flotante
+          // Contenedor principal con tarjeta flotante neobrutalista
           SliverToBoxAdapter(
             child: Transform.translate(
               offset: const Offset(0, -28),
               child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFFDF5),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 16,
-                      offset: Offset(0, -6),
-                    ),
-                  ],
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFDF5),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
                 ),
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Categoría y Puntuación en formato insignia elegante
+                    // Categoría y Puntuación estilo insignia
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(20),
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+                            ],
                           ),
                           child: Text(
                             currentMemory.category.toUpperCase(),
                             style: GoogleFonts.outfit(
                               color: Colors.white, 
-                              fontWeight: FontWeight.w700, 
+                              fontWeight: FontWeight.w800, 
                               fontSize: 11,
                               letterSpacing: 0.8,
                             ),
@@ -151,20 +163,23 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.amber.shade50,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.amber.shade300, width: 1.2),
+                            color: const Color(0xFFFFD400),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+                            ],
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                              const Icon(Icons.star_rounded, color: Color(0xFF0F172A), size: 18),
                               const SizedBox(width: 6),
                               Text(
                                 currentMemory.rating.toStringAsFixed(1),
                                 style: GoogleFonts.outfit(
-                                  fontSize: 16, 
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.amber.shade900,
+                                  fontSize: 15, 
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF0F172A),
                                 ),
                               ),
                             ],
@@ -179,7 +194,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                       currentMemory.title,
                       style: GoogleFonts.outfit(
                         fontSize: 30,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                         color: const Color(0xFF0F172A),
                         letterSpacing: -0.8,
                         height: 1.15,
@@ -197,8 +212,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                             currentMemory.restaurantName, 
                             style: GoogleFonts.inter(
                               fontSize: 14,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF0F172A),
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -207,29 +222,32 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
 
                     const SizedBox(height: 24),
 
-                    // Tarjeta de Detalles Específicos (si existen)
+                    // Tarjeta de Detalles Específicos
                     if (extraFields.isNotEmpty || otroSabor != null && otroSabor.isNotEmpty) ...[
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3F1E8),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 3))
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.tune_rounded, size: 16, color: Colors.blueGrey),
+                                const Icon(Icons.tune_rounded, size: 16, color: Color(0xFF0F172A)),
                                 const SizedBox(width: 6),
                                 Text(
                                   "DETALLES DE LA EXPERIENCIA",
                                   style: GoogleFonts.outfit(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blueGrey.shade700,
+                                    fontWeight: FontWeight.w900,
+                                    color: const Color(0xFF0F172A),
                                     letterSpacing: 0.8,
                                   ),
                                 ),
@@ -245,11 +263,11 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                                   children: [
                                     Text(
                                       _formatKey(entry.key),
-                                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
                                     ),
                                     Text(
                                       cleanedValue,
-                                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A)),
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A)),
                                     ),
                                   ],
                                 ),
@@ -261,8 +279,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text("Sabor adicional", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade600)),
-                                    Text(_cleanValue(otroSabor), style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A))),
+                                    Text("Sabor adicional", style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                                    Text(_cleanValue(otroSabor), style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F172A))),
                                   ],
                                 ),
                               ),
@@ -277,7 +295,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                       "Tu opinión", 
                       style: GoogleFonts.outfit(
                         fontSize: 18, 
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                         color: const Color(0xFF0F172A),
                       ),
                     ),
@@ -287,53 +305,51 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade200),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 3))
                         ],
                       ),
                       child: Text(
                         description.isNotEmpty ? description : "Sin descripción personal añadida en este recuerdo.",
                         style: GoogleFonts.inter(
-                          fontSize: 15,
-                          color: description.isNotEmpty ? Colors.grey.shade800 : Colors.grey.shade400,
+                          fontSize: 14,
+                          color: description.isNotEmpty ? const Color(0xFF0F172A) : Colors.grey.shade400,
                           height: 1.6,
                           fontStyle: description.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-                    // Badge de recomendación (¿Volverías?) estilizado
+                    // Badge de recomendación (¿Volverías?) estilizado neobrutalista
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       decoration: BoxDecoration(
                         color: currentMemory.wouldReturn ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: currentMemory.wouldReturn ? const Color(0xFFA5D6A7) : const Color(0xFFFFCC80),
-                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 3))
+                        ],
                       ),
                       child: Row(
                         children: [
                           Icon(
                             currentMemory.wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
                             size: 20,
-                            color: currentMemory.wouldReturn ? const Color(0xFF2E7D32) : const Color(0xFFEF6C00),
+                            color: const Color(0xFF0F172A),
                           ),
                           const SizedBox(width: 12),
                           Text(
                             currentMemory.wouldReturn ? "¡Sí volvería a este lugar sin duda!" : "No tengo claro si volvería",
                             style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700, 
-                              fontSize: 14,
-                              color: currentMemory.wouldReturn ? const Color(0xFF1B5E20) : const Color(0xFFE65100),
+                              fontWeight: FontWeight.w800, 
+                              fontSize: 13,
+                              color: const Color(0xFF0F172A),
                             ),
                           ),
                         ],
@@ -341,7 +357,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                     ),
 
                     const SizedBox(height: 28),
-                    const Divider(color: Color(0xFFE2E8F0), thickness: 1),
+                    const Divider(color: Color(0xFF0F172A), thickness: 2),
                     const SizedBox(height: 20),
 
                     // Ubicación detallada
@@ -349,7 +365,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                       "Ubicación", 
                       style: GoogleFonts.outfit(
                         fontSize: 18, 
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                         color: const Color(0xFF0F172A),
                       ),
                     ),
@@ -359,22 +375,30 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 3))
+                        ],
                       ),
                       child: Row(
                         children: [
-                          const CircleAvatar(
-                            backgroundColor: Color(0xFFFFECE6),
-                            child: Icon(Icons.location_on_rounded, size: 20, color: Color(0xFFFF4D29)),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFD400),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                            ),
+                            child: const Icon(Icons.location_on_rounded, size: 18, color: Color(0xFF0F172A)),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Text(
                               currentMemory.location.address, 
                               style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade800,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
                                 height: 1.3,
                               ),
                             ),

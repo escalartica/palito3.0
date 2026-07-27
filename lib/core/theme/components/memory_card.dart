@@ -187,7 +187,7 @@ class MemoryCardLarge extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(21),
                     gradient: LinearGradient(
-                      colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                      colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                     ),

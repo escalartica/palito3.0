@@ -27,7 +27,7 @@ class DynamicFieldFactory {
       case "Plato Estrella": return PlatoEstrellaFields();
       case "Menú": return MenuFields();
       case "Postres / Helados": return PostreFields();
-      case "Decoración / Espacio": return AmbienteFields(); // Corregido el nombre
+      case "Decoración / Espacio": return AmbienteFields();
       case "Atención": return AtencionFields();
       
       default: 

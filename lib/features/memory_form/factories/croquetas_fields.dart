@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/factories/dynamic_field_factory.dart';
 
 class CroquetasFields implements DynamicFieldGenerator {
@@ -9,62 +10,190 @@ class CroquetasFields implements DynamicFieldGenerator {
     TextEditingController otroController,
   ) {
     return [
-      _buildMultiChipGroup('sabor', '¿Qué ingredientes llevan?', 
-          ['Jamón', 'Cocido', 'Boletus', 'Cecina', 'Bacalao', 'Rabo de toro', 'Gamba', 'Queso', 'Pollo', 'Espinacas', 'Otro'], data, onUpdate, otroController),
-      _buildMultiChipGroup('sensacion', '¿Qué sensaciones te dejaron?', 
-          ['😐 Meh', '🙂 Buenas', '🤤 Muy buenas', '🥹 Emocionantes', '🙏 Religiosas'], data, onUpdate, null),
-      _buildMultiChipGroup('bechamel', 'La bechamel era...', 
-          ['Demasiado líquida', 'Muy cremosa', 'Equilibrada', 'Densa', 'Cemento armado'], data, onUpdate, null),
-      _buildMultiChipGroup('rebozado', 'Prueba Chicote (Rebozado):', 
-          ['Muy fino', 'Crujiente perfecto', 'Sonido metálico', 'Desintegración', 'Aceitoso', 'Hormigón armado'], data, onUpdate, null),
-      _buildMultiChipGroup('creatividad', 'Creatividad en la presentación:', 
-          ['Clásica', 'Original', 'Innovadora', 'Sorprendente', 'Decepcionante'], data, onUpdate, null),
+      _buildCompactChipGroup(
+        'sabor', 
+        '¿Qué ingredientes llevan?', 
+        [
+          {'label': 'Jamón', 'icon': Icons.set_meal_rounded},
+          {'label': 'Cocido', 'icon': Icons.soup_kitchen_outlined},
+          {'label': 'Boletus', 'icon': Icons.eco_outlined},
+          {'label': 'Cecina', 'icon': Icons.kebab_dining_outlined},
+          {'label': 'Bacalao', 'icon': Icons.phishing_outlined},
+          {'label': 'Rabo de toro', 'icon': Icons.restaurant_outlined},
+          {'label': 'Gamba', 'icon': Icons.set_meal_rounded},
+          {'label': 'Queso', 'icon': Icons.egg_outlined},
+          {'label': 'Pollo', 'icon': Icons.dinner_dining_outlined},
+          {'label': 'Espinacas', 'icon': Icons.grass_outlined},
+          {'label': 'Otro', 'icon': Icons.add_circle_outline_rounded},
+        ], 
+        data, 
+        onUpdate, 
+        otroController,
+      ),
+      _buildCompactChipGroup(
+        'sensacion', 
+        '¿Qué sensaciones te dejaron?', 
+        [
+          {'label': 'Meh', 'icon': Icons.sentiment_neutral_rounded},
+          {'label': 'Buenas', 'icon': Icons.thumb_up_outlined},
+          {'label': 'Muy buenas', 'icon': Icons.star_border_rounded},
+          {'label': 'Emocionantes', 'icon': Icons.local_fire_department_outlined},
+          {'label': 'Religiosas', 'icon': Icons.auto_awesome_rounded},
+        ], 
+        data, 
+        onUpdate, 
+        null,
+      ),
+      _buildCompactChipGroup(
+        'bechamel', 
+        'La bechamel era...', 
+        [
+          {'label': 'Demasiado líquida', 'icon': Icons.water_drop_outlined},
+          {'label': 'Muy cremosa', 'icon': Icons.icecream_outlined},
+          {'label': 'Equilibrada', 'icon': Icons.balance_outlined},
+          {'label': 'Densa', 'icon': Icons.layers_outlined},
+          {'label': 'Cemento armado', 'icon': Icons.shield_outlined},
+          {'label': 'Mazacote', 'icon': Icons.block_outlined},
+        ], 
+        data, 
+        onUpdate, 
+        null,
+      ),
+      _buildCompactChipGroup(
+        'rebozado', 
+        'Prueba Chicote - Tiro al plato (Rebozado):', 
+        [
+          {'label': 'Muy fino', 'icon': Icons.linear_scale_rounded},
+          {'label': 'Crujiente perfecto', 'icon': Icons.flash_on_outlined},
+          {'label': 'Sonido metálico', 'icon': Icons.volume_up_outlined},
+          {'label': 'Desintegración', 'icon': Icons.grain_rounded},
+          {'label': 'Aceitoso', 'icon': Icons.opacity_outlined},
+          {'label': 'Hormigón armado', 'icon': Icons.foundation_outlined},
+        ], 
+        data, 
+        onUpdate, 
+        null,
+      ),
+      _buildCompactChipGroup(
+        'creatividad', 
+        'Creatividad en la presentación:', 
+        [
+          {'label': 'Clásica', 'icon': Icons.history_edu_rounded},
+          {'label': 'Original', 'icon': Icons.lightbulb_outline_rounded},
+          {'label': 'Innovadora', 'icon': Icons.trending_up_rounded},
+          {'label': 'Sorprendente', 'icon': Icons.bolt_rounded},
+          {'label': 'Decepcionante', 'icon': Icons.sentiment_dissatisfied_rounded},
+        ], 
+        data, 
+        onUpdate, 
+        null,
+      ),
     ];
   }
 
-  Widget _buildMultiChipGroup(
+  Widget _buildCompactChipGroup(
     String key, 
     String label, 
-    List<String> options, 
+    List<Map<String, dynamic>> options, 
     Map<String, dynamic> data, 
     Function(String, dynamic) onUpdate,
     TextEditingController? otroController,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12), // Margen vertical muy reducido para evitar scroll innecesario
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          // Título limpio estilo minimalista sin contenedor
+          Text(
+            label, 
+            style: GoogleFonts.outfit(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 8,
-            children: options.map((option) {
+            spacing: 6,
+            runSpacing: 6,
+            children: options.map((optionData) {
+              final String option = optionData['label'] as String;
+              final IconData icon = optionData['icon'] as IconData;
+              
               final List selectedItems = data[key] is List ? List.from(data[key]) : [];
-              return FilterChip(
-                label: Text(option),
-                selected: selectedItems.contains(option),
-                onSelected: (selected) {
+              final bool isSelected = selectedItems.contains(option);
+
+              return InkWell(
+                onTap: () {
                   final newList = List.from(selectedItems);
-                  if (selected) {
-                    newList.add(option);
-                  } else {
+                  if (isSelected) {
                     newList.remove(option);
+                  } else {
+                    newList.add(option);
                   }
                   onUpdate(key, newList);
                 },
+                borderRadius: BorderRadius.circular(10),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFFFFD400) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF0F172A), 
+                      width: isSelected ? 2.0 : 1.0, // Borde más sutil si no está seleccionado
+                    ),
+                    boxShadow: isSelected 
+                        ? const [BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))]
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon, 
+                        size: 14, 
+                        color: const Color(0xFF0F172A),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        option,
+                        style: GoogleFonts.inter(
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: const Color(0xFF0F172A),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             }).toList(),
           ),
-          if (key == 'sabor' && (data['sabor']?.contains('Otro') ?? false) && otroController != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextFormField(
+          if (key == 'sabor' && (data['sabor']?.contains('Otro') ?? false) && otroController != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              ),
+              child: TextField(
                 controller: otroController,
-                decoration: const InputDecoration(labelText: 'Especifica el sabor', border: OutlineInputBorder()),
+                style: GoogleFonts.inter(color: const Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Especifica el sabor',
+                  labelStyle: GoogleFonts.inter(color: Colors.grey.shade600, fontSize: 12),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
                 onChanged: (v) => onUpdate('otro_sabor', v),
               ),
             ),
+          ],
         ],
       ),
     );

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "911590606586",
+    "project_id": "palito-de-sabores",
+    "storage_bucket": "palito-de-sabores.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911590606586:android:5bb73d6ad969d68e356b43",
+        "android_client_info": {
+          "package_name": "com.example.palito_3_0"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAISRuQ8zQXePfKAqqwkxtm531y-DrTyVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
