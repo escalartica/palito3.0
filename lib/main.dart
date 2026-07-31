@@ -79,7 +79,6 @@ Future<bool> _initializeFirebase() async {
 try {
 debugPrint('🔥 Inicializando Firebase...');
 
-
 await Firebase.initializeApp(
   options: DefaultFirebaseOptions.currentPlatform,
 );
@@ -116,10 +115,8 @@ debugPrint(
 
 return true;
 
-
 } on FirebaseException catch (e, stack) {
 firebaseInitialized = false;
-
 
 debugPrint(
   '❌ ERROR INICIALIZANDO FIREBASE',
@@ -139,10 +136,8 @@ debugPrintStack(
 
 return false;
 
-
 } catch (e, stack) {
 firebaseInitialized = false;
-
 
 debugPrint(
   '❌ ERROR INESPERADO INICIALIZANDO FIREBASE: $e',
@@ -153,7 +148,6 @@ debugPrintStack(
 );
 
 return false;
-
 
 }
 }
@@ -168,9 +162,7 @@ debugPrint(
 '⚠️ No se puede autenticar: Firebase no está inicializado.',
 );
 
-
 return;
-
 
 }
 
@@ -184,7 +176,6 @@ final existingUser = auth.currentUser;
 
 if (existingUser != null) {
 firebaseAuthenticated = true;
-
 
 debugPrint(
   '🔐 Usuario Firebase ya autenticado.',
@@ -204,7 +195,6 @@ debugPrint(
 
 return;
 
-
 }
 
 debugPrint(
@@ -219,7 +209,6 @@ try {
 debugPrint(
 '🔐 Iniciando autenticación anónima...',
 );
-
 
 final UserCredential credential =
     await auth.signInAnonymously();
@@ -254,10 +243,8 @@ debugPrint(
   '🔐 Email: ${user.email}',
 );
 
-
 } on FirebaseAuthException catch (e, stack) {
 firebaseAuthenticated = false;
-
 
 debugPrint(
   '❌ ERROR DE FIREBASE AUTH',
@@ -278,10 +265,6 @@ debugPrint(
 debugPrint(
   '❌ Firebase inicializado: $firebaseInitialized',
 );
-
-// ==========================================================
-// DIAGNÓSTICO ESPECÍFICO
-// ==========================================================
 
 switch (e.code) {
   case 'operation-not-allowed':
@@ -353,10 +336,8 @@ debugPrintStack(
   stackTrace: stack,
 );
 
-
 } catch (e, stack) {
 firebaseAuthenticated = false;
-
 
 debugPrint(
   '❌ ERROR INESPERADO DURANTE FIREBASE AUTH: $e',
@@ -365,7 +346,6 @@ debugPrint(
 debugPrintStack(
   stackTrace: stack,
 );
-
 
 }
 }
@@ -396,20 +376,17 @@ debugPrint(
 '❌ Firebase no está disponible.',
 );
 
-
 debugPrint(
   '============================================================',
 );
 
 return;
 
-
 }
 
 try {
 final app = Firebase.app();
 final user = FirebaseAuth.instance.currentUser;
-
 
 debugPrint(
   '🔥 Firebase apps activas: ${Firebase.apps.length}',
@@ -453,7 +430,6 @@ if (user != null) {
     'users/{uid}/memories.',
   );
 }
-
 
 } catch (e) {
 debugPrint(
@@ -504,16 +480,20 @@ routes: [
 // DETALLE DE MEMORIA
 // ============================================================
 
-
 GoRoute(
   path: '/memory-detail',
   parentNavigatorKey: _rootNavigatorKey,
-  builder: (context, state) {
+  pageBuilder: (context, state) {
     final memory =
         state.extra as MemoryModel;
 
-    return MemoryDetailPage(
-      memory: memory,
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: MemoryDetailPage(
+        memory: memory,
+      ),
+      direction: 1,
     );
   },
 ),
@@ -525,8 +505,13 @@ GoRoute(
 GoRoute(
   path: '/new-memory',
   parentNavigatorKey: _rootNavigatorKey,
-  builder: (context, state) {
-    return const MemoryFormPage();
+  pageBuilder: (context, state) {
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: const MemoryFormPage(),
+      direction: 1,
+    );
   },
 ),
 
@@ -537,8 +522,13 @@ GoRoute(
 GoRoute(
   path: '/gamer',
   parentNavigatorKey: _rootNavigatorKey,
-  builder: (context, state) {
-    return const GamerPage();
+  pageBuilder: (context, state) {
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: const GamerPage(),
+      direction: 1,
+    );
   },
 ),
 
@@ -549,12 +539,17 @@ GoRoute(
 GoRoute(
   path: '/map',
   parentNavigatorKey: _rootNavigatorKey,
-  builder: (context, state) {
+  pageBuilder: (context, state) {
     final initialCategory =
         state.extra as String?;
 
-    return MapPage(
-      initialCategory: initialCategory,
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: MapPage(
+        initialCategory: initialCategory,
+      ),
+      direction: 1,
     );
   },
 ),
@@ -566,8 +561,13 @@ GoRoute(
 GoRoute(
   path: '/profile',
   parentNavigatorKey: _rootNavigatorKey,
-  builder: (context, state) {
-    return const ProfilePage();
+  pageBuilder: (context, state) {
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: const ProfilePage(),
+      direction: 1,
+    );
   },
 ),
 
@@ -587,7 +587,17 @@ ShellRoute(
           const Color(0xFFFDFBF7),
       body: Stack(
         children: [
-          child,
+          // ==================================================
+          // CONTENIDO PRINCIPAL
+          // ==================================================
+
+          Positioned.fill(
+            child: child,
+          ),
+
+          // ==================================================
+          // APP DOCK
+          // ==================================================
 
           Align(
             alignment:
@@ -612,10 +622,10 @@ ShellRoute(
                         ),
                   duration:
                       const Duration(
-                    milliseconds: 300,
+                    milliseconds: 350,
                   ),
                   curve:
-                      Curves.easeInOut,
+                      Curves.easeOutCubic,
                   child: Padding(
                     padding:
                         const EdgeInsets.only(
@@ -660,19 +670,106 @@ ShellRoute(
 
     GoRoute(
       path: '/',
-      builder: (
+      pageBuilder: (
         context,
         state,
       ) {
-        return const HomePage();
+        return _buildDynamicPage(
+          context: context,
+          state: state,
+          child: const HomePage(),
+          direction: 1,
+        );
       },
     ),
   ],
 ),
 
-
 ],
 );
+
+// ================================================================
+// TRANSICIÓN DINÁMICA DE PÁGINAS
+// ================================================================
+
+CustomTransitionPage<void> _buildDynamicPage({
+required BuildContext context,
+required GoRouterState state,
+required Widget child,
+required int direction,
+}) {
+return CustomTransitionPage<void>(
+key: state.pageKey,
+child: child,
+transitionDuration:
+const Duration(
+milliseconds: 500,
+),
+reverseTransitionDuration:
+const Duration(
+milliseconds: 350,
+),
+transitionsBuilder: (
+context,
+animation,
+secondaryAnimation,
+child,
+) {
+final curvedAnimation =
+CurvedAnimation(
+parent: animation,
+curve: Curves.easeOutCubic,
+reverseCurve: Curves.easeInCubic,
+);
+
+  final slideAnimation =
+      Tween<Offset>(
+    begin: Offset(
+      0.12 * direction,
+      0.035,
+    ),
+    end: Offset.zero,
+  ).animate(
+    curvedAnimation,
+  );
+
+  final scaleAnimation =
+      Tween<double>(
+    begin: 0.96,
+    end: 1.0,
+  ).animate(
+    CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+    ),
+  );
+
+  final fadeAnimation =
+      Tween<double>(
+    begin: 0.0,
+    end: 1.0,
+  ).animate(
+    CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOut,
+    ),
+  );
+
+  return FadeTransition(
+    opacity: fadeAnimation,
+    child: SlideTransition(
+      position: slideAnimation,
+      child: ScaleTransition(
+        scale: scaleAnimation,
+        alignment: Alignment.center,
+        child: child,
+      ),
+    ),
+  );
+},
+
+);
+}
 
 // ================================================================
 // ÍNDICE DEL DOCK
@@ -687,19 +784,24 @@ GoRouterState
 .uri
 .path;
 
+// MAPA
 if (location.startsWith('/map')) {
 return 0;
 }
 
+// GAMER
 if (location.startsWith('/gamer')) {
 return 1;
 }
 
+// PERFIL
 if (location.startsWith('/profile')) {
 return 2;
 }
 
-return 0;
+// HOME Y CUALQUIER OTRA RUTA
+// No seleccionamos ningún icono.
+return -1;
 }
 
 // ================================================================
@@ -725,7 +827,6 @@ case 1:
 case 2:
   context.go('/profile');
   break;
-
 
 }
 }

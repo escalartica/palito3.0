@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../../../../core/factories/dynamic_field_factory.dart';
@@ -5,82 +6,135 @@ import '../../../../../../../core/factories/dynamic_field_factory.dart';
 class MenuFields implements DynamicFieldGenerator {
   @override
   List<Widget> buildFields(
-    Map<String, dynamic> data, 
-    Function(String, dynamic) onUpdate, 
+    Map<String, dynamic> data,
+    Function(String, dynamic) onUpdate,
     TextEditingController otroController,
   ) {
-    return [
+    final fields = <Widget>[
       _buildCustomTextField(
-        'nombre_menu', 
-        'Datos del Menú', 
-        'Nombre del Menú', 
-        data, 
+        'nombre_menu',
+        'Datos del Menú',
+        'Nombre del Menú',
+        data,
         onUpdate,
       ),
+
       _buildCustomTextField(
-        'precio_menu', 
-        'Precio', 
-        'Precio por persona', 
-        data, 
+        'precio_menu',
+        'Precio',
+        'Precio por persona',
+        data,
         onUpdate,
       ),
+
+      // ================================================================
+      // TIPO DE MENÚ
+      // ================================================================
+
       _buildCompactChipGroup(
-        'tipo_menu', 
-        'Tipo de menú', 
+        'tipo_menu',
+        'Tipo de menú',
         [
           {'label': 'Menú del día', 'icon': Icons.wb_sunny_outlined},
           {'label': 'Degustación', 'icon': Icons.restaurant_menu_rounded},
           {'label': 'Ejecutivo', 'icon': Icons.badge_outlined},
           {'label': 'Fin de semana', 'icon': Icons.weekend_outlined},
           {'label': 'Festival', 'icon': Icons.celebration_outlined},
-        ], 
-        data, 
+          {'label': 'Otro', 'icon': Icons.add_circle_outline_rounded},
+        ],
+        data,
         onUpdate,
         isMulti: false,
+        customFieldKey: 'otro_tipo_menu',
+        customFieldHint: 'Especifica el tipo de menú',
       ),
+
+      // ================================================================
+      // RITMO
+      // ================================================================
+
       _buildCompactChipGroup(
-        'ritmo', 
-        'La Evolución del Viaje: Ritmo del servicio', 
+        'ritmo',
+        'La Evolución del Viaje: Ritmo del servicio',
         [
           {'label': 'Demasiado rápido', 'icon': Icons.fast_forward_rounded},
           {'label': 'Algo acelerado', 'icon': Icons.speed_rounded},
           {'label': 'Perfecto', 'icon': Icons.check_circle_outline_rounded},
           {'label': 'Se hizo largo', 'icon': Icons.hourglass_bottom_rounded},
           {'label': 'Eterno', 'icon': Icons.update_rounded},
-        ], 
-        data, 
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // EVOLUCIÓN
+      // ================================================================
+
       _buildCompactChipGroup(
-        'evolucion', 
-        'Evolución de los platos', 
+        'evolucion',
+        'Evolución de los platos',
         [
-          {'label': 'Empezó fuerte, terminó flojo', 'icon': Icons.trending_down_rounded},
-          {'label': 'Fue creciendo', 'icon': Icons.trending_up_rounded},
-          {'label': 'Siempre arriba', 'icon': Icons.star_border_rounded},
-          {'label': 'Altibajos', 'icon': Icons.swap_vert_rounded},
-          {'label': 'El postre salvó todo', 'icon': Icons.cake_outlined},
-        ], 
-        data, 
+          {
+            'label': 'Empezó fuerte, terminó flojo',
+            'icon': Icons.trending_down_rounded,
+          },
+          {
+            'label': 'Fue creciendo',
+            'icon': Icons.trending_up_rounded,
+          },
+          {
+            'label': 'Siempre arriba',
+            'icon': Icons.star_border_rounded,
+          },
+          {
+            'label': 'Altibajos',
+            'icon': Icons.swap_vert_rounded,
+          },
+          {
+            'label': 'El postre salvó todo',
+            'icon': Icons.cake_outlined,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // COHERENCIA
+      // ================================================================
+
       _buildCompactChipGroup(
-        'coherencia', 
-        'Equilibrio y Coherencia: ¿Coherente?', 
+        'coherencia',
+        'Equilibrio y Coherencia: ¿Coherente?',
         [
-          {'label': 'Sí, totalmente', 'icon': Icons.verified_rounded},
-          {'label': 'Bastante', 'icon': Icons.thumb_up_outlined},
-          {'label': 'Platos sin relación', 'icon': Icons.shuffle_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Sí, totalmente',
+            'icon': Icons.verified_rounded,
+          },
+          {
+            'label': 'Bastante',
+            'icon': Icons.thumb_up_outlined,
+          },
+          {
+            'label': 'Platos sin relación',
+            'icon': Icons.shuffle_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // DEMASIADO DE
+      // ================================================================
+
       _buildCompactChipGroup(
-        'demasiado_de', 
-        'Demasiado presencia de...', 
+        'demasiado_de',
+        'Demasiado presencia de...',
         [
           {'label': 'Carne', 'icon': Icons.kebab_dining_rounded},
           {'label': 'Pescado', 'icon': Icons.set_meal_rounded},
@@ -88,240 +142,785 @@ class MenuFields implements DynamicFieldGenerator {
           {'label': 'Fritos', 'icon': Icons.oil_barrel_outlined},
           {'label': 'Dulces', 'icon': Icons.icecream_outlined},
           {'label': 'Equilibrado', 'icon': Icons.balance_outlined},
-        ], 
-        data, 
+        ],
+        data,
         onUpdate,
         isMulti: true,
       ),
+
+      // ================================================================
+      // PERSONALIDAD
+      // ================================================================
+
       _buildCompactChipGroup(
-        'personalidad', 
-        'Personalidad y Recuerdo: Estilo', 
+        'personalidad',
+        'Personalidad y Recuerdo: Estilo',
         [
           {'label': 'Tradicional', 'icon': Icons.history_edu_rounded},
           {'label': 'Creativo', 'icon': Icons.lightbulb_outline_rounded},
           {'label': 'Técnico', 'icon': Icons.science_outlined},
           {'label': 'Divertido', 'icon': Icons.sports_esports_outlined},
           {'label': 'Elegante', 'icon': Icons.diamond_outlined},
-          {'label': 'Atrevido', 'icon': Icons.local_fire_department_outlined},
-        ], 
-        data, 
+          {
+            'label': 'Atrevido',
+            'icon': Icons.local_fire_department_outlined,
+          },
+          {
+            'label': 'Otro',
+            'icon': Icons.add_circle_outline_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
+        customFieldKey: 'otra_personalidad',
+        customFieldHint: 'Describe la personalidad del menú',
       ),
+
+      // ================================================================
+      // MOMENTO ESTRELLA
+      // ================================================================
+
       _buildCompactChipGroup(
-        'momento_estrella', 
-        'Momento estrella', 
+        'momento_estrella',
+        'Momento estrella',
         [
           {'label': 'Aperitivo', 'icon': Icons.tapas_outlined},
-          {'label': 'Primer plato', 'icon': Icons.soup_kitchen_rounded},
-          {'label': 'Principal', 'icon': Icons.restaurant_rounded},
+          {
+            'label': 'Primer plato',
+            'icon': Icons.soup_kitchen_rounded,
+          },
+          {
+            'label': 'Principal',
+            'icon': Icons.restaurant_rounded,
+          },
           {'label': 'Postre', 'icon': Icons.cake_rounded},
           {'label': 'Café', 'icon': Icons.coffee_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Otro',
+            'icon': Icons.add_circle_outline_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
+        customFieldKey: 'otro_momento_estrella',
+        customFieldHint: 'Describe el momento estrella',
       ),
+
+      // ================================================================
+      // PAN — NUEVO APARTADO
+      // ================================================================
+
       _buildCompactChipGroup(
-        'pan_detector', 
-        'El Detector Palito: Repetición de pan', 
+        'tipo_pan',
+        'Descripción del pan',
+        [
+          {
+            'label': 'Industrial',
+            'icon': Icons.factory_outlined,
+          },
+          {
+            'label': 'Rústico',
+            'icon': Icons.grass_outlined,
+          },
+          {
+            'label': 'Masa madre',
+            'icon': Icons.bakery_dining_outlined,
+          },
+          {
+            'label': 'Envasado',
+            'icon': Icons.inventory_2_outlined,
+          },
+          {
+            'label': 'Otro',
+            'icon': Icons.add_circle_outline_rounded,
+          },
+        ],
+        data,
+        onUpdate,
+        isMulti: false,
+        customFieldKey: 'otro_pan',
+        customFieldHint: 'Describe el tipo de pan',
+      ),
+
+      // ================================================================
+      // DETECTOR DE PAN
+      // ================================================================
+
+      _buildCompactChipGroup(
+        'pan_detector',
+        'El Detector Palito: Repetición de pan',
         [
           {'label': 'Ninguno', 'icon': Icons.block_outlined},
           {'label': 'Una vez', 'icon': Icons.looks_one_outlined},
           {'label': 'Dos veces', 'icon': Icons.looks_two_outlined},
-          {'label': 'Perdí la cuenta', 'icon': Icons.all_inclusive_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Perdí la cuenta',
+            'icon': Icons.all_inclusive_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // DINÁMICA EN LA MESA
+      // ================================================================
+
       _buildCompactChipGroup(
-        'pelea_plato', 
-        'Dinámica en la mesa', 
+        'pelea_plato',
+        'Dinámica en la mesa',
         [
-          {'label': 'Pelea por el último bocado', 'icon': Icons.sports_kabaddi_rounded},
-          {'label': 'Compartimos todo', 'icon': Icons.group_outlined},
-          {'label': 'Intercambio de platos', 'icon': Icons.swap_horiz_rounded},
-          {'label': 'Nadie compartió', 'icon': Icons.person_outline_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Pelea por el último bocado',
+            'icon': Icons.sports_kabaddi_rounded,
+          },
+          {
+            'label': 'Compartimos todo',
+            'icon': Icons.group_outlined,
+          },
+          {
+            'label': 'Intercambio de platos',
+            'icon': Icons.swap_horiz_rounded,
+          },
+          {
+            'label': 'Nadie compartió',
+            'icon': Icons.person_outline_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // PELÍCULA
+      // ================================================================
+
       _buildCompactChipGroup(
-        'pelicula', 
-        '¿Qué película vimos?', 
+        'pelicula',
+        '¿Qué película vimos?',
         [
-          {'label': 'Ganaría un Oscar', 'icon': Icons.emoji_events_outlined},
-          {'label': 'Cine independiente', 'icon': Icons.theaters_outlined},
-          {'label': 'Un clásico', 'icon': Icons.movie_outlined},
-          {'label': 'Mucho tráiler, poca peli', 'icon': Icons.visibility_off_outlined},
-          {'label': 'Éxito inesperado', 'icon': Icons.auto_awesome_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Ganaría un Oscar',
+            'icon': Icons.emoji_events_outlined,
+          },
+          {
+            'label': 'Cine independiente',
+            'icon': Icons.theaters_outlined,
+          },
+          {
+            'label': 'Un clásico',
+            'icon': Icons.movie_outlined,
+          },
+          {
+            'label': 'Mucho tráiler, poca peli',
+            'icon': Icons.visibility_off_outlined,
+          },
+          {
+            'label': 'Éxito inesperado',
+            'icon': Icons.auto_awesome_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
+
+      // ================================================================
+      // SALIDA
+      // ================================================================
+
       _buildCompactChipGroup(
-        'estado_final', 
-        'La Salida del Restaurante: Estado final', 
+        'estado_final',
+        'La Salida del Restaurante: Estado final',
         [
-          {'label': 'Con ganas de volver', 'icon': Icons.replay_rounded},
-          {'label': 'Pensando en un plato', 'icon': Icons.psychology_outlined},
-          {'label': 'Feliz y satisfecho', 'icon': Icons.sentiment_very_satisfied_rounded},
-          {'label': 'Con una buena historia', 'icon': Icons.menu_book_rounded},
-          {'label': 'Solo siesta', 'icon': Icons.bed_outlined},
-          {'label': 'Esperaba más', 'icon': Icons.sentiment_dissatisfied_rounded},
-        ], 
-        data, 
+          {
+            'label': 'Con ganas de volver',
+            'icon': Icons.replay_rounded,
+          },
+          {
+            'label': 'Pensando en un plato',
+            'icon': Icons.psychology_outlined,
+          },
+          {
+            'label': 'Feliz y satisfecho',
+            'icon': Icons.sentiment_very_satisfied_rounded,
+          },
+          {
+            'label': 'Con una buena historia',
+            'icon': Icons.menu_book_rounded,
+          },
+          {
+            'label': 'Solo siesta',
+            'icon': Icons.bed_outlined,
+          },
+          {
+            'label': 'Esperaba más',
+            'icon': Icons.sentiment_dissatisfied_rounded,
+          },
+          {
+            'label': 'Ganas de huir',
+            'icon': Icons.directions_run_rounded,
+          },
+        ],
+        data,
         onUpdate,
         isMulti: false,
       ),
     ];
+
+    // ================================================================
+    // ANIMACIÓN DE ENTRADA POR BLOQUES
+    // ================================================================
+
+    return List.generate(
+      fields.length,
+      (index) => _AnimatedFieldEntry(
+        key: ValueKey('menu_field_$index'),
+        index: index,
+        child: fields[index],
+      ),
+    );
   }
 
+  // ==========================================================================
+  // GRUPO DE CHIPS
+  // ==========================================================================
+
   Widget _buildCompactChipGroup(
-    String key, 
-    String label, 
-    List<Map<String, dynamic>> options, 
-    Map<String, dynamic> data, 
+    String key,
+    String label,
+    List<Map<String, dynamic>> options,
+    Map<String, dynamic> data,
     Function(String, dynamic) onUpdate, {
     required bool isMulti,
+    String? customFieldKey,
+    String? customFieldHint,
   }) {
+    final bool hasCustomOption =
+        options.any((option) => option['label'] == 'Otro');
+
+    final bool showCustomField =
+        hasCustomOption &&
+        data[key] == 'Otro';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ================================================================
+          // TÍTULO
+          // ================================================================
+
           Text(
-            label, 
+            label,
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: const Color(0xFF0F172A),
             ),
           ),
+
           const SizedBox(height: 8),
+
+          // ================================================================
+          // CHIPS
+          // ================================================================
+
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: options.map((optionData) {
-              final String option = optionData['label'] as String;
-              final IconData icon = optionData['icon'] as IconData;
-              
+              final String option =
+                  optionData['label'] as String;
+
+              final IconData icon =
+                  optionData['icon'] as IconData;
+
               bool isSelected = false;
+
               if (isMulti) {
-                final List selectedItems = data[key] is List ? List.from(data[key]) : [];
-                isSelected = selectedItems.contains(option);
+                final List selectedItems =
+                    data[key] is List
+                        ? List.from(data[key])
+                        : [];
+
+                isSelected =
+                    selectedItems.contains(option);
               } else {
-                isSelected = data[key] == option;
+                isSelected =
+                    data[key] == option;
               }
 
-              return InkWell(
+              return _AnimatedChip(
+                option: option,
+                icon: icon,
+                isSelected: isSelected,
                 onTap: () {
                   if (isMulti) {
-                    final List selectedItems = data[key] is List ? List.from(data[key]) : [];
-                    final newList = List.from(selectedItems);
+                    final List selectedItems =
+                        data[key] is List
+                            ? List.from(data[key])
+                            : [];
+
+                    final List newList =
+                        List.from(selectedItems);
+
                     if (isSelected) {
                       newList.remove(option);
                     } else {
                       newList.add(option);
                     }
-                    onUpdate(key, newList);
+
+                    onUpdate(
+                      key,
+                      newList,
+                    );
                   } else {
-                    onUpdate(key, isSelected ? null : option);
+                    onUpdate(
+                      key,
+                      isSelected
+                          ? null
+                          : option,
+                    );
                   }
                 },
-                borderRadius: BorderRadius.circular(10),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFFFD400) : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFF0F172A), 
-                      width: isSelected ? 2.0 : 1.0,
-                    ),
-                    boxShadow: isSelected 
-                        ? const [BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        icon, 
-                        size: 14, 
-                        color: const Color(0xFF0F172A),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        option,
-                        style: GoogleFonts.inter(
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                          color: const Color(0xFF0F172A),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               );
             }).toList(),
           ),
+
+          // ================================================================
+          // CAMPO "OTRO"
+          // ================================================================
+
+          if (showCustomField &&
+              customFieldKey != null) ...[
+            const SizedBox(height: 10),
+
+            AnimatedSwitcher(
+              duration:
+                  const Duration(milliseconds: 280),
+              switchInCurve:
+                  Curves.easeOutCubic,
+              switchOutCurve:
+                  Curves.easeInCubic,
+              transitionBuilder:
+                  (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                key: ValueKey(customFieldKey),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius:
+                      BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        const Color(0xFF0F172A),
+                    width: 1.5,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color:
+                          Color(0xFF0F172A),
+                      blurRadius: 0,
+                      offset:
+                          Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextFormField(
+                  initialValue:
+                      data[customFieldKey],
+                  style:
+                      GoogleFonts.inter(
+                    color:
+                        const Color(
+                            0xFF0F172A),
+                    fontWeight:
+                        FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  decoration:
+                      InputDecoration(
+                    labelText:
+                        customFieldHint,
+                    labelStyle:
+                        GoogleFonts.inter(
+                      color:
+                          Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                    prefixIcon:
+                        const Icon(
+                      Icons.edit_rounded,
+                      size: 19,
+                      color:
+                          Color(0xFF0F172A),
+                    ),
+                    border:
+                        InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets
+                            .symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    onUpdate(
+                      customFieldKey,
+                      value,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
+  // ==========================================================================
+  // CAMPO DE TEXTO
+  // ==========================================================================
+
   Widget _buildCustomTextField(
-    String key, 
-    String label, 
-    String hint, 
-    Map<String, dynamic> data, 
+    String key,
+    String label,
+    String hint,
+    Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding:
+          const EdgeInsets.symmetric(
+        vertical: 12,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
-            label, 
-            style: GoogleFonts.outfit(
+            label,
+            style:
+                GoogleFonts.outfit(
               fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              fontWeight:
+                  FontWeight.w800,
+              color:
+                  const Color(
+                      0xFF0F172A),
             ),
           ),
+
           const SizedBox(height: 8),
+
           Container(
-            decoration: BoxDecoration(
+            decoration:
+                BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              borderRadius:
+                  BorderRadius.circular(
+                      10),
+              border: Border.all(
+                color:
+                    const Color(
+                        0xFF0F172A),
+                width: 1.5,
+              ),
               boxShadow: const [
-                BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 2))
+                BoxShadow(
+                  color:
+                      Color(0xFF0F172A),
+                  blurRadius: 0,
+                  offset:
+                      Offset(0, 2),
+                ),
               ],
             ),
-            child: TextFormField(
-              initialValue: data[key],
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A), 
-                fontWeight: FontWeight.w600, 
+            child:
+                TextFormField(
+              initialValue:
+                  data[key],
+              style:
+                  GoogleFonts.inter(
+                color:
+                    const Color(
+                        0xFF0F172A),
+                fontWeight:
+                    FontWeight.w600,
                 fontSize: 13,
               ),
-              decoration: InputDecoration(
+              decoration:
+                  InputDecoration(
                 hintText: hint,
-                hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 12),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                hintStyle:
+                    GoogleFonts.inter(
+                  color:
+                      Colors.grey.shade400,
+                  fontSize: 12,
+                ),
+                border:
+                    InputBorder.none,
+                contentPadding:
+                    const EdgeInsets
+                        .symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
-              onChanged: (v) => onUpdate(key, v),
+              onChanged:
+                  (value) {
+                onUpdate(
+                  key,
+                  value,
+                );
+              },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ANIMACIÓN DE ENTRADA DE CADA BLOQUE
+// ============================================================================
+
+class _AnimatedFieldEntry
+    extends StatefulWidget {
+  final Widget child;
+  final int index;
+
+  const _AnimatedFieldEntry({
+    super.key,
+    required this.child,
+    required this.index,
+  });
+
+  @override
+  State<_AnimatedFieldEntry> createState() =>
+      _AnimatedFieldEntryState();
+}
+
+class _AnimatedFieldEntryState
+    extends State<_AnimatedFieldEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController
+      _controller;
+
+  late final Animation<double>
+      _fadeAnimation;
+
+  late final Animation<Offset>
+      _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller =
+        AnimationController(
+      vsync: this,
+      duration: const Duration(
+        milliseconds: 450,
+      ),
+    );
+
+    final curve =
+        CurvedAnimation(
+      parent: _controller,
+      curve:
+          Curves.easeOutCubic,
+    );
+
+    _fadeAnimation =
+        Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(curve);
+
+    _slideAnimation =
+        Tween<Offset>(
+      begin:
+          const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(curve);
+
+    Future.delayed(
+      Duration(
+        milliseconds:
+            50 * widget.index,
+      ),
+      () {
+        if (mounted) {
+          _controller.forward();
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(
+      BuildContext context) {
+    return FadeTransition(
+      opacity:
+          _fadeAnimation,
+      child:
+          SlideTransition(
+        position:
+            _slideAnimation,
+        child:
+            widget.child,
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// CHIP ANIMADO
+// ============================================================================
+
+class _AnimatedChip
+    extends StatelessWidget {
+  final String option;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _AnimatedChip({
+    required this.option,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(
+      BuildContext context) {
+    return Material(
+      color:
+          Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+            BorderRadius.circular(
+                10),
+        child:
+            AnimatedContainer(
+          duration:
+              const Duration(
+            milliseconds: 220,
+          ),
+          curve:
+              Curves.easeOutCubic,
+          padding:
+              const EdgeInsets
+                  .symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+          decoration:
+              BoxDecoration(
+            color: isSelected
+                ? const Color(
+                    0xFFFFD400)
+                : Colors.white,
+            borderRadius:
+                BorderRadius.circular(
+                    10),
+            border:
+                Border.all(
+              color:
+                  const Color(
+                      0xFF0F172A),
+              width:
+                  isSelected
+                      ? 2.0
+                      : 1.0,
+            ),
+            boxShadow:
+                isSelected
+                    ? const [
+                        BoxShadow(
+                          color:
+                              Color(
+                                  0xFF0F172A),
+                          blurRadius:
+                              0,
+                          offset:
+                              Offset(
+                                  0, 2),
+                        ),
+                      ]
+                    : null,
+          ),
+          child:
+              AnimatedScale(
+            scale:
+                isSelected
+                    ? 1.02
+                    : 1.0,
+            duration:
+                const Duration(
+              milliseconds: 180,
+            ),
+            curve:
+                Curves.easeOutBack,
+            child:
+                Row(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 14,
+                  color:
+                      const Color(
+                          0xFF0F172A),
+                ),
+                const SizedBox(
+                    width: 5),
+                Text(
+                  option,
+                  style:
+                      GoogleFonts.inter(
+                    fontWeight:
+                        isSelected
+                            ? FontWeight
+                                .w700
+                            : FontWeight
+                                .w500,
+                    color:
+                        const Color(
+                            0xFF0F172A),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
