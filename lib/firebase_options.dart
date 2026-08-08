@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -63,6 +60,15 @@ class DefaultFirebaseOptions {
     appId: '1:911590606586:android:5bb73d6ad969d68e356b43',
     messagingSenderId: '911590606586',
     projectId: 'palito-de-sabores',
+    storageBucket: 'palito-de-sabores.firebasestorage.app',
+  );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAYhs1zl8byWDHJvOlHzNv6BN7BBK01psw',
+    appId: '1:911590606586:web:aaab37d2012e05dc356b43',
+    messagingSenderId: '911590606586',
+    projectId: 'palito-de-sabores',
+    authDomain: 'palito-de-sabores.firebaseapp.com',
     storageBucket: 'palito-de-sabores.firebasestorage.app',
   );
 }
