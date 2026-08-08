@@ -1,5 +1,4 @@
-
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
-import '../../core/utils/image_saver.dart';
+import '../../core/services/storage_image_service.dart';
 import '../../core/providers/dock_provider.dart';
 import '../../core/data/categories.dart';
 import '../../core/theme/tokens/app_spacing.dart';
@@ -25,15 +24,10 @@ class MemoryFormPage extends ConsumerStatefulWidget {
   final Category? initialCategory;
   final MemoryModel? memory;
 
-  const MemoryFormPage({
-    super.key,
-    this.initialCategory,
-    this.memory,
-  });
+  const MemoryFormPage({super.key, this.initialCategory, this.memory});
 
   @override
-  ConsumerState<MemoryFormPage> createState() =>
-      _MemoryFormPageState();
+  ConsumerState<MemoryFormPage> createState() => _MemoryFormPageState();
 }
 
 class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
@@ -43,7 +37,8 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   final _descController = TextEditingController();
   final _otroSaborController = TextEditingController();
 
-  File? _tempMediaFile;
+  XFile? _tempMediaFile;
+  Uint8List? _tempMediaBytes;
   String? _existingImagePath;
 
   bool _isSaving = false;
@@ -106,15 +101,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       curve: Curves.easeOutCubic,
     );
 
-    _pageSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _pageAnimationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _pageSlideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _pageAnimationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     Future.microtask(() {
       if (mounted) {
@@ -122,7 +115,8 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       }
     });
 
-    _selectedCategory = widget.memory?.category ??
+    _selectedCategory =
+        widget.memory?.category ??
         widget.initialCategory?.name ??
         gastronomicCategories.first.name;
 
@@ -137,27 +131,22 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
       _descController.text =
           m.specificFields['description']?.toString() ??
-              m.specificFields['nota']?.toString() ??
-              '';
+          m.specificFields['nota']?.toString() ??
+          '';
 
       _wouldReturnState = m.wouldReturn;
 
       _rating = m.rating;
 
-      _dynamicData = Map<String, dynamic>.from(
-        m.specificFields,
-      );
+      _dynamicData = Map<String, dynamic>.from(m.specificFields);
 
-      _otroSaborController.text =
-          _dynamicData['otro_sabor']?.toString() ?? '';
+      _otroSaborController.text = _dynamicData['otro_sabor']?.toString() ?? '';
 
       if (m.imageUrls.isNotEmpty) {
         _existingImagePath = m.imageUrls.first;
       }
 
-      debugPrint(
-        '✏️ EDITANDO MEMORIA: ${m.id}',
-      );
+      debugPrint('✏️ EDITANDO MEMORIA: ${m.id}');
 
       debugPrint(
         '📍 Coordenadas originales: '
@@ -204,16 +193,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     _gpsAnimationController.repeat();
 
     try {
-      final serviceEnabled =
-          await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                "Activa la ubicación del dispositivo.",
-              ),
+              content: Text("Activa la ubicación del dispositivo."),
             ),
           );
         }
@@ -221,31 +207,24 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         return;
       }
 
-      LocationPermission permission =
-          await Geolocator.checkPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
-        permission =
-            await Geolocator.requestPermission();
+        permission = await Geolocator.requestPermission();
       }
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Permiso de ubicación no concedido.",
-              ),
-            ),
+            const SnackBar(content: Text("Permiso de ubicación no concedido.")),
           );
         }
 
         return;
       }
 
-      final Position position =
-          await Geolocator.getCurrentPosition(
+      final Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
@@ -259,35 +238,25 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           "${lng.toStringAsFixed(6)}";
 
       try {
-        final placemarks =
-            await placemarkFromCoordinates(
-          lat,
-          lng,
-        );
+        final placemarks = await placemarkFromCoordinates(lat, lng);
 
         if (placemarks.isNotEmpty) {
           final place = placemarks.first;
 
           final parts = <String>[];
 
-          if (place.street != null &&
-              place.street!.trim().isNotEmpty) {
+          if (place.street != null && place.street!.trim().isNotEmpty) {
             parts.add(place.street!.trim());
           }
 
-          if (place.locality != null &&
-              place.locality!.trim().isNotEmpty) {
+          if (place.locality != null && place.locality!.trim().isNotEmpty) {
             parts.add(place.locality!.trim());
           }
 
           if (place.administrativeArea != null &&
               place.administrativeArea!.trim().isNotEmpty &&
-              !parts.contains(
-                place.administrativeArea!.trim(),
-              )) {
-            parts.add(
-              place.administrativeArea!.trim(),
-            );
+              !parts.contains(place.administrativeArea!.trim())) {
+            parts.add(place.administrativeArea!.trim());
           }
 
           if (parts.isNotEmpty) {
@@ -295,9 +264,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           }
         }
       } catch (e) {
-        debugPrint(
-          '⚠️ No se pudo resolver dirección GPS: $e',
-        );
+        debugPrint('⚠️ No se pudo resolver dirección GPS: $e');
       }
 
       if (!mounted) return;
@@ -320,28 +287,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Ubicación GPS obtenida correctamente.",
-          ),
-        ),
+        const SnackBar(content: Text("Ubicación GPS obtenida correctamente.")),
       );
     } catch (e, stack) {
-      debugPrint(
-        '❌ Error obteniendo ubicación GPS: $e',
-      );
+      debugPrint('❌ Error obteniendo ubicación GPS: $e');
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      debugPrintStack(stackTrace: stack);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Error obteniendo ubicación GPS: $e",
-            ),
-          ),
+          SnackBar(content: Text("Error obteniendo ubicación GPS: $e")),
         );
       }
     } finally {
@@ -365,9 +320,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       context: context,
       backgroundColor: const Color(0xFFFDFBF7),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (BuildContext context) {
         return SafeArea(
@@ -416,23 +369,15 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     required VoidCallback onTap,
   }) {
     return ListTile(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: const Color(0xFFFFD400),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: const Color(0xFF0F172A),
-            width: 2,
-          ),
+          border: Border.all(color: const Color(0xFF0F172A), width: 2),
         ),
-        child: Icon(
-          icon,
-          color: const Color(0xFF0F172A),
-        ),
+        child: Icon(icon, color: const Color(0xFF0F172A)),
       ),
       title: Text(
         title,
@@ -445,27 +390,27 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     );
   }
 
-  Future<void> _pickMedia(
-    ImageSource source,
-  ) async {
+  Future<void> _pickMedia(ImageSource source) async {
     final picker = ImagePicker();
 
-    final XFile? pickedFile =
-        await picker.pickImage(
+    final XFile? pickedFile = await picker.pickImage(
       source: source,
       imageQuality: 80,
     );
 
     if (pickedFile != null && mounted) {
+      final bytes = await pickedFile.readAsBytes();
+
+      if (!mounted) return;
+
       setState(() {
-        _tempMediaFile =
-            File(pickedFile.path);
+        _tempMediaFile = pickedFile;
+        _tempMediaBytes = bytes;
 
         _existingImagePath = null;
       });
 
-      _photoAnimationController
-          .forward(from: 0);
+      _photoAnimationController.forward(from: 0);
     }
   }
 
@@ -473,9 +418,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // GEOCODIFICACIÓN
   // ============================================================
 
-  Future<LocationData?> _resolveAddressToLocation(
-    String address,
-  ) async {
+  Future<LocationData?> _resolveAddressToLocation(String address) async {
     final cleanAddress = address.trim();
 
     if (cleanAddress.isEmpty) {
@@ -487,18 +430,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       caseSensitive: false,
     );
 
-    final gpsMatch = gpsRegex.firstMatch(
-      cleanAddress,
-    );
+    final gpsMatch = gpsRegex.firstMatch(cleanAddress);
 
     if (gpsMatch != null) {
-      final lat = double.tryParse(
-        gpsMatch.group(1) ?? '',
-      );
+      final lat = double.tryParse(gpsMatch.group(1) ?? '');
 
-      final lng = double.tryParse(
-        gpsMatch.group(2) ?? '',
-      );
+      final lng = double.tryParse(gpsMatch.group(2) ?? '');
 
       if (lat != null &&
           lng != null &&
@@ -506,41 +443,27 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           lat <= 90 &&
           lng >= -180 &&
           lng <= 180) {
-        return LocationData(
-          address: cleanAddress,
-          lat: lat,
-          lng: lng,
-        );
+        return LocationData(address: cleanAddress, lat: lat, lng: lng);
       }
     }
 
-    final queries = <String>[
-      cleanAddress,
-    ];
+    final queries = <String>[cleanAddress];
 
     if (!cleanAddress.toLowerCase().contains('españa') &&
         !cleanAddress.toLowerCase().contains('spain')) {
-      queries.add(
-        '$cleanAddress, España',
-      );
+      queries.add('$cleanAddress, España');
     }
 
     if (cleanAddress.toLowerCase() == 'medellín' ||
         cleanAddress.toLowerCase() == 'medellin') {
-      queries.insert(
-        0,
-        'Medellín, Badajoz, España',
-      );
+      queries.insert(0, 'Medellín, Badajoz, España');
     }
 
     for (final query in queries) {
       try {
-        debugPrint(
-          '🔎 Intentando geocodificar: "$query"',
-        );
+        debugPrint('🔎 Intentando geocodificar: "$query"');
 
-        final locations =
-            await locationFromAddress(query);
+        final locations = await locationFromAddress(query);
 
         if (locations.isNotEmpty) {
           final location = locations.first;
@@ -548,26 +471,17 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           final lat = location.latitude;
           final lng = location.longitude;
 
-          if (lat >= -90 &&
-              lat <= 90 &&
-              lng >= -180 &&
-              lng <= 180) {
+          if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
             debugPrint(
               '✅ Coordenadas encontradas para "$query": '
               '$lat, $lng',
             );
 
-            return LocationData(
-              address: cleanAddress,
-              lat: lat,
-              lng: lng,
-            );
+            return LocationData(address: cleanAddress, lat: lat, lng: lng);
           }
         }
       } catch (e) {
-        debugPrint(
-          '⚠️ Fallo geocodificando "$query": $e',
-        );
+        debugPrint('⚠️ Fallo geocodificando "$query": $e');
       }
     }
 
@@ -585,26 +499,20 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   @override
   Widget build(BuildContext context) {
-    final generator =
-        DynamicFieldFactory.getGenerator(
-      _selectedCategory,
-    );
+    final generator = DynamicFieldFactory.getGenerator(_selectedCategory);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDFBF7),
       appBar: AppBar(
         title: Text(
-          _isEditing
-              ? "Editar Recuerdo"
-              : "Nuevo Recuerdo",
+          _isEditing ? "Editar Recuerdo" : "Nuevo Recuerdo",
           style: GoogleFonts.outfit(
             fontWeight: FontWeight.w900,
             color: const Color(0xFF0F172A),
             fontSize: 22,
           ),
         ),
-        backgroundColor:
-            const Color(0xFFFDFBF7),
+        backgroundColor: const Color(0xFFFDFBF7),
         elevation: 0,
         centerTitle: true,
         leading: _buildAnimatedIconButton(
@@ -652,21 +560,15 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                     const SizedBox(height: 8),
 
                     AnimatedSwitcher(
-                      duration:
-                          const Duration(milliseconds: 450),
-                      switchInCurve:
-                          Curves.easeOutCubic,
-                      switchOutCurve:
-                          Curves.easeInCubic,
-                      transitionBuilder:
-                          (child, animation) {
+                      duration: const Duration(milliseconds: 450),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
                         return FadeTransition(
                           opacity: animation,
                           child: SlideTransition(
-                            position:
-                                Tween<Offset>(
-                              begin:
-                                  const Offset(0, 0.03),
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.03),
                               end: Offset.zero,
                             ).animate(animation),
                             child: child,
@@ -675,21 +577,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                       },
                       child: generator != null
                           ? KeyedSubtree(
-                              key: ValueKey(
-                                _selectedCategory,
-                              ),
+                              key: ValueKey(_selectedCategory),
                               child: Column(
-                                children:
-                                    generator.buildFields(
-                                  _dynamicData,
-                                  (key, value) {
-                                    setState(() {
-                                      _dynamicData[key] =
-                                          value;
-                                    });
-                                  },
-                                  _otroSaborController,
-                                ),
+                                children: generator.buildFields(_dynamicData, (
+                                  key,
+                                  value,
+                                ) {
+                                  setState(() {
+                                    _dynamicData[key] = value;
+                                  });
+                                }, _otroSaborController),
                               ),
                             )
                           : const SizedBox.shrink(),
@@ -715,10 +612,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                     ),
                     const SizedBox(height: 32),
 
-                    _buildAnimatedSection(
-                      index: 7,
-                      child: _buildSaveButton(),
-                    ),
+                    _buildAnimatedSection(index: 7, child: _buildSaveButton()),
 
                     const SizedBox(height: 40),
                   ]),
@@ -737,8 +631,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildCategorySection() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel("Categoría"),
         const SizedBox(height: 8),
@@ -753,18 +646,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 fontWeight: FontWeight.w900,
                 color: const Color(0xFF0F172A),
               ),
-              items:
-                  gastronomicCategories.map(
-                (cat) {
-                  return DropdownMenuItem(
-                    value: cat.name,
-                    child: Text(cat.name),
-                  );
-                },
-              ).toList(),
+              items: gastronomicCategories.map((cat) {
+                return DropdownMenuItem(value: cat.name, child: Text(cat.name));
+              }).toList(),
               onChanged: (val) {
-                if (val == null ||
-                    val == _selectedCategory) {
+                if (val == null || val == _selectedCategory) {
                   return;
                 }
 
@@ -782,28 +668,19 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildRestaurantSection() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(
-          "Restaurante / Lugar",
-        ),
+        _buildSectionLabel("Restaurante / Lugar"),
         const SizedBox(height: 8),
         _buildNeoContainer(
           child: TextField(
-            controller:
-                _restaurantController,
+            controller: _restaurantController,
             style: GoogleFonts.inter(
-              color:
-                  const Color(0xFF0F172A),
-              fontWeight:
-                  FontWeight.bold,
+              color: const Color(0xFF0F172A),
+              fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
-            decoration:
-                _inputDecoration(
-              "Ej. Taberna La Bulería",
-            ),
+            decoration: _inputDecoration("Ej. Taberna La Bulería"),
           ),
         ),
       ],
@@ -812,8 +689,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildLocationSection() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionLabel("Ubicación"),
         const SizedBox(height: 8),
@@ -822,26 +698,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
             children: [
               Expanded(
                 child: TextField(
-                  controller:
-                      _locationController,
+                  controller: _locationController,
                   onChanged: (_) {
-                    if (_currentLocation !=
-                        null) {
-                      final currentText =
-                          _locationController
-                              .text
-                              .trim();
+                    if (_currentLocation != null) {
+                      final currentText = _locationController.text.trim();
 
-                      final savedAddress =
-                          _currentLocation!
-                              .address
-                              .trim();
+                      final savedAddress = _currentLocation!.address.trim();
 
-                      if (currentText !=
-                          savedAddress) {
+                      if (currentText != savedAddress) {
                         setState(() {
-                          _currentLocation =
-                              null;
+                          _currentLocation = null;
                         });
 
                         debugPrint(
@@ -852,26 +718,18 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                       }
                     }
                   },
-                  style:
-                      GoogleFonts.inter(
-                    color:
-                        const Color(
-                            0xFF0F172A),
-                    fontWeight:
-                        FontWeight.bold,
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF0F172A),
+                    fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
-                  decoration:
-                      _inputDecoration(
+                  decoration: _inputDecoration(
                     "Escribe una ciudad o dirección",
                   ),
                 ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.only(
-                  right: 8.0,
-                ),
+                padding: const EdgeInsets.only(right: 8.0),
                 child: _buildGpsButton(),
               ),
             ],
@@ -883,57 +741,31 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildGpsButton() {
     return GestureDetector(
-      onTap:
-          _isGettingLocation
-              ? null
-              : _getCurrentLocation,
+      onTap: _isGettingLocation ? null : _getCurrentLocation,
       child: AnimatedContainer(
-        duration:
-            const Duration(milliseconds: 250),
-        padding:
-            const EdgeInsets.all(8),
-        decoration:
-            BoxDecoration(
-          color:
-              _isGettingLocation
-                  ? const Color(
-                      0xFFFFE77A,
-                    )
-                  : const Color(
-                      0xFFFFD400,
-                    ),
-          borderRadius:
-              BorderRadius.circular(10),
-          border: Border.all(
-            color:
-                const Color(0xFF0F172A),
-            width: 2,
-          ),
-          boxShadow:
-              _isGettingLocation
-                  ? const []
-                  : const [
-                      BoxShadow(
-                        color:
-                            Color(0xFF0F172A),
-                        blurRadius: 0,
-                        offset:
-                            Offset(0, 2),
-                      ),
-                    ],
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: _isGettingLocation
+              ? const Color(0xFFFFE77A)
+              : const Color(0xFFFFD400),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF0F172A), width: 2),
+          boxShadow: _isGettingLocation
+              ? const []
+              : const [
+                  BoxShadow(
+                    color: Color(0xFF0F172A),
+                    blurRadius: 0,
+                    offset: Offset(0, 2),
+                  ),
+                ],
         ),
-        child:
-            RotationTransition(
-          turns:
-              _gpsAnimationController,
+        child: RotationTransition(
+          turns: _gpsAnimationController,
           child: Icon(
-            _isGettingLocation
-                ? Icons.sync_rounded
-                : Icons
-                    .my_location_rounded,
-            color:
-                const Color(
-                    0xFF0F172A),
+            _isGettingLocation ? Icons.sync_rounded : Icons.my_location_rounded,
+            color: const Color(0xFF0F172A),
             size: 18,
           ),
         ),
@@ -944,73 +776,43 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Widget _buildPhotoSection() {
     final hasImage =
         _tempMediaFile != null ||
-        (_existingImagePath != null &&
-            _existingImagePath!.isNotEmpty);
+        (_existingImagePath != null && _existingImagePath!.isNotEmpty);
 
     return GestureDetector(
-      onTap:
-          _showImageSourceDialog,
+      onTap: _showImageSourceDialog,
       child: ScaleTransition(
-        scale: Tween<double>(
-          begin: 0.96,
-          end: 1.0,
-        ).animate(
+        scale: Tween<double>(begin: 0.96, end: 1.0).animate(
           CurvedAnimation(
-            parent:
-                _photoAnimationController,
-            curve:
-                Curves.easeOutBack,
+            parent: _photoAnimationController,
+            curve: Curves.easeOutBack,
           ),
         ),
         child: AnimatedContainer(
-          duration:
-              const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 350),
           height: 180,
           width: double.infinity,
-          decoration:
-              BoxDecoration(
-            color:
-                const Color(0xFFFFFAEB),
-            border: Border.all(
-              color:
-                  const Color(0xFF0F172A),
-              width: 2,
-            ),
-            borderRadius:
-                BorderRadius.circular(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFAEB),
+            border: Border.all(color: const Color(0xFF0F172A), width: 2),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: const [
               BoxShadow(
-                color:
-                    Color(0xFF0F172A),
+                color: Color(0xFF0F172A),
                 blurRadius: 0,
-                offset:
-                    Offset(0, 3),
+                offset: Offset(0, 3),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius:
-                BorderRadius.circular(
-              14,
-            ),
+            borderRadius: BorderRadius.circular(14),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (_tempMediaFile !=
-                    null)
-                  Image.file(
-                    _tempMediaFile!,
-                    fit: BoxFit.cover,
-                  )
-                else if (_existingImagePath !=
-                        null &&
-                    _existingImagePath!
-                        .isNotEmpty)
-                  SmartImage(
-                    imagePath:
-                        _existingImagePath,
-                    fit: BoxFit.cover,
-                  )
+                if (_tempMediaBytes != null)
+                  Image.memory(_tempMediaBytes!, fit: BoxFit.cover)
+                else if (_existingImagePath != null &&
+                    _existingImagePath!.isNotEmpty)
+                  SmartImage(imagePath: _existingImagePath, fit: BoxFit.cover)
                 else
                   _buildEmptyPhotoState(),
 
@@ -1018,8 +820,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   Positioned(
                     bottom: 12,
                     right: 12,
-                    child:
-                        _buildChangePhotoBadge(),
+                    child: _buildChangePhotoBadge(),
                   ),
               ],
             ),
@@ -1031,69 +832,43 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildEmptyPhotoState() {
     return Column(
-      mainAxisAlignment:
-          MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TweenAnimationBuilder<double>(
-          tween: Tween(
-            begin: 0.85,
-            end: 1.0,
-          ),
-          duration:
-              const Duration(milliseconds: 600),
-          curve:
-              Curves.easeOutBack,
-          builder:
-              (context, scale, child) {
-            return Transform.scale(
-              scale: scale,
-              child: child,
-            );
+          tween: Tween(begin: 0.85, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutBack,
+          builder: (context, scale, child) {
+            return Transform.scale(scale: scale, child: child);
           },
           child: Container(
-            padding:
-                const EdgeInsets.all(12),
-            decoration:
-                BoxDecoration(
-              color:
-                  const Color(0xFFFFD400),
-              shape:
-                  BoxShape.circle,
-              border:
-                  Border.all(
-                color:
-                    const Color(0xFF0F172A),
-                width: 2,
-              ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD400),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF0F172A), width: 2),
               boxShadow: const [
                 BoxShadow(
-                  color:
-                      Color(0xFF0F172A),
+                  color: Color(0xFF0F172A),
                   blurRadius: 0,
-                  offset:
-                      Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
             child: const Icon(
-              Icons
-                  .camera_alt_rounded,
+              Icons.camera_alt_rounded,
               size: 24,
-              color:
-                  Color(0xFF0F172A),
+              color: Color(0xFF0F172A),
             ),
           ),
         ),
         const SizedBox(height: 10),
         Text(
           "Añadir foto del plato o lugar",
-          style:
-              GoogleFonts.outfit(
-            fontWeight:
-                FontWeight.bold,
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
             fontSize: 15,
-            color:
-                const Color(0xFF0F172A),
+            color: const Color(0xFF0F172A),
           ),
         ),
       ],
@@ -1102,54 +877,30 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildChangePhotoBadge() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 6,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            const Color(0xFFFFD400),
-        borderRadius:
-            BorderRadius.circular(20),
-        border:
-            Border.all(
-          color:
-              const Color(0xFF0F172A),
-          width: 2,
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFD400),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
-            color:
-                Color(0xFF0F172A),
+            color: Color(0xFF0F172A),
             blurRadius: 0,
-            offset:
-                Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Row(
-        mainAxisSize:
-            MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.edit,
-            size: 14,
-            color:
-                Color(0xFF0F172A),
-          ),
+          const Icon(Icons.edit, size: 14, color: Color(0xFF0F172A)),
           const SizedBox(width: 6),
           Text(
             "Cambiar foto",
-            style:
-                GoogleFonts.outfit(
-              color:
-                  const Color(
-                      0xFF0F172A),
+            style: GoogleFonts.outfit(
+              color: const Color(0xFF0F172A),
               fontSize: 12,
-              fontWeight:
-                  FontWeight.bold,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -1159,40 +910,23 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildRatingSection() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(
-          "Puntuación general",
-        ),
+        _buildSectionLabel("Puntuación general"),
         const SizedBox(height: 8),
         _buildNeoContainer(
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
               Expanded(
                 child: SliderTheme(
-                  data:
-                      SliderThemeData(
-                    activeTrackColor:
-                        const Color(
-                            0xFF0F172A),
-                    inactiveTrackColor:
-                        Colors.grey
-                            .shade300,
-                    thumbColor:
-                        const Color(
-                            0xFFFFD400),
-                    overlayColor:
-                        const Color(
-                                0xFFFFD400)
-                            .withValues(
-                      alpha: 0.2,
-                    ),
+                  data: SliderThemeData(
+                    activeTrackColor: const Color(0xFF0F172A),
+                    inactiveTrackColor: Colors.grey.shade300,
+                    thumbColor: const Color(0xFFFFD400),
+                    overlayColor: const Color(
+                      0xFFFFD400,
+                    ).withValues(alpha: 0.2),
                     trackHeight: 6,
                   ),
                   child: Slider(
@@ -1205,63 +939,36 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                         _rating = v;
                       });
 
-                      _ratingAnimationController
-                          .forward(
-                            from: 0,
-                          );
+                      _ratingAnimationController.forward(from: 0);
                     },
                   ),
                 ),
               ),
               ScaleTransition(
-                scale: Tween<double>(
-                  begin: 0.85,
-                  end: 1.0,
-                ).animate(
+                scale: Tween<double>(begin: 0.85, end: 1.0).animate(
                   CurvedAnimation(
-                    parent:
-                        _ratingAnimationController,
-                    curve:
-                        Curves.easeOutBack,
+                    parent: _ratingAnimationController,
+                    curve: Curves.easeOutBack,
                   ),
                 ),
                 child: Container(
-                  padding:
-                      const EdgeInsets
-                          .symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 6,
                   ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        const Color(
-                            0xFFFFD400),
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                      10,
-                    ),
-                    border:
-                        Border.all(
-                      color:
-                          const Color(
-                              0xFF0F172A),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD400),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF0F172A),
                       width: 2,
                     ),
                   ),
                   child: Text(
-                    _rating
-                        .toStringAsFixed(
-                      1,
-                    ),
-                    style:
-                        GoogleFonts.outfit(
-                      fontWeight:
-                          FontWeight.w900,
-                      color:
-                          const Color(
-                              0xFF0F172A),
+                    _rating.toStringAsFixed(1),
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0F172A),
                       fontSize: 16,
                     ),
                   ),
@@ -1275,80 +982,43 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   }
 
   Widget _buildReturnSection() {
-    final isSelected =
-        _wouldReturnState == true;
+    final isSelected = _wouldReturnState == true;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(
-          "¿Volverías a este lugar?",
-        ),
+        _buildSectionLabel("¿Volverías a este lugar?"),
         const SizedBox(height: 8),
         AnimatedContainer(
-          duration:
-              const Duration(milliseconds: 300),
-          curve:
-              Curves.easeOutCubic,
-          decoration:
-              BoxDecoration(
-            color:
-                isSelected
-                    ? const Color(
-                        0xFFFFFAEB,
-                      )
-                    : Colors.white,
-            borderRadius:
-                BorderRadius.circular(
-              14,
-            ),
-            border:
-                Border.all(
-              color:
-                  const Color(
-                      0xFF0F172A),
-              width: 2,
-            ),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFFAEB) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF0F172A), width: 2),
             boxShadow: const [
               BoxShadow(
-                color:
-                    Color(0xFF0F172A),
+                color: Color(0xFF0F172A),
                 blurRadius: 0,
-                offset:
-                    Offset(0, 3),
+                offset: Offset(0, 3),
               ),
             ],
           ),
-          child:
-              SwitchListTile(
-            contentPadding:
-                const EdgeInsets
-                    .symmetric(
-              horizontal: 16,
-            ),
+          child: SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             title: Text(
               "¿Volverías?",
-              style:
-                  GoogleFonts.inter(
-                fontWeight:
-                    FontWeight.bold,
-                color:
-                    const Color(
-                        0xFF0F172A),
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF0F172A),
                 fontSize: 14,
               ),
             ),
-            value:
-                _wouldReturnState ??
-                    false,
-            activeThumbColor:
-                const Color(
-                    0xFFFFD400),
+            value: _wouldReturnState ?? false,
+            activeThumbColor: const Color(0xFFFFD400),
             onChanged: (v) {
               setState(() {
-                _wouldReturnState =
-                    v;
+                _wouldReturnState = v;
               });
             },
           ),
@@ -1359,32 +1029,22 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildDescriptionSection() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(
-          "Nota personal",
-        ),
+        _buildSectionLabel("Nota personal"),
         const SizedBox(height: 8),
         _buildNeoContainer(
           child: TextField(
-            controller:
-                _descController,
+            controller: _descController,
             maxLines: 3,
-            style:
-                GoogleFonts.inter(
-              color:
-                  const Color(
-                      0xFF0F172A),
-              fontWeight:
-                  FontWeight.w500,
+            style: GoogleFonts.inter(
+              color: const Color(0xFF0F172A),
+              fontWeight: FontWeight.w500,
               fontSize: 14,
             ),
-            decoration:
-                _inputDecoration(
+            decoration: _inputDecoration(
               "Escribe tus impresiones...",
-              contentPadding:
-                  const EdgeInsets.all(14),
+              contentPadding: const EdgeInsets.all(14),
             ),
           ),
         ),
@@ -1394,107 +1054,58 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildSaveButton() {
     return AnimatedContainer(
-      duration:
-          const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       width: double.infinity,
       height: 56,
-      decoration:
-          BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color:
-                const Color(0xFF0F172A),
-            blurRadius:
-                _isSaving ? 2 : 0,
-            offset:
-                _isSaving
-                    ? const Offset(0, 2)
-                    : const Offset(0, 4),
+            color: const Color(0xFF0F172A),
+            blurRadius: _isSaving ? 2 : 0,
+            offset: _isSaving ? const Offset(0, 2) : const Offset(0, 4),
           ),
         ],
       ),
-      child:
-          ElevatedButton(
-        style:
-            ElevatedButton.styleFrom(
-          backgroundColor:
-              _isSaving
-                  ? const Color(
-                      0xFFFFE77A,
-                    )
-                  : const Color(
-                      0xFFFFD400,
-                    ),
-          foregroundColor:
-              const Color(
-                  0xFF0F172A),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _isSaving
+              ? const Color(0xFFFFE77A)
+              : const Color(0xFFFFD400),
+          foregroundColor: const Color(0xFF0F172A),
           elevation: 0,
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              18,
-            ),
-            side:
-                const BorderSide(
-              color:
-                  Color(0xFF0F172A),
-              width: 2.5,
-            ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFF0F172A), width: 2.5),
           ),
         ),
-        onPressed: _isSaving
-            ? null
-            : _saveMemory,
+        onPressed: _isSaving ? null : _saveMemory,
         child: AnimatedSwitcher(
-          duration:
-              const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 250),
           child: _isSaving
               ? Row(
-                  key: const ValueKey(
-                    'saving',
-                  ),
-                  mainAxisAlignment:
-                      MainAxisAlignment.center,
+                  key: const ValueKey('saving'),
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     RotationTransition(
-                      turns:
-                          _saveAnimationController,
-                      child:
-                          const Icon(
-                        Icons
-                            .sync_rounded,
-                        size: 22,
-                      ),
+                      turns: _saveAnimationController,
+                      child: const Icon(Icons.sync_rounded, size: 22),
                     ),
-                    const SizedBox(
-                        width: 10),
+                    const SizedBox(width: 10),
                     Text(
                       "Guardando...",
-                      style:
-                          GoogleFonts.outfit(
-                        fontWeight:
-                            FontWeight.w900,
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w900,
                         fontSize: 18,
                       ),
                     ),
                   ],
                 )
               : Text(
-                  _isEditing
-                      ? "Guardar Cambios"
-                      : "Guardar Recuerdo",
-                  key: const ValueKey(
-                    'idle',
-                  ),
-                  style:
-                      GoogleFonts.outfit(
-                    fontWeight:
-                        FontWeight.w900,
+                  _isEditing ? "Guardar Cambios" : "Guardar Recuerdo",
+                  key: const ValueKey('idle'),
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w900,
                     fontSize: 18,
                   ),
                 ),
@@ -1507,29 +1118,18 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // COMPONENTES UI
   // ============================================================
 
-  Widget _buildAnimatedSection({
-    required int index,
-    required Widget child,
-  }) {
-    final delay =
-        Duration(milliseconds: 50 * index);
+  Widget _buildAnimatedSection({required int index, required Widget child}) {
+    final delay = Duration(milliseconds: 50 * index);
 
     return TweenAnimationBuilder<double>(
-      tween: Tween(
-        begin: 0.0,
-        end: 1.0,
-      ),
-      duration:
-          Duration(milliseconds: 500 + (index * 50)),
-      curve:
-          Curves.easeOutCubic,
-      builder:
-          (context, value, child) {
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 500 + (index * 50)),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
         return Opacity(
           opacity: value,
           child: Transform.translate(
-            offset:
-                Offset(0, 12 * (1 - value)),
+            offset: Offset(0, 12 * (1 - value)),
             child: child,
           ),
         );
@@ -1543,31 +1143,18 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     EdgeInsetsGeometry? padding,
   }) {
     return AnimatedContainer(
-      duration:
-          const Duration(milliseconds: 200),
-      padding: padding ??
-          const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 4,
-          ),
-      decoration:
-          BoxDecoration(
+      duration: const Duration(milliseconds: 200),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(14),
-        border:
-            Border.all(
-          color:
-              const Color(0xFF0F172A),
-          width: 2,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
-            color:
-                Color(0xFF0F172A),
+            color: Color(0xFF0F172A),
             blurRadius: 0,
-            offset:
-                Offset(0, 3),
+            offset: Offset(0, 3),
           ),
         ],
       ),
@@ -1580,48 +1167,27 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding:
-          const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          customBorder:
-              const CircleBorder(),
+          customBorder: const CircleBorder(),
           child: Container(
-            padding:
-                const EdgeInsets.all(8),
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.white,
-              shape:
-                  BoxShape.circle,
-              border:
-                  Border.all(
-                color:
-                    const Color(
-                        0xFF0F172A),
-                width: 2,
-              ),
-              boxShadow:
-                  const [
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF0F172A), width: 2),
+              boxShadow: const [
                 BoxShadow(
-                  color:
-                      Colors.black12,
+                  color: Colors.black12,
                   blurRadius: 2,
-                  offset:
-                      Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-            child: Icon(
-              icon,
-              color:
-                  const Color(
-                      0xFF0F172A),
-              size: 16,
-            ),
+            child: Icon(icon, color: const Color(0xFF0F172A), size: 16),
           ),
         ),
       ),
@@ -1630,43 +1196,29 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   InputDecoration _inputDecoration(
     String hint, {
-    EdgeInsetsGeometry?
-        contentPadding,
+    EdgeInsetsGeometry? contentPadding,
   }) {
     return InputDecoration(
       hintText: hint,
-      hintStyle:
-          GoogleFonts.inter(
-        color:
-            Colors.grey.shade400,
-        fontWeight:
-            FontWeight.w400,
+      hintStyle: GoogleFonts.inter(
+        color: Colors.grey.shade400,
+        fontWeight: FontWeight.w400,
         fontSize: 14,
       ),
-      border:
-          InputBorder.none,
+      border: InputBorder.none,
       contentPadding:
           contentPadding ??
-              const EdgeInsets
-                  .symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
-  Widget _buildSectionLabel(
-    String title,
-  ) {
+  Widget _buildSectionLabel(String title) {
     return Text(
       title,
-      style:
-          GoogleFonts.outfit(
+      style: GoogleFonts.outfit(
         fontSize: 16,
-        fontWeight:
-            FontWeight.w900,
-        color:
-            const Color(0xFF0F172A),
+        fontWeight: FontWeight.w900,
+        color: const Color(0xFF0F172A),
       ),
     );
   }
@@ -1676,35 +1228,23 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // ============================================================
 
   Future<void> _saveMemory() async {
-    if (_restaurantController.text
-        .trim()
-        .isEmpty) {
-      _showError(
-        "Nombre de restaurante",
-      );
+    if (_restaurantController.text.trim().isEmpty) {
+      _showError("Nombre de restaurante");
       return;
     }
 
-    if (_locationController.text
-        .trim()
-        .isEmpty) {
-      _showError(
-        "Ubicación",
-      );
+    if (_locationController.text.trim().isEmpty) {
+      _showError("Ubicación");
       return;
     }
 
     if (_rating <= 0.0) {
-      _showError(
-        "Puntuación",
-      );
+      _showError("Puntuación");
       return;
     }
 
     if (_wouldReturnState == null) {
-      _showError(
-        "¿Volverías?",
-      );
+      _showError("¿Volverías?");
       return;
     }
 
@@ -1720,55 +1260,47 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
     try {
       // ========================================================
-      // 1. GUARDAR IMAGEN
+      // 0. ID (se genera antes para poder usarlo como carpeta de Storage)
       // ========================================================
 
-      List<String> finalImagePaths =
-          List<String>.from(
-        widget.memory?.imageUrls ??
-            <String>[],
+      final memoryId = widget.memory?.id ?? const Uuid().v4();
+
+      // ========================================================
+      // 1. GUARDAR IMAGEN (Firebase Storage — visible en ambos móviles)
+      // ========================================================
+
+      List<String> finalImagePaths = List<String>.from(
+        widget.memory?.imageUrls ?? <String>[],
       );
 
-      if (_tempMediaFile != null) {
-        final permanentFileName =
-            await ImageSaver.saveImagePermanently(
-          _tempMediaFile!.path,
+      if (_tempMediaBytes != null) {
+        final downloadUrl = await StorageImageService.uploadMemoryImage(
+          memoryId: memoryId,
+          bytes: _tempMediaBytes!,
         );
 
-        finalImagePaths = [
-          permanentFileName,
-        ];
-      } else if (_existingImagePath !=
-              null &&
-          _existingImagePath!.isNotEmpty) {
-        finalImagePaths = [
-          _existingImagePath!,
-        ];
+        finalImagePaths = [downloadUrl];
+      } else if (_existingImagePath != null && _existingImagePath!.isNotEmpty) {
+        finalImagePaths = [_existingImagePath!];
       }
 
       // ========================================================
       // 2. RESOLVER UBICACIÓN
       // ========================================================
 
-      final String addressText =
-          _locationController.text.trim();
+      final String addressText = _locationController.text.trim();
 
       LocationData? resolvedLocation;
 
       if (_currentLocation != null &&
           _currentLocation!.lat != null &&
           _currentLocation!.lng != null) {
-        final currentLat =
-            _currentLocation!.lat!;
-        final currentLng =
-            _currentLocation!.lng!;
+        final currentLat = _currentLocation!.lat!;
+        final currentLng = _currentLocation!.lng!;
 
-        if (_currentLocation!.address
-                .trim()
-                .toLowerCase() ==
+        if (_currentLocation!.address.trim().toLowerCase() ==
             addressText.toLowerCase()) {
-          resolvedLocation =
-              LocationData(
+          resolvedLocation = LocationData(
             address: addressText,
             lat: currentLat,
             lng: currentLng,
@@ -1784,21 +1316,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       if (resolvedLocation == null &&
           _isEditing &&
           widget.memory != null &&
-          widget.memory!.location.lat !=
-              null &&
-          widget.memory!.location.lng !=
-              null &&
-          widget.memory!.location.address
-                  .trim()
-                  .toLowerCase() ==
+          widget.memory!.location.lat != null &&
+          widget.memory!.location.lng != null &&
+          widget.memory!.location.address.trim().toLowerCase() ==
               addressText.toLowerCase()) {
-        resolvedLocation =
-            LocationData(
+        resolvedLocation = LocationData(
           address: addressText,
-          lat:
-              widget.memory!.location.lat,
-          lng:
-              widget.memory!.location.lng,
+          lat: widget.memory!.location.lat,
+          lng: widget.memory!.location.lng,
         );
 
         debugPrint(
@@ -1808,10 +1333,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         );
       }
 
-      resolvedLocation ??=
-          await _resolveAddressToLocation(
-        addressText,
-      );
+      resolvedLocation ??= await _resolveAddressToLocation(addressText);
 
       if (resolvedLocation == null ||
           resolvedLocation.lat == null ||
@@ -1822,8 +1344,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         );
 
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
                 "No se pudo localizar esta dirección. "
@@ -1836,11 +1357,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         return;
       }
 
-      final double lat =
-          resolvedLocation.lat!;
+      final double lat = resolvedLocation.lat!;
 
-      final double lng =
-          resolvedLocation.lng!;
+      final double lng = resolvedLocation.lng!;
 
       debugPrint(
         '📍 UBICACIÓN FINAL VALIDADA: '
@@ -1853,8 +1372,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       // 3. LOCATIONDATA FINAL
       // ========================================================
 
-      final finalLocation =
-          LocationData(
+      final finalLocation = LocationData(
         address: addressText,
         lat: lat,
         lng: lng,
@@ -1864,85 +1382,46 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       // 4. DATOS DINÁMICOS
       // ========================================================
 
-      final Map<String, dynamic>
-          finalDynamicData =
-          Map<String, dynamic>.from(
+      final Map<String, dynamic> finalDynamicData = Map<String, dynamic>.from(
         _dynamicData,
       );
 
-      if (_descController.text
-          .trim()
-          .isNotEmpty) {
-        finalDynamicData[
-                'description'] =
-            _descController.text.trim();
+      if (_descController.text.trim().isNotEmpty) {
+        finalDynamicData['description'] = _descController.text.trim();
       } else {
-        finalDynamicData.remove(
-          'description',
-        );
+        finalDynamicData.remove('description');
       }
 
-      if (_otroSaborController.text
-          .trim()
-          .isNotEmpty) {
-        finalDynamicData[
-                'otro_sabor'] =
-            _otroSaborController.text
-                .trim();
+      if (_otroSaborController.text.trim().isNotEmpty) {
+        finalDynamicData['otro_sabor'] = _otroSaborController.text.trim();
       }
-
-      // ========================================================
-      // 5. ID
-      // ========================================================
-
-      final memoryId =
-          widget.memory?.id ??
-              const Uuid().v4();
 
       // ========================================================
       // 6. MODELO FINAL
       // ========================================================
 
-      final newMemory =
-          MemoryModel(
+      final newMemory = MemoryModel(
         id: memoryId,
-        title:
-            _restaurantController.text
-                .trim(),
-        restaurantName:
-            _restaurantController.text
-                .trim(),
-        location:
-            finalLocation,
-        wouldReturn:
-            _wouldReturnState ?? false,
-        rating:
-            _rating,
-        imageUrls:
-            finalImagePaths,
-        videoUrl:
-            widget.memory?.videoUrl,
-        date:
-            widget.memory?.date ??
-                DateTime.now(),
-        category:
-            _selectedCategory,
-        specificFields:
-            finalDynamicData,
+        title: _restaurantController.text.trim(),
+        restaurantName: _restaurantController.text.trim(),
+        location: finalLocation,
+        wouldReturn: _wouldReturnState ?? false,
+        rating: _rating,
+        imageUrls: finalImagePaths,
+        videoUrl: widget.memory?.videoUrl,
+        date: widget.memory?.date ?? DateTime.now(),
+        category: _selectedCategory,
+        specificFields: finalDynamicData,
       );
 
       // ========================================================
       // 7. DATOS FIRESTORE
       // ========================================================
 
-      final Map<String, dynamic>
-          firestoreMemoryData =
-          Map<String, dynamic>.from(
-        newMemory.toJson(),
-      );
+      final Map<String, dynamic> firestoreMemoryData =
+          Map<String, dynamic>.from(newMemory.toJson());
 
-      firestoreMemoryData['timestamp'] =
-          FieldValue.serverTimestamp();
+      firestoreMemoryData['timestamp'] = FieldValue.serverTimestamp();
 
       firestoreMemoryData['location'] = {
         'address': addressText,
@@ -1950,8 +1429,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         'lng': lng,
       };
 
-      firestoreMemoryData['id'] =
-          memoryId;
+      firestoreMemoryData['id'] = memoryId;
 
       debugPrint(
         '💾 FIRESTORE MEMORY DATA: '
@@ -1963,36 +1441,20 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       // ========================================================
 
       if (_isEditing) {
-        ref
-            .read(
-              memoryProvider.notifier,
-            )
-            .updateMemory(
-              newMemory,
-            );
+        ref.read(memoryProvider.notifier).updateMemory(newMemory);
       } else {
-        ref
-            .read(
-              memoryProvider.notifier,
-            )
-            .addMemory(
-              newMemory,
-            );
+        ref.read(memoryProvider.notifier).addMemory(newMemory);
       }
 
       // ========================================================
       // 9. GUARDAR EN FIRESTORE
       // ========================================================
 
-      final memoryMapService =
-          ref.read(
-        memoryMapServiceProvider,
-      );
+      final memoryMapService = ref.read(memoryMapServiceProvider);
 
       await memoryMapService.saveMemory(
         memoryId: memoryId,
-        memoryData:
-            firestoreMemoryData,
+        memoryData: firestoreMemoryData,
       );
 
       // ========================================================
@@ -2000,56 +1462,34 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       // ========================================================
 
       await memoryMapService.saveLocation(
-        locationId:
-            memoryId,
+        locationId: memoryId,
         locationData: {
-          'memoryId':
-              memoryId,
-          'title':
-              newMemory.title,
-          'restaurantName':
-              newMemory.restaurantName,
-          'address':
-              addressText,
-          'lat':
-              lat,
-          'lng':
-              lng,
-          'category':
-              _selectedCategory,
-          'rating':
-              _rating,
-          'wouldReturn':
-              _wouldReturnState ??
-                  false,
+          'memoryId': memoryId,
+          'title': newMemory.title,
+          'restaurantName': newMemory.restaurantName,
+          'address': addressText,
+          'lat': lat,
+          'lng': lng,
+          'category': _selectedCategory,
+          'rating': _rating,
+          'wouldReturn': _wouldReturnState ?? false,
         },
       );
 
-      debugPrint(
-        '✅ RECUERDO GUARDADO COMPLETAMENTE',
-      );
+      debugPrint('✅ RECUERDO GUARDADO COMPLETAMENTE');
 
       debugPrint(
         '🗺️ COORDENADAS DISPONIBLES PARA EL MAPA: '
         '$lat, $lng',
       );
     } catch (e, stack) {
-      debugPrint(
-        '❌ Error guardando recuerdo: $e',
-      );
+      debugPrint('❌ Error guardando recuerdo: $e');
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      debugPrintStack(stackTrace: stack);
 
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
-          SnackBar(
-            content: Text(
-              "Error guardando el recuerdo: $e",
-            ),
-          ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error guardando el recuerdo: $e")),
         );
       }
 
@@ -2074,19 +1514,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // ERRORES
   // ============================================================
 
-  void _showError(
-    String field,
-  ) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
+  void _showError(String field) {
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        behavior:
-            SnackBarBehavior.floating,
-        content: Text(
-          "Por favor, completa: $field",
-        ),
+        behavior: SnackBarBehavior.floating,
+        content: Text("Por favor, completa: $field"),
       ),
     );
   }
 }
-
