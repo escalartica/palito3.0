@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Herramientas de desarrollo asistido (no forman parte de la app)
+.agents/
+.claude/
+skills-lock.json
+
+# Caché local de la CLI de Firebase
+.firebase/
