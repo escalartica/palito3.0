@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/household_config.dart';
 import '../models/memory_model.dart';
 
 /// ===========================================================================
@@ -65,31 +66,31 @@ class MemoryMapFirestoreService {
   // REFERENCIAS
   // ==========================================================================
 
+  // Todas las lecturas/escrituras usan kHouseholdId como segmento de ruta
+  // (no el uid anónimo del dispositivo) para que los recuerdos se
+  // compartan entre todos los teléfonos del hogar. _currentUserId solo
+  // se usa aquí como comprobación de que el dispositivo está autenticado.
   CollectionReference<Map<String, dynamic>>?
       get _userMemoriesCollection {
-    final String? uid = _currentUserId;
-
-    if (uid == null) {
+    if (_currentUserId == null) {
       return null;
     }
 
     return _firestore
         .collection(_usersCollection)
-        .doc(uid)
+        .doc(kHouseholdId)
         .collection(_memoriesCollection);
   }
 
   CollectionReference<Map<String, dynamic>>?
       get _userLocationsCollection {
-    final String? uid = _currentUserId;
-
-    if (uid == null) {
+    if (_currentUserId == null) {
       return null;
     }
 
     return _firestore
         .collection(_usersCollection)
-        .doc(uid)
+        .doc(kHouseholdId)
         .collection(_locationsCollection);
   }
 
@@ -715,7 +716,7 @@ class MemoryMapFirestoreService {
     );
 
     debugPrint(
-      '📁 users/$_currentUserId/$_memoriesCollection',
+      '📁 users/$kHouseholdId/$_memoriesCollection',
     );
 
     return collection.snapshots().map(
@@ -1522,7 +1523,7 @@ class MemoryMapFirestoreService {
     );
 
     debugPrint(
-      '📁 users/$_currentUserId/$_locationsCollection',
+      '📁 users/$kHouseholdId/$_locationsCollection',
     );
 
     return collection.snapshots().map(

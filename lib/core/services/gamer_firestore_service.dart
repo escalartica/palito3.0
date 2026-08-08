@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/household_config.dart';
+
 /// ============================================================================
 /// SERVICIO FIRESTORE DE GAMER
 /// ============================================================================
@@ -77,16 +79,17 @@ class GamerFirestoreService {
   // REFERENCIA A LA COLECCIÓN GAMER DEL USUARIO ACTUAL
   // ==========================================================================
 
+  // Igual que en MemoryMapFirestoreService: la ruta usa kHouseholdId (no
+  // el uid anónimo del dispositivo) para que Eme y CeH compartan las
+  // mismas estadísticas sin importar en qué teléfono jueguen.
   CollectionReference<Map<String, dynamic>>? get _userGamerCollection {
-    final User? user = _auth.currentUser;
-
-    if (user == null) {
+    if (_auth.currentUser == null) {
       return null;
     }
 
     return _firestore
         .collection(usersCollection)
-        .doc(user.uid)
+        .doc(kHouseholdId)
         .collection(gamerStatsCollection);
   }
 
@@ -109,12 +112,15 @@ class GamerFirestoreService {
   // REFERENCIA A MAIN_STATS DE UN UID
   // ==========================================================================
 
+  // El parámetro `uid` se conserva por compatibilidad de firma con las
+  // llamadas existentes, pero la ruta real siempre apunta a kHouseholdId
+  // (documento compartido por todo el hogar).
   DocumentReference<Map<String, dynamic>> _mainStatsDocumentForUid(
     String uid,
   ) {
     return _firestore
         .collection(usersCollection)
-        .doc(uid)
+        .doc(kHouseholdId)
         .collection(gamerStatsCollection)
         .doc(mainStatsDocument);
   }
@@ -511,7 +517,7 @@ class GamerFirestoreService {
 
     return _firestore
         .collection(usersCollection)
-        .doc(normalizedUid)
+        .doc(kHouseholdId)
         .snapshots()
         .map(
       (
@@ -890,7 +896,7 @@ class GamerFirestoreService {
     try {
       await _firestore
           .collection(usersCollection)
-          .doc(user.uid)
+          .doc(kHouseholdId)
           .collection(gameHistoryCollection)
           .add(
         <String, dynamic>{
