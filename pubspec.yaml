@@ -2,7 +2,7 @@ name: palito_3_0
 description: "Aplicación para guardar y explorar recuerdos gastronómicos."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ^3.12.2
@@ -33,8 +33,6 @@ dependencies:
   firebase_core: ^3.15.2
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.4.4
-  firebase_storage: ^12.3.0
-
   # ---------------------------------------------------------------------------
   # MAPS & LOCATION
   # ---------------------------------------------------------------------------
@@ -59,12 +57,25 @@ dependencies:
   # UTILITIES
   # ---------------------------------------------------------------------------
   uuid: ^4.3.3
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  ios: true
+  android: true
+  web:
+    generate: true
+    background_color: "#FFD400"
+    theme_color: "#FFD400"
+  remove_alpha_ios: true
+  background_color_ios: "#FFD400"
 
 flutter:
   uses-material-design: true
