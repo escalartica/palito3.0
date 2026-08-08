@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,18 +11,13 @@ import '../memory_form/widgets/smart_image.dart';
 class MemoryDetailPage extends ConsumerStatefulWidget {
   final MemoryModel memory;
 
-  const MemoryDetailPage({
-    super.key,
-    required this.memory,
-  });
+  const MemoryDetailPage({super.key, required this.memory});
 
   @override
-  ConsumerState<MemoryDetailPage> createState() =>
-      _MemoryDetailPageState();
+  ConsumerState<MemoryDetailPage> createState() => _MemoryDetailPageState();
 }
 
-class _MemoryDetailPageState
-    extends ConsumerState<MemoryDetailPage>
+class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -51,15 +45,13 @@ class _MemoryDetailPageState
       curve: Curves.easeOutCubic,
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -83,45 +75,35 @@ class _MemoryDetailPageState
       orElse: () => widget.memory,
     );
 
-    final firstImageUrl =
-        currentMemory.imageUrls.isNotEmpty
-            ? currentMemory.imageUrls.first
-            : null;
+    final firstImageUrl = currentMemory.imageUrls.isNotEmpty
+        ? currentMemory.imageUrls.first
+        : null;
 
     final description =
         currentMemory.specificFields['description'] ??
-            currentMemory.specificFields['nota'] ??
-            '';
+        currentMemory.specificFields['nota'] ??
+        '';
 
     final bool showRestaurantSubtitle =
         currentMemory.title.toLowerCase() !=
-            currentMemory.restaurantName.toLowerCase();
+        currentMemory.restaurantName.toLowerCase();
 
     final Map<String, dynamic> extraFields =
-        Map<String, dynamic>.from(
-      currentMemory.specificFields,
-    )
+        Map<String, dynamic>.from(currentMemory.specificFields)
           ..remove('description')
           ..remove('nota')
           ..remove('otro_sabor');
 
-    final String? otroSabor =
-        currentMemory.specificFields['otro_sabor']?.toString();
+    final String? otroSabor = currentMemory.specificFields['otro_sabor']
+        ?.toString();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF5),
-      floatingActionButton: _buildFloatingEditButton(
-        context,
-        currentMemory,
-      ),
+      floatingActionButton: _buildFloatingEditButton(context, currentMemory),
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          _buildHeroHeader(
-            context,
-            currentMemory,
-            firstImageUrl,
-          ),
+          _buildHeroHeader(context, currentMemory, firstImageUrl),
 
           SliverToBoxAdapter(
             child: SlideTransition(
@@ -167,7 +149,11 @@ class _MemoryDetailPageState
       leading: Padding(
         padding: const EdgeInsets.all(8),
         child: _buildCircleButton(
-          icon: Icons.arrow_back_ios_new_rounded,
+          // arrow_back_rounded para igualar el peso visual de
+          // edit_rounded (el chevron "ios_new" tiene un trazo mucho más
+          // grueso al mismo tamaño lógico) y para usar el mismo icono de
+          // "volver" que el resto de la app (perfil, gamer).
+          icon: Icons.arrow_back_rounded,
           tooltip: 'Volver',
           onTap: () => Navigator.pop(context),
         ),
@@ -179,10 +165,7 @@ class _MemoryDetailPageState
           child: _buildCircleButton(
             icon: Icons.edit_rounded,
             tooltip: 'Editar recuerdo',
-            onTap: () => _openEditPage(
-              context,
-              memory,
-            ),
+            onTap: () => _openEditPage(context, memory),
           ),
         ),
       ],
@@ -194,10 +177,7 @@ class _MemoryDetailPageState
         ],
         background: GestureDetector(
           onTap: firstImageUrl != null
-              ? () => _openFullScreenImage(
-                    context,
-                    firstImageUrl,
-                  )
+              ? () => _openFullScreenImage(context, firstImageUrl)
               : null,
           onTapDown: (_) {
             if (mounted) {
@@ -229,19 +209,14 @@ class _MemoryDetailPageState
               children: [
                 Hero(
                   tag: 'memory-image-${memory.id}',
-                  child: firstImageUrl != null &&
-                          firstImageUrl.isNotEmpty
-                      ? SmartImage(
-                          imagePath: firstImageUrl,
-                          fit: BoxFit.cover,
-                        )
+                  child: firstImageUrl != null && firstImageUrl.isNotEmpty
+                      ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
                       : _buildImagePlaceholder(),
                 ),
 
                 _buildImageGradient(),
 
-                if (firstImageUrl != null &&
-                    firstImageUrl.isNotEmpty)
+                if (firstImageUrl != null && firstImageUrl.isNotEmpty)
                   Positioned(
                     right: 18,
                     bottom: 48,
@@ -286,11 +261,7 @@ class _MemoryDetailPageState
             Colors.transparent,
             Colors.black.withValues(alpha: 0.78),
           ],
-          stops: const [
-            0.0,
-            0.42,
-            1.0,
-          ],
+          stops: const [0.0, 0.42, 1.0],
         ),
       ),
     );
@@ -298,17 +269,11 @@ class _MemoryDetailPageState
 
   Widget _buildImagePreviewBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFF0F172A),
@@ -339,9 +304,7 @@ class _MemoryDetailPageState
     );
   }
 
-  Widget _buildHeroTitle(
-    MemoryModel memory,
-  ) {
+  Widget _buildHeroTitle(MemoryModel memory) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -408,16 +371,9 @@ class _MemoryDetailPageState
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFFFFDF5),
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(32),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        26,
-        20,
-        100,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -429,12 +385,10 @@ class _MemoryDetailPageState
 
           const SizedBox(height: 24),
 
-          if (showRestaurantSubtitle &&
-              memory.restaurantName.isNotEmpty)
+          if (showRestaurantSubtitle && memory.restaurantName.isNotEmpty)
             _buildRestaurantCard(memory),
 
-          if (showRestaurantSubtitle &&
-              memory.restaurantName.isNotEmpty)
+          if (showRestaurantSubtitle && memory.restaurantName.isNotEmpty)
             const SizedBox(height: 20),
 
           _buildRatingCard(memory),
@@ -442,16 +396,11 @@ class _MemoryDetailPageState
           const SizedBox(height: 20),
 
           if (extraFields.isNotEmpty ||
-              (otroSabor != null &&
-                  otroSabor.isNotEmpty))
-            _buildExperienceDetails(
-              extraFields,
-              otroSabor,
-            ),
+              (otroSabor != null && otroSabor.isNotEmpty))
+            _buildExperienceDetails(extraFields, otroSabor),
 
           if (extraFields.isNotEmpty ||
-              (otroSabor != null &&
-                  otroSabor.isNotEmpty))
+              (otroSabor != null && otroSabor.isNotEmpty))
             const SizedBox(height: 24),
 
           _buildOpinionSection(description),
@@ -478,47 +427,30 @@ class _MemoryDetailPageState
         width: 42,
         height: 5,
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A)
-              .withValues(alpha: 0.18),
+          color: const Color(0xFF0F172A).withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(20),
         ),
       ),
     );
   }
 
-  Widget _buildTopSummary(
-    MemoryModel memory,
-  ) {
+  Widget _buildTopSummary(MemoryModel memory) {
     return Row(
       children: [
-        Expanded(
-          child: _buildCategoryBadge(
-            memory.category,
-          ),
-        ),
+        Expanded(child: _buildCategoryBadge(memory.category)),
         const SizedBox(width: 12),
-        _buildReturnMiniBadge(
-          memory.wouldReturn,
-        ),
+        _buildReturnMiniBadge(memory.wouldReturn),
       ],
     );
   }
 
-  Widget _buildCategoryBadge(
-    String category,
-  ) {
+  Widget _buildCategoryBadge(String category) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFF0F172A),
@@ -541,50 +473,32 @@ class _MemoryDetailPageState
     );
   }
 
-  Widget _buildReturnMiniBadge(
-    bool wouldReturn,
-  ) {
+  Widget _buildReturnMiniBadge(bool wouldReturn) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: wouldReturn
-            ? const Color(0xFFE8F5E9)
-            : const Color(0xFFFFF3E0),
+        color: wouldReturn ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
       ),
       child: Icon(
-        wouldReturn
-            ? Icons.thumb_up_rounded
-            : Icons.thumb_down_rounded,
+        wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
         size: 18,
         color: const Color(0xFF0F172A),
       ),
     );
   }
 
-  Widget _buildRestaurantCard(
-    MemoryModel memory,
-  ) {
+  Widget _buildRestaurantCard(MemoryModel memory) {
     return _buildAnimatedCard(
       child: Row(
         children: [
-          _buildIconBox(
-            Icons.storefront_rounded,
-            const Color(0xFFFFD400),
-          ),
+          _buildIconBox(Icons.storefront_rounded, const Color(0xFFFFD400)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'LUGAR',
@@ -616,36 +530,28 @@ class _MemoryDetailPageState
   // PUNTUACIÓN
   // ============================================================
 
-  Widget _buildRatingCard(
-    MemoryModel memory,
-  ) {
+  Widget _buildRatingCard(MemoryModel memory) {
     final rating = memory.rating.clamp(0.0, 10.0);
     final progress = rating / 10.0;
 
     return _buildAnimatedCard(
       padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  _buildIconBox(
-                    Icons.star_rounded,
-                    const Color(0xFFFFD400),
-                  ),
+                  _buildIconBox(Icons.star_rounded, const Color(0xFFFFD400)),
                   const SizedBox(width: 12),
                   Text(
                     'Puntuación',
                     style: GoogleFonts.outfit(
                       fontSize: 17,
                       fontWeight: FontWeight.w900,
-                      color:
-                          const Color(0xFF0F172A),
+                      color: const Color(0xFF0F172A),
                     ),
                   ),
                 ],
@@ -657,26 +563,17 @@ class _MemoryDetailPageState
           const SizedBox(height: 18),
 
           ClipRRect(
-            borderRadius:
-                BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(20),
             child: TweenAnimationBuilder<double>(
-              tween: Tween(
-                begin: 0,
-                end: progress,
-              ),
-              duration:
-                  const Duration(milliseconds: 1000),
+              tween: Tween(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 1000),
               curve: Curves.easeOutCubic,
-              builder:
-                  (context, value, child) {
+              builder: (context, value, child) {
                 return LinearProgressIndicator(
                   value: value,
                   minHeight: 10,
-                  backgroundColor:
-                      Colors.grey.shade200,
-                  valueColor:
-                      const AlwaysStoppedAnimation<
-                          Color>(
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
                     Color(0xFFFFD400),
                   ),
                 );
@@ -687,8 +584,7 @@ class _MemoryDetailPageState
           const SizedBox(height: 10),
 
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '0',
@@ -721,21 +617,13 @@ class _MemoryDetailPageState
     );
   }
 
-  Widget _buildRatingNumber(
-    double rating,
-  ) {
+  Widget _buildRatingNumber(double rating) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFFFD400),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFF0F172A),
@@ -746,11 +634,7 @@ class _MemoryDetailPageState
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.star_rounded,
-            size: 18,
-            color: Color(0xFF0F172A),
-          ),
+          const Icon(Icons.star_rounded, size: 18, color: Color(0xFF0F172A)),
           const SizedBox(width: 5),
           Text(
             rating.toStringAsFixed(1),
@@ -793,31 +677,21 @@ class _MemoryDetailPageState
     Map<String, dynamic> extraFields,
     String? otroSabor,
   ) {
-    final List<MapEntry<String, dynamic>> entries =
-        extraFields.entries.toList();
+    final List<MapEntry<String, dynamic>> entries = extraFields.entries
+        .toList();
 
-    if (otroSabor != null &&
-        otroSabor.trim().isNotEmpty) {
-      entries.add(
-        MapEntry(
-          'otro_sabor',
-          otroSabor,
-        ),
-      );
+    if (otroSabor != null && otroSabor.trim().isNotEmpty) {
+      entries.add(MapEntry('otro_sabor', otroSabor));
     }
 
     return _buildAnimatedCard(
       padding: const EdgeInsets.all(18),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _buildIconBox(
-                Icons.tune_rounded,
-                const Color(0xFFFFD400),
-              ),
+              _buildIconBox(Icons.tune_rounded, const Color(0xFFFFD400)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -835,87 +709,56 @@ class _MemoryDetailPageState
 
           const SizedBox(height: 18),
 
-          ...List.generate(
-            entries.length,
-            (index) {
-              final entry = entries[index];
+          ...List.generate(entries.length, (index) {
+            final entry = entries[index];
 
-              return TweenAnimationBuilder<double>(
-                tween: Tween(
-                  begin: 0,
-                  end: 1,
-                ),
-                duration: Duration(
-                  milliseconds:
-                      300 + (index * 80),
-                ),
-                curve: Curves.easeOut,
-                builder:
-                    (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        8 * (1 - value),
-                      ),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding:
-                      const EdgeInsets.only(
-                    bottom: 12,
+            return TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: Duration(milliseconds: 300 + (index * 80)),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 8 * (1 - value)),
+                    child: child,
                   ),
-                  child: _buildDetailRow(
-                    entry.key,
-                    entry.value,
-                  ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildDetailRow(entry.key, entry.value),
+              ),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(
-    String key,
-    dynamic value,
-  ) {
-    final cleanedValue =
-        _cleanValue(value);
+  Widget _buildDetailRow(String key, dynamic value) {
+    final cleanedValue = _cleanValue(value);
 
     if (cleanedValue.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF5),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color:
-              const Color(0xFF0F172A)
-                  .withValues(alpha: 0.12),
+          color: const Color(0xFF0F172A).withValues(alpha: 0.12),
         ),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             flex: 4,
             child: Text(
-              key == 'otro_sabor'
-                  ? 'Sabor adicional'
-                  : _formatKey(key),
+              key == 'otro_sabor' ? 'Sabor adicional' : _formatKey(key),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -945,15 +788,11 @@ class _MemoryDetailPageState
   // OPINIÓN
   // ============================================================
 
-  Widget _buildOpinionSection(
-    String description,
-  ) {
-    final bool hasDescription =
-        description.trim().isNotEmpty;
+  Widget _buildOpinionSection(String description) {
+    final bool hasDescription = description.trim().isNotEmpty;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle(
           icon: Icons.format_quote_rounded,
@@ -963,8 +802,7 @@ class _MemoryDetailPageState
         _buildAnimatedCard(
           padding: const EdgeInsets.all(20),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
                 Icons.format_quote_rounded,
@@ -1003,26 +841,17 @@ class _MemoryDetailPageState
   // RECOMENDACIÓN
   // ============================================================
 
-  Widget _buildRecommendationCard(
-    MemoryModel memory,
-  ) {
-    final bool wouldReturn =
-        memory.wouldReturn;
+  Widget _buildRecommendationCard(MemoryModel memory) {
+    final bool wouldReturn = memory.wouldReturn;
 
     return AnimatedContainer(
-      duration:
-          const Duration(milliseconds: 450),
+      duration: const Duration(milliseconds: 450),
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: wouldReturn
-            ? const Color(0xFFE8F5E9)
-            : const Color(0xFFFFF3E0),
+        color: wouldReturn ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFF0F172A),
@@ -1034,41 +863,29 @@ class _MemoryDetailPageState
       child: Row(
         children: [
           AnimatedSwitcher(
-            duration:
-                const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             child: Container(
               key: ValueKey(wouldReturn),
-              padding:
-                  const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFD400),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color:
-                      const Color(0xFF0F172A),
-                  width: 2,
-                ),
+                border: Border.all(color: const Color(0xFF0F172A), width: 2),
               ),
               child: Icon(
-                wouldReturn
-                    ? Icons.thumb_up_rounded
-                    : Icons.thumb_down_rounded,
+                wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
                 size: 20,
-                color:
-                    const Color(0xFF0F172A),
+                color: const Color(0xFF0F172A),
               ),
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  wouldReturn
-                      ? 'RECOMENDACIÓN'
-                      : 'IMPRESIÓN PERSONAL',
+                  wouldReturn ? 'RECOMENDACIÓN' : 'IMPRESIÓN PERSONAL',
                   style: GoogleFonts.outfit(
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
@@ -1084,8 +901,7 @@ class _MemoryDetailPageState
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    color:
-                        const Color(0xFF0F172A),
+                    color: const Color(0xFF0F172A),
                   ),
                 ),
               ],
@@ -1100,21 +916,14 @@ class _MemoryDetailPageState
   // UBICACIÓN
   // ============================================================
 
-  Widget _buildLocationSection(
-    MemoryModel memory,
-  ) {
+  Widget _buildLocationSection(MemoryModel memory) {
     final hasCoordinates =
-        memory.location.lat != null &&
-            memory.location.lng != null;
+        memory.location.lat != null && memory.location.lng != null;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(
-          icon: Icons.location_on_rounded,
-          title: 'Ubicación',
-        ),
+        _buildSectionTitle(icon: Icons.location_on_rounded, title: 'Ubicación'),
 
         const SizedBox(height: 12),
 
@@ -1123,8 +932,7 @@ class _MemoryDetailPageState
           child: Column(
             children: [
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildIconBox(
                     Icons.location_on_rounded,
@@ -1137,8 +945,7 @@ class _MemoryDetailPageState
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color:
-                            const Color(0xFF0F172A),
+                        color: const Color(0xFF0F172A),
                         height: 1.4,
                       ),
                     ),
@@ -1150,19 +957,12 @@ class _MemoryDetailPageState
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:
-                        const Color(0xFFFFFDF5),
-                    borderRadius:
-                        BorderRadius.circular(12),
+                    color: const Color(0xFFFFFDF5),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color:
-                          const Color(0xFF0F172A)
-                              .withValues(
-                        alpha: 0.12,
-                      ),
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.12),
                     ),
                   ),
                   child: Row(
@@ -1170,30 +970,24 @@ class _MemoryDetailPageState
                       const Icon(
                         Icons.my_location_rounded,
                         size: 16,
-                        color:
-                            Color(0xFF0F172A),
+                        color: Color(0xFF0F172A),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '${memory.location.lat!.toStringAsFixed(5)}, '
                           '${memory.location.lng!.toStringAsFixed(5)}',
-                          style:
-                              GoogleFonts.inter(
+                          style: GoogleFonts.inter(
                             fontSize: 11,
-                            fontWeight:
-                                FontWeight.w700,
-                            color: Colors
-                                .grey
-                                .shade600,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey.shade600,
                           ),
                         ),
                       ),
                       const Icon(
                         Icons.check_circle_rounded,
                         size: 17,
-                        color:
-                            Color(0xFF2E7D32),
+                        color: Color(0xFF2E7D32),
                       ),
                     ],
                   ),
@@ -1210,17 +1004,10 @@ class _MemoryDetailPageState
   // COMPONENTES REUTILIZABLES
   // ============================================================
 
-  Widget _buildSectionTitle({
-    required IconData icon,
-    required String title,
-  }) {
+  Widget _buildSectionTitle({required IconData icon, required String title}) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: const Color(0xFF0F172A),
-        ),
+        Icon(icon, size: 20, color: const Color(0xFF0F172A)),
         const SizedBox(width: 8),
         Text(
           title,
@@ -1234,32 +1021,21 @@ class _MemoryDetailPageState
     );
   }
 
-  Widget _buildIconBox(
-    IconData icon,
-    Color backgroundColor,
-  ) {
+  Widget _buildIconBox(IconData icon, Color backgroundColor) {
     return Container(
       padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
       ),
-      child: Icon(
-        icon,
-        size: 18,
-        color: const Color(0xFF0F172A),
-      ),
+      child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
     );
   }
 
   Widget _buildAnimatedCard({
     required Widget child,
-    EdgeInsetsGeometry padding =
-        const EdgeInsets.all(16),
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
   }) {
     return Container(
       width: double.infinity,
@@ -1267,10 +1043,7 @@ class _MemoryDetailPageState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF0F172A),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFF0F172A), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0xFF0F172A),
@@ -1283,6 +1056,11 @@ class _MemoryDetailPageState
     );
   }
 
+  // Botón "cristal oscuro": fondo negro semitransparente + icono blanco.
+  // Sobre una fotografía el contraste puede variar mucho según la zona de
+  // la imagen (cielos claros, mesas oscuras...) — un scrim oscuro con
+  // icono blanco es el único par de colores que garantiza legibilidad
+  // sobre cualquier foto, a diferencia de un chip blanco/oscuro fijo.
   Widget _buildCircleButton({
     required IconData icon,
     required VoidCallback onTap,
@@ -1291,69 +1069,38 @@ class _MemoryDetailPageState
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.white,
-        shape: const CircleBorder(),
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(
+          side: BorderSide(color: Colors.white, width: 1.5),
+        ),
         elevation: 0,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF0F172A),
-                width: 2,
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(
-              icon,
-              color: const Color(0xFF0F172A),
-              size: 17,
-            ),
+            child: Icon(icon, color: Colors.white, size: 17),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFloatingEditButton(
-    BuildContext context,
-    MemoryModel memory,
-  ) {
+  Widget _buildFloatingEditButton(BuildContext context, MemoryModel memory) {
     return FloatingActionButton.extended(
       heroTag: 'edit-memory-${memory.id}',
-      backgroundColor:
-          const Color(0xFFFFD400),
-      foregroundColor:
-          const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFFFD400),
+      foregroundColor: const Color(0xFF0F172A),
       elevation: 0,
-      onPressed: () =>
-          _openEditPage(context, memory),
-      icon: const Icon(
-        Icons.edit_rounded,
-        size: 19,
-      ),
+      onPressed: () => _openEditPage(context, memory),
+      icon: const Icon(Icons.edit_rounded, size: 19),
       label: Text(
         'Editar',
-        style: GoogleFonts.outfit(
-          fontWeight: FontWeight.w900,
-        ),
+        style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
       ),
       shape: RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        side: const BorderSide(
-          color: Color(0xFF0F172A),
-          width: 2,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFF0F172A), width: 2),
       ),
     );
   }
@@ -1361,12 +1108,7 @@ class _MemoryDetailPageState
   Widget _buildSectionDivider() {
     return Row(
       children: [
-        Expanded(
-          child: Container(
-            height: 2,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
+        Expanded(child: Container(height: 2, color: const Color(0xFF0F172A))),
         const SizedBox(width: 12),
         const Icon(
           Icons.restaurant_rounded,
@@ -1374,12 +1116,7 @@ class _MemoryDetailPageState
           color: Color(0xFF0F172A),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            height: 2,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
+        Expanded(child: Container(height: 2, color: const Color(0xFF0F172A))),
       ],
     );
   }
@@ -1388,36 +1125,17 @@ class _MemoryDetailPageState
   // NAVEGACIÓN
   // ============================================================
 
-  void _openEditPage(
-    BuildContext context,
-    MemoryModel memory,
-  ) {
+  void _openEditPage(BuildContext context, MemoryModel memory) {
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration:
-            const Duration(milliseconds: 400),
-        reverseTransitionDuration:
-            const Duration(milliseconds: 300),
-        pageBuilder:
-            (
-          context,
-          animation,
-          secondaryAnimation,
-        ) {
-          return MemoryFormPage(
-            memory: memory,
-          );
+        transitionDuration: const Duration(milliseconds: 400),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return MemoryFormPage(memory: memory);
         },
-        transitionsBuilder:
-            (
-          context,
-          animation,
-          secondaryAnimation,
-          child,
-        ) {
-          final curvedAnimation =
-              CurvedAnimation(
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curvedAnimation = CurvedAnimation(
             parent: animation,
             curve: Curves.easeOutCubic,
           );
@@ -1437,31 +1155,20 @@ class _MemoryDetailPageState
     );
   }
 
-  void _openFullScreenImage(
-    BuildContext context,
-    String imagePath,
-  ) {
+  void _openFullScreenImage(BuildContext context, String imagePath) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        transitionDuration:
-            const Duration(milliseconds: 350),
-        pageBuilder:
-            (
-          context,
-          animation,
-          secondaryAnimation,
-        ) {
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (context, animation, secondaryAnimation) {
           return Scaffold(
-            backgroundColor:
-                Colors.black.withValues(alpha: 0.96),
+            backgroundColor: Colors.black.withValues(alpha: 0.96),
             body: SafeArea(
               child: Stack(
                 children: [
                   Center(
                     child: Hero(
-                      tag:
-                          'memory-image-${widget.memory.id}',
+                      tag: 'memory-image-${widget.memory.id}',
                       child: InteractiveViewer(
                         minScale: 0.8,
                         maxScale: 4,
@@ -1476,11 +1183,9 @@ class _MemoryDetailPageState
                     top: 16,
                     right: 16,
                     child: _buildCircleButton(
-                      icon:
-                          Icons.close_rounded,
+                      icon: Icons.close_rounded,
                       tooltip: 'Cerrar',
-                      onTap: () =>
-                          Navigator.pop(context),
+                      onTap: () => Navigator.pop(context),
                     ),
                   ),
                 ],
@@ -1488,17 +1193,8 @@ class _MemoryDetailPageState
             ),
           );
         },
-        transitionsBuilder:
-            (
-          context,
-          animation,
-          secondaryAnimation,
-          child,
-        ) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
         },
       ),
     );
@@ -1513,11 +1209,9 @@ class _MemoryDetailPageState
       return '';
     }
 
-    final formatted =
-        key.replaceAll('_', ' ');
+    final formatted = key.replaceAll('_', ' ');
 
-    return formatted[0].toUpperCase() +
-        formatted.substring(1);
+    return formatted[0].toUpperCase() + formatted.substring(1);
   }
 
   String _cleanValue(dynamic value) {
@@ -1526,9 +1220,7 @@ class _MemoryDetailPageState
     }
 
     if (value is List) {
-      return value
-          .map((item) => item.toString())
-          .join(', ');
+      return value.map((item) => item.toString()).join(', ');
     }
 
     if (value is bool) {
@@ -1546,4 +1238,3 @@ class _MemoryDetailPageState
     return text.trim();
   }
 }
-

@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../../../../core/factories/dynamic_field_factory.dart';
 import 'package:flutter/services.dart';
+
 class EnsaladillaFields implements DynamicFieldGenerator {
   @override
   List<Widget> buildFields(
@@ -29,16 +29,12 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // ============================================================
       // TIPO DE MAYONESA
       // ============================================================
-
       _buildCompactChipGroup(
         'tipo_mayonesa',
         'Tipo de mayonesa',
         [
           {'label': 'Casera', 'icon': Icons.home_rounded},
-          {
-            'label': 'Casera espectacular',
-            'icon': Icons.auto_awesome_rounded,
-          },
+          {'label': 'Casera espectacular', 'icon': Icons.auto_awesome_rounded},
           {'label': 'Industrial', 'icon': Icons.factory_rounded},
           {'label': 'Bote', 'icon': Icons.inventory_2_outlined},
           {'label': 'No sé', 'icon': Icons.help_outline_rounded},
@@ -96,15 +92,9 @@ class EnsaladillaFields implements DynamicFieldGenerator {
         'integracion_huevo',
         'Integración del huevo',
         [
-          {
-            'label': 'Muy bien mezclado',
-            'icon': Icons.join_inner_rounded,
-          },
+          {'label': 'Muy bien mezclado', 'icon': Icons.join_inner_rounded},
           {'label': 'En trozos', 'icon': Icons.grid_view_rounded},
-          {
-            'label': 'Solo decorativo',
-            'icon': Icons.visibility_outlined,
-          },
+          {'label': 'Solo decorativo', 'icon': Icons.visibility_outlined},
         ],
         data,
         onUpdate,
@@ -114,7 +104,6 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // ============================================================
       // CALIDAD DEL ATÚN
       // ============================================================
-
       _buildCompactChipGroup(
         'calidad_atun',
         'Calidad del atún',
@@ -135,15 +124,11 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // INGREDIENTES EXTRA
       // SE PUEDEN SELECCIONAR VARIOS
       // ============================================================
-
       _buildCompactChipGroup(
         'extras',
         'Ingredientes extra',
         [
-          {
-            'label': 'Aceitunas',
-            'icon': Icons.radio_button_checked_rounded,
-          },
+          {'label': 'Aceitunas', 'icon': Icons.radio_button_checked_rounded},
           {'label': 'Piparras', 'icon': Icons.eco_outlined},
           {'label': 'Anchoa', 'icon': Icons.phishing_outlined},
           {'label': 'Ventresca', 'icon': Icons.set_meal_rounded},
@@ -165,15 +150,11 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // ============================================================
       // PRIMERA CUCHARADA
       // ============================================================
-
       _buildCompactChipGroup(
         'primer_bocado',
         'Experiencia en la primera cucharada',
         [
-          {
-            'label': 'Normalita',
-            'icon': Icons.sentiment_neutral_rounded,
-          },
+          {'label': 'Normalita', 'icon': Icons.sentiment_neutral_rounded},
           {'label': 'Muy buena', 'icon': Icons.thumb_up_outlined},
           {'label': 'Ojo con esto', 'icon': Icons.visibility_rounded},
           {'label': 'Necesito otra', 'icon': Icons.repeat_rounded},
@@ -190,25 +171,18 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // EQUILIBRIO
       // SE PUEDEN SELECCIONAR VARIOS
       // ============================================================
-
       _buildCompactChipGroup(
         'destaca_demasiado',
         'Equilibrio (¿Qué le falta?)',
         [
           {'label': 'Salada', 'icon': Icons.grain_rounded},
-          {
-            'label': 'Fuerte de vinagre',
-            'icon': Icons.science_outlined,
-          },
+          {'label': 'Fuerte de vinagre', 'icon': Icons.science_outlined},
           {'label': 'Huevo', 'icon': Icons.egg_outlined},
           {'label': 'Atún', 'icon': Icons.set_meal_outlined},
           {'label': 'Perfecta', 'icon': Icons.verified_rounded},
           {'label': 'Falta sal', 'icon': Icons.add_rounded},
           {'label': 'Falta vinagre', 'icon': Icons.water_drop_outlined},
-          {
-            'label': 'Insípida',
-            'icon': Icons.sentiment_dissatisfied_rounded,
-          },
+          {'label': 'Insípida', 'icon': Icons.sentiment_dissatisfied_rounded},
           {
             'label': 'Falta punch',
             'icon': Icons.local_fire_department_outlined,
@@ -223,7 +197,6 @@ class EnsaladillaFields implements DynamicFieldGenerator {
       // ÁREAS DE MEJORA
       // SE PUEDEN SELECCIONAR VARIAS
       // ============================================================
-
       _buildCompactChipGroup(
         'mejoras',
         'Áreas de mejora sugeridas',
@@ -233,20 +206,11 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           {'label': 'Más patata', 'icon': Icons.data_usage_rounded},
           {'label': 'Más atún', 'icon': Icons.set_meal_rounded},
           {'label': 'Más huevo', 'icon': Icons.egg_outlined},
-          {
-            'label': 'Menos sal',
-            'icon': Icons.cancel_presentation_rounded,
-          },
+          {'label': 'Menos sal', 'icon': Icons.cancel_presentation_rounded},
           {'label': 'Más sal', 'icon': Icons.grain_rounded},
-          {
-            'label': 'Más vinagre',
-            'icon': Icons.water_drop_outlined,
-          },
+          {'label': 'Más vinagre', 'icon': Icons.water_drop_outlined},
           {'label': 'Texturas', 'icon': Icons.layers_outlined},
-          {
-            'label': 'Algún extra',
-            'icon': Icons.add_circle_outline_rounded,
-          },
+          {'label': 'Algún extra', 'icon': Icons.add_circle_outline_rounded},
         ],
         data,
         onUpdate,
@@ -258,17 +222,11 @@ class EnsaladillaFields implements DynamicFieldGenerator {
         'Premio Palito',
         [
           {'label': 'Reina del vermut', 'icon': Icons.local_bar_rounded},
-          {
-            'label': 'Cucharada obligatoria',
-            'icon': Icons.restaurant_rounded,
-          },
+          {'label': 'Cucharada obligatoria', 'icon': Icons.restaurant_rounded},
           {'label': 'La de siempre', 'icon': Icons.history_edu_rounded},
           {'label': 'Sabor a verano', 'icon': Icons.wb_sunny_outlined},
           {'label': 'Una joya', 'icon': Icons.diamond_outlined},
-          {
-            'label': 'Para recorrer kms',
-            'icon': Icons.directions_walk_rounded,
-          },
+          {'label': 'Para recorrer kms', 'icon': Icons.directions_walk_rounded},
           {'label': 'Nunca falla', 'icon': Icons.star_rounded},
           {'label': 'Poca gloria', 'icon': Icons.cloud_off_rounded},
           {'label': 'De bote', 'icon': Icons.inventory_2_outlined},
@@ -285,10 +243,7 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           {'label': 'Lo dejé', 'icon': Icons.close_rounded},
           {'label': 'Me dio igual', 'icon': Icons.remove_done_rounded},
           {'label': 'Me supo a poco', 'icon': Icons.trending_up_rounded},
-          {
-            'label': 'Rebañé el plato',
-            'icon': Icons.cleaning_services_rounded,
-          },
+          {'label': 'Rebañé el plato', 'icon': Icons.cleaning_services_rounded},
           {'label': 'Pedimos otra', 'icon': Icons.plus_one_rounded},
           {'label': 'Pa los perros', 'icon': Icons.pets_rounded},
         ],
@@ -314,9 +269,7 @@ class EnsaladillaFields implements DynamicFieldGenerator {
   }) {
     final bool hasOtro =
         key == 'extras' &&
-        (data[key] is List
-            ? (data[key] as List).contains('Otra')
-            : false) &&
+        (data[key] is List ? (data[key] as List).contains('Otra') : false) &&
         otroController != null;
 
     return Padding(
@@ -327,7 +280,6 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           // =================================================================
           // TÍTULO
           // =================================================================
-
           Text(
             label,
             style: GoogleFonts.outfit(
@@ -342,323 +294,195 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           // =================================================================
           // CHIPS
           // =================================================================
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 6.0;
+              const columns = 3;
+              final chipWidth =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: options.map((optionData) {
-              final String option =
-                  optionData['label'] as String;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: options.map((optionData) {
+                  final String option = optionData['label'] as String;
 
-              final IconData icon =
-                  optionData['icon'] as IconData;
+                  final IconData icon = optionData['icon'] as IconData;
 
-              bool isSelected = false;
+                  bool isSelected = false;
 
-              if (isMulti) {
-                final List selectedItems =
-                    data[key] is List
+                  if (isMulti) {
+                    final List selectedItems = data[key] is List
                         ? List.from(data[key])
                         : [];
 
-                isSelected =
-                    selectedItems.contains(option);
-              } else {
-                isSelected =
-                    data[key] == option;
-              }
-
-              return InkWell(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-
-                  if (isMulti) {
-                    final List selectedItems =
-                        data[key] is List
-                            ? List.from(data[key])
-                            : [];
-
-                    final List newList =
-                        List.from(selectedItems);
-
-                    if (isSelected) {
-                      newList.remove(option);
-                    } else {
-                      newList.add(option);
-                    }
-
-                    onUpdate(
-                      key,
-                      newList,
-                    );
+                    isSelected = selectedItems.contains(option);
                   } else {
-                    onUpdate(
-                      key,
-                      isSelected
-                          ? null
-                          : option,
-                    );
+                    isSelected = data[key] == option;
                   }
-                },
-                borderRadius:
-                    BorderRadius.circular(10),
-                child: AnimatedContainer(
-                  duration:
-                      const Duration(
-                    milliseconds: 220,
-                  ),
-                  curve:
-                      Curves.easeOutCubic,
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    color: isSelected
-                        ? const Color(
-                            0xFFFFD400,
-                          )
-                        : Colors.white,
-                    borderRadius:
-                        BorderRadius.circular(
-                      10,
-                    ),
-                    border:
-                        Border.all(
-                      color:
-                          const Color(
-                        0xFF0F172A,
-                      ),
-                      width:
-                          isSelected
-                              ? 2.0
-                              : 1.0,
-                    ),
-                    boxShadow:
-                        isSelected
-                            ? const [
-                                BoxShadow(
-                                  color:
-                                      Color(
+
+                  return SizedBox(
+                    width: chipWidth,
+                    child: InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+
+                        if (isMulti) {
+                          final List selectedItems = data[key] is List
+                              ? List.from(data[key])
+                              : [];
+
+                          final List newList = List.from(selectedItems);
+
+                          if (isSelected) {
+                            newList.remove(option);
+                          } else {
+                            newList.add(option);
+                          }
+
+                          onUpdate(key, newList);
+                        } else {
+                          onUpdate(key, isSelected ? null : option);
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFFFFD400)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF0F172A)
+                                : const Color(
                                     0xFF0F172A,
+                                  ).withValues(alpha: 0.25),
+                            width: 2.0,
+                          ),
+                          boxShadow: isSelected
+                              ? const [
+                                  BoxShadow(
+                                    color: Color(0xFF0F172A),
+                                    blurRadius: 0,
+                                    offset: Offset(0, 2),
                                   ),
-                                  blurRadius:
-                                      0,
-                                  offset:
-                                      Offset(
-                                    0,
-                                    2,
+                                ]
+                              : null,
+                        ),
+                        child: AnimatedScale(
+                          scale: isSelected ? 1.02 : 1.0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutBack,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                icon,
+                                size: 14,
+                                color: const Color(0xFF0F172A),
+                              ),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  option,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: const Color(0xFF0F172A),
+                                    fontSize: 12,
                                   ),
                                 ),
-                              ]
-                            : null,
-                  ),
-                  child: AnimatedScale(
-                    scale:
-                        isSelected
-                            ? 1.02
-                            : 1.0,
-                    duration:
-                        const Duration(
-                      milliseconds: 180,
-                    ),
-                    curve:
-                        Curves.easeOutBack,
-                    child: Row(
-                      mainAxisSize:
-                          MainAxisSize.min,
-                      children: [
-                        Icon(
-                          icon,
-                          size: 14,
-                          color:
-                              const Color(
-                            0xFF0F172A,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(
-                          width: 5,
-                        ),
-                        Text(
-                          option,
-                          style:
-                              GoogleFonts.inter(
-                            fontWeight:
-                                isSelected
-                                    ? FontWeight
-                                        .w700
-                                    : FontWeight
-                                        .w500,
-                            color:
-                                const Color(
-                              0xFF0F172A,
-                            ),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
 
           // =================================================================
           // CAMPO "OTRA"
           // =================================================================
-
           AnimatedSwitcher(
-            duration:
-                const Duration(
-              milliseconds: 250,
-            ),
-            switchInCurve:
-                Curves.easeOutCubic,
-            switchOutCurve:
-                Curves.easeInCubic,
-            transitionBuilder:
-                (
-              child,
-              animation,
-            ) {
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
               return SizeTransition(
-                sizeFactor:
-                    animation,
-                axisAlignment:
-                    -1,
-                child:
-                    FadeTransition(
-                  opacity:
-                      animation,
-                  child:
-                      child,
-                ),
+                sizeFactor: animation,
+                axisAlignment: -1,
+                child: FadeTransition(opacity: animation, child: child),
               );
             },
             child: hasOtro
                 ? Padding(
-                    key: const ValueKey(
-                      'otro_visible',
-                    ),
-                    padding:
-                        const EdgeInsets.only(
-                      top: 10,
-                    ),
-                    child:
-                        Container(
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            Colors.white,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          10,
+                    key: const ValueKey('otro_visible'),
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF0F172A),
+                          width: 1.5,
                         ),
-                        border:
-                            Border.all(
-                          color:
-                              const Color(
-                            0xFF0F172A,
-                          ),
-                          width:
-                              1.5,
-                        ),
-                        boxShadow:
-                            const [
+                        boxShadow: const [
                           BoxShadow(
-                            color:
-                                Color(
-                              0xFF0F172A,
-                            ),
-                            blurRadius:
-                                0,
-                            offset:
-                                Offset(
-                              0,
-                              2,
-                            ),
+                            color: Color(0xFF0F172A),
+                            blurRadius: 0,
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
-                      child:
-                          TextField(
-                        controller:
-                            otroController,
-                        style:
-                            GoogleFonts
-                                .inter(
-                          color:
-                              const Color(
-                            0xFF0F172A,
-                          ),
-                          fontWeight:
-                              FontWeight
-                                  .w600,
-                          fontSize:
-                              13,
+                      child: TextField(
+                        controller: otroController,
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
-                        decoration:
-                            InputDecoration(
-                          labelText:
-                              'Añade otro ingrediente',
-                          labelStyle:
-                              GoogleFonts
-                                  .inter(
-                            color:
-                                Colors
-                                    .grey
-                                    .shade600,
-                            fontSize:
-                                12,
+                        decoration: InputDecoration(
+                          labelText: 'Añade otro ingrediente',
+                          labelStyle: GoogleFonts.inter(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
                           ),
-                          hintText:
-                              'Ej. huevo de codorniz...',
-                          hintStyle:
-                              GoogleFonts
-                                  .inter(
-                            color:
-                                Colors
-                                    .grey
-                                    .shade400,
-                            fontSize:
-                                12,
+                          hintText: 'Ej. huevo de codorniz...',
+                          hintStyle: GoogleFonts.inter(
+                            color: Colors.grey.shade400,
+                            fontSize: 12,
                           ),
-                          border:
-                              InputBorder
-                                  .none,
-                          contentPadding:
-                              const EdgeInsets
-                                  .symmetric(
-                            horizontal:
-                                12,
-                            vertical:
-                                10,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
                           ),
                         ),
-                        onChanged:
-                            (value) {
-                          onUpdate(
-                            'otro_extra',
-                            value,
-                          );
+                        onChanged: (value) {
+                          onUpdate('otro_extra', value);
                         },
                       ),
                     ),
                   )
-                : const SizedBox
-                    .shrink(
-                    key: ValueKey(
-                      'otro_hidden',
-                    ),
-                  ),
+                : const SizedBox.shrink(key: ValueKey('otro_hidden')),
           ),
         ],
       ),
     );
   }
 }
-

@@ -28,23 +28,25 @@ class ProfessionalChoiceChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           // Borde más grueso si está seleccionado
           border: Border.all(
-            color: const Color(0xFF0F172A), 
+            color: const Color(0xFF0F172A),
             width: isSelected ? 2.0 : 1.0,
           ),
           // Sombra dura estilo neobrutalista solo al seleccionar
-          boxShadow: isSelected 
-              ? const [BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 3))]
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: Color(0xFF0F172A),
+                    blurRadius: 0,
+                    offset: Offset(0, 3),
+                  ),
+                ]
               : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(
-                icon, 
-                size: 18, 
-                color: const Color(0xFF0F172A),
-              ),
+              Icon(icon, size: 18, color: const Color(0xFF0F172A)),
               const SizedBox(width: 8),
             ],
             Text(

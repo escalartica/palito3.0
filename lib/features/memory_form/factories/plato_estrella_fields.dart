@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../../../../core/factories/dynamic_field_factory.dart';
@@ -59,7 +58,10 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
         'tecnica',
         'Técnica y Equilibrio: Técnica aplicada',
         [
-          {'label': 'Brasa perfecta', 'icon': Icons.local_fire_department_outlined},
+          {
+            'label': 'Brasa perfecta',
+            'icon': Icons.local_fire_department_outlined,
+          },
           {'label': 'Baja temperatura', 'icon': Icons.thermostat_rounded},
           {'label': 'Frito impecable', 'icon': Icons.oil_barrel_outlined},
           {'label': 'Crujiente', 'icon': Icons.flash_on_outlined},
@@ -175,7 +177,10 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
         'Premio Palito y Decisión',
         [
           {'label': 'Obra maestra', 'icon': Icons.diamond_outlined},
-          {'label': 'Vale el viaje', 'icon': Icons.directions_car_filled_outlined},
+          {
+            'label': 'Vale el viaje',
+            'icon': Icons.directions_car_filled_outlined,
+          },
           {'label': 'Amor a primer bocado', 'icon': Icons.favorite_rounded},
           {'label': 'Motivo para volver', 'icon': Icons.replay_rounded},
           {'label': 'Joya escondida', 'icon': Icons.star_border_rounded},
@@ -213,7 +218,10 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
         [
           {'label': 'Lo pediré otra vez', 'icon': Icons.repeat_rounded},
           {'label': 'Cambiaría mi ruta', 'icon': Icons.alt_route_rounded},
-          {'label': 'Haría un viaje solo', 'icon': Icons.directions_walk_rounded},
+          {
+            'label': 'Haría un viaje solo',
+            'icon': Icons.directions_walk_rounded,
+          },
           {'label': 'Lo echaré de menos', 'icon': Icons.cloud_off_rounded},
           {'label': 'Ya planificando', 'icon': Icons.calendar_today_rounded},
         ],
@@ -263,120 +271,141 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
           ),
           const SizedBox(height: 8),
 
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: options.map((optionData) {
-              final String option = optionData['label'] as String;
-              final IconData icon = optionData['icon'] as IconData;
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 6.0;
+              const columns = 3;
+              final chipWidth =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-              bool isSelected = false;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: options.map((optionData) {
+                  final String option = optionData['label'] as String;
+                  final IconData icon = optionData['icon'] as IconData;
 
-              if (isMulti) {
-                final List selectedItems =
-                    data[key] is List ? List.from(data[key]) : [];
+                  bool isSelected = false;
 
-                isSelected = selectedItems.contains(option);
-              } else {
-                isSelected = data[key] == option;
-              }
-
-              return InkWell(
-                onTap: () {
                   if (isMulti) {
-                    final List selectedItems =
-                        data[key] is List ? List.from(data[key]) : [];
+                    final List selectedItems = data[key] is List
+                        ? List.from(data[key])
+                        : [];
 
-                    final List newList = List.from(selectedItems);
-
-                    if (isSelected) {
-                      newList.remove(option);
-
-                      // Si se desmarca "Otro", limpiamos el campo personalizado.
-                      if (option == 'Otro') {
-                        onUpdate('otra_tecnica', null);
-                      }
-                    } else {
-                      newList.add(option);
-                    }
-
-                    onUpdate(key, newList);
+                    isSelected = selectedItems.contains(option);
                   } else {
-                    // Si se pulsa el chip ya seleccionado,
-                    // se deselecciona.
-                    if (isSelected) {
-                      onUpdate(key, null);
-
-                      // Limpiamos los datos personalizados asociados.
-                      if (key == 'tipo_plato') {
-                        onUpdate('otro_tipo_plato', null);
-                      }
-
-                      if (key == 'equilibrio') {
-                        onUpdate('otro_equilibrio', null);
-                      }
-                    } else {
-                      onUpdate(key, option);
-                    }
+                    isSelected = data[key] == option;
                   }
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFFFFD400)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFF0F172A),
-                      width: isSelected ? 2.0 : 1.0,
-                    ),
-                    boxShadow: isSelected
-                        ? const [
-                            BoxShadow(
-                              color: Color(0xFF0F172A),
-                              blurRadius: 0,
-                              offset: Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 150),
-                        child: Icon(
-                          icon,
-                          key: ValueKey(
-                            '${option}_$isSelected',
+
+                  return SizedBox(
+                    width: chipWidth,
+                    child: InkWell(
+                      onTap: () {
+                        if (isMulti) {
+                          final List selectedItems = data[key] is List
+                              ? List.from(data[key])
+                              : [];
+
+                          final List newList = List.from(selectedItems);
+
+                          if (isSelected) {
+                            newList.remove(option);
+
+                            // Si se desmarca "Otro", limpiamos el campo personalizado.
+                            if (option == 'Otro') {
+                              onUpdate('otra_tecnica', null);
+                            }
+                          } else {
+                            newList.add(option);
+                          }
+
+                          onUpdate(key, newList);
+                        } else {
+                          // Si se pulsa el chip ya seleccionado,
+                          // se deselecciona.
+                          if (isSelected) {
+                            onUpdate(key, null);
+
+                            // Limpiamos los datos personalizados asociados.
+                            if (key == 'tipo_plato') {
+                              onUpdate('otro_tipo_plato', null);
+                            }
+
+                            if (key == 'equilibrio') {
+                              onUpdate('otro_equilibrio', null);
+                            }
+                          } else {
+                            onUpdate(key, option);
+                          }
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFFFFD400)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF0F172A)
+                                : const Color(
+                                    0xFF0F172A,
+                                  ).withValues(alpha: 0.25),
+                            width: 2.0,
                           ),
-                          size: 14,
-                          color: const Color(0xFF0F172A),
+                          boxShadow: isSelected
+                              ? const [
+                                  BoxShadow(
+                                    color: Color(0xFF0F172A),
+                                    blurRadius: 0,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 150),
+                              child: Icon(
+                                icon,
+                                key: ValueKey('${option}_$isSelected'),
+                                size: 14,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                option,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: const Color(0xFF0F172A),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        option,
-                        style: GoogleFonts.inter(
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: const Color(0xFF0F172A),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
         ],
       ),
@@ -416,10 +445,7 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: const Color(0xFF0F172A),
-                  width: 1.5,
-                ),
+                border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0xFF0F172A),
@@ -429,9 +455,7 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
                 ],
               ),
               child: TextFormField(
-                key: ValueKey(
-                  '${key}_${data[key] ?? ''}',
-                ),
+                key: ValueKey('${key}_${data[key] ?? ''}'),
                 initialValue: data[key]?.toString() ?? '',
                 style: GoogleFonts.inter(
                   color: const Color(0xFF0F172A),
@@ -451,10 +475,7 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
                   ),
                 ),
                 onChanged: (value) {
-                  onUpdate(
-                    key,
-                    value.trim().isEmpty ? null : value,
-                  );
+                  onUpdate(key, value.trim().isEmpty ? null : value);
                 },
               ),
             ),
@@ -464,4 +485,3 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
     );
   }
 }
-

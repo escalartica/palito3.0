@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart'; // Añadido para mantener las tipografías
-import '../../memory_form/widgets/smart_image.dart'; 
+import '../../memory_form/widgets/smart_image.dart';
 import '../../../core/models/memory_model.dart';
 
 class HeroCard extends ConsumerWidget {
@@ -19,7 +19,11 @@ class HeroCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
           boxShadow: const [
-            BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 4))
+            BoxShadow(
+              color: Color(0xFF0F172A),
+              blurRadius: 0,
+              offset: Offset(0, 4),
+            ),
           ],
         ),
         child: Center(
@@ -35,7 +39,9 @@ class HeroCard extends ConsumerWidget {
       );
     }
 
-    final String? path = (memory!.imageUrls.isNotEmpty) ? memory!.imageUrls.first : null;
+    final String? path = (memory!.imageUrls.isNotEmpty)
+        ? memory!.imageUrls.first
+        : null;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.4,
@@ -46,7 +52,11 @@ class HeroCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
         boxShadow: const [
-          BoxShadow(color: Color(0xFF0F172A), blurRadius: 0, offset: Offset(0, 4))
+          BoxShadow(
+            color: Color(0xFF0F172A),
+            blurRadius: 0,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: Stack(
@@ -56,11 +66,15 @@ class HeroCard extends ConsumerWidget {
             child: (path != null && path.isNotEmpty)
                 ? SmartImage(imagePath: path, fit: BoxFit.cover)
                 : Container(
-                    color: const Color(0xFFF8FAFC), 
-                    child: const Icon(Icons.image_rounded, size: 50, color: Color(0xFF0F172A)),
+                    color: const Color(0xFFF8FAFC),
+                    child: const Icon(
+                      Icons.image_rounded,
+                      size: 50,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
           ),
-          
+
           // Gradiente inferior para legibilidad del texto
           Container(
             decoration: BoxDecoration(
@@ -68,13 +82,13 @@ class HeroCard extends ConsumerWidget {
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  const Color(0xFF0F172A).withValues(alpha: 0.85), 
+                  const Color(0xFF0F172A).withValues(alpha: 0.85),
                   Colors.transparent,
                 ],
               ),
             ),
           ),
-          
+
           // Contenido de texto con tipografías Outfit / Inter
           Padding(
             padding: const EdgeInsets.all(20),
@@ -85,22 +99,26 @@ class HeroCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    memory!.title, 
+                    memory!.title,
                     style: GoogleFonts.outfit(
-                      color: Colors.white, 
-                      fontSize: 22, 
+                      color: Colors.white,
+                      fontSize: 22,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.store_rounded, size: 14, color: Color(0xFFFFD400)),
+                      const Icon(
+                        Icons.store_rounded,
+                        size: 14,
+                        color: Color(0xFFFFD400),
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        memory!.restaurantName, 
+                        memory!.restaurantName,
                         style: GoogleFonts.inter(
-                          color: const Color(0xFFFFD400), 
+                          color: const Color(0xFFFFD400),
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),

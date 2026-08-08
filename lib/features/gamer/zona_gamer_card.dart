@@ -1,9 +1,8 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class ZonaGamerCard
-    extends StatelessWidget {
+class ZonaGamerCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final Color backgroundColor;
@@ -18,152 +17,122 @@ class ZonaGamerCard
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  State<ZonaGamerCard> createState() => _ZonaGamerCardState();
+}
+
+class _ZonaGamerCardState extends State<ZonaGamerCard> {
+  static const Offset _restOffset = Offset(4, 4);
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentShadowOffset = _pressed ? Offset.zero : _restOffset;
+    final translation = _pressed ? _restOffset : Offset.zero;
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width:
-            double.infinity,
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 18,
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        widget.onTap();
+      },
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(
+          translation.dx,
+          translation.dy,
+          0,
         ),
-        decoration:
-            BoxDecoration(
-          gradient:
-              LinearGradient(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
             colors: [
-              backgroundColor,
-              backgroundColor
-                  .withValues(
-                alpha: 0.8,
-              ),
+              widget.backgroundColor,
+              widget.backgroundColor.withValues(alpha: 0.8),
             ],
-            begin:
-                Alignment.topLeft,
-            end:
-                Alignment.bottomRight,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          borderRadius:
-              BorderRadius.circular(
-            22,
-          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFF0F172A), width: 2),
           boxShadow: [
             BoxShadow(
-              color:
-                  backgroundColor
-                      .withValues(
-                alpha: 0.35,
-              ),
-              blurRadius:
-                  12,
-              offset:
-                  const Offset(
-                0,
-                5,
-              ),
+              color: const Color(0xFF0F172A),
+              offset: currentShadowOffset,
+              blurRadius: 0,
             ),
           ],
         ),
-        child:
-            Row(
-          mainAxisAlignment:
-              MainAxisAlignment
-                  .spaceBetween,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.all(
-                    10,
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.white
-                            .withValues(
-                      alpha: 0.2,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: _pressed ? 0.85 : 1),
+                  duration: const Duration(milliseconds: 120),
+                  builder: (context, scale, child) =>
+                      Transform.scale(scale: scale, child: child),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
                     ),
-                    shape:
-                        BoxShape.circle,
-                  ),
-                  child:
-                      const Icon(
-                    Icons
-                        .auto_awesome_rounded,
-                    color:
-                        Colors.white,
-                    size:
-                        22,
+                    child: const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
-                const SizedBox(
-                  width: 14,
-                ),
+                const SizedBox(width: 14),
                 Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      style:
-                          GoogleFonts.outfit(
-                        fontSize:
-                            18,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            Colors.white,
+                      widget.title,
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(
-                      height: 2,
-                    ),
+                    const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      style:
-                          GoogleFonts.inter(
-                        fontSize:
-                            12,
-                        color:
-                            Colors.white
-                                .withValues(
-                          alpha: 0.8,
-                        ),
+                      widget.subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-            Container(
-              padding:
-                  const EdgeInsets.all(
-                8,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    Colors.white
-                        .withValues(
-                  alpha: 0.15,
+            AnimatedSlide(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              offset: _pressed ? const Offset(0.15, 0) : Offset.zero,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
                 ),
-                shape:
-                    BoxShape.circle,
-              ),
-              child:
-                  const Icon(
-                Icons
-                    .arrow_forward_ios_rounded,
-                color:
-                    Colors.white,
-                size:
-                    16,
+                child: const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
               ),
             ),
           ],
@@ -172,4 +141,3 @@ class ZonaGamerCard
     );
   }
 }
-

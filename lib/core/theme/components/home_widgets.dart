@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../models/memory_model.dart'; 
-import '../../../features/memory_form/widgets/smart_image.dart'; 
+import '../../models/memory_model.dart';
+import '../../../features/memory_form/widgets/smart_image.dart';
 
 // Paleta de colores neo-brutalista
-const Color palitoDark = Color(0xFF1A1A1A);
+const Color palitoDark = Color(0xFF0F172A);
 const Color palitoYellow = Color(0xFFFFD400);
 
 class HomeHero extends StatelessWidget {
@@ -14,10 +14,10 @@ class HomeHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Obtenemos la primera imagen si existe, o usamos una por defecto
-    final imageUrl = (memory != null && memory!.imageUrls.isNotEmpty) 
-        ? memory!.imageUrls.first 
+    final imageUrl = (memory != null && memory!.imageUrls.isNotEmpty)
+        ? memory!.imageUrls.first
         : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=800';
-        
+
     final title = memory?.title ?? "Tu mejor experiencia";
     final category = memory?.category ?? "Palito";
     final rating = memory?.rating;
@@ -29,13 +29,9 @@ class HomeHero extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palitoDark, width: 2.5),
+        border: Border.all(color: palitoDark, width: 2),
         boxShadow: const [
-          BoxShadow(
-            color: palitoDark,
-            offset: Offset(4, 4),
-            blurRadius: 0,
-          ),
+          BoxShadow(color: palitoDark, offset: Offset(4, 4), blurRadius: 0),
         ],
       ),
       child: ClipRRect(
@@ -46,7 +42,7 @@ class HomeHero extends StatelessWidget {
             Positioned.fill(
               child: SmartImage(imagePath: imageUrl, fit: BoxFit.cover),
             ),
-            
+
             // 2. Gradiente oscuro inferior para mejorar la lectura del texto
             Positioned.fill(
               child: Container(
@@ -72,7 +68,10 @@ class HomeHero extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: palitoYellow,
                         borderRadius: BorderRadius.circular(8),
@@ -91,7 +90,10 @@ class HomeHero extends StatelessWidget {
                     if (rating != null && rating > 0) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
@@ -99,7 +101,11 @@ class HomeHero extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: Colors.amber,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               rating.toStringAsFixed(1),
@@ -143,8 +149,8 @@ class HomeHero extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white, 
-                        fontSize: 24, 
+                        color: Colors.white,
+                        fontSize: 24,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
                         height: 1.1,
@@ -164,15 +170,15 @@ class HomeHero extends StatelessWidget {
 class SectionHeader extends StatelessWidget {
   final String title;
   const SectionHeader(this.title, {super.key});
-  
+
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
     child: Text(
-      title.toUpperCase(), 
+      title.toUpperCase(),
       style: const TextStyle(
-        fontSize: 22, 
-        fontWeight: FontWeight.w900, 
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
         color: palitoDark,
         letterSpacing: -0.5,
       ),
