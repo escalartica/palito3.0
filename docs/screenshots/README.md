@@ -1,14 +1,13 @@
 # Capturas de pantalla
 
-Añade aquí 3–4 capturas reales de la app (formato PNG, recomendado ~320px de
-ancho para que se vean bien en fila dentro del README principal) con estos
-nombres para que se enlacen automáticamente desde `README.md`:
+Súbelas aquí con estos nombres exactos para que se enlacen automáticamente
+desde el `README.md` principal (formato PNG):
 
-- `home.png` — pantalla de inicio
-- `detail.png` — detalle de un recuerdo
-- `map.png` — mapa con recuerdos
-- `gamer.png` — Zona Gamer
+- `gamer.png` — Zona Gamer (ruleta de decisiones)
+- `achievements.png` — Insignias y logros de la mesa
+- `map.png` — Mapa de recuerdos
+- `profile.png` — Perfil y estadísticas
 
-No hizo falta generarlas automáticamente en esta sesión (permiso de captura
-de pantalla no disponible en el entorno de la IA), así que basta con
-arrastrar aquí capturas hechas desde el propio iPhone.
+Puedes subirlas directamente desde el navegador del móvil, sin necesidad de
+ordenador: entra en esta misma carpeta en GitHub → **Add file → Upload
+files** → selecciona las fotos desde el carrete → confirma el commit.

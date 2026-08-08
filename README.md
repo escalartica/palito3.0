@@ -4,16 +4,11 @@
 
 Aplicación multiplataforma (iOS + Web/PWA) para registrar experiencias gastronómicas — restaurante, plato, puntuación, fotos y ubicación — con un sistema de "juicio" gamificado para decidir qué pedir o quién elige. Pensada desde el primer commit para que **dos personas** usen la misma cuenta desde dispositivos distintos y vean siempre los mismos datos.
 
-<!-- 
-  Sustituye estas rutas por capturas reales cuando las tengas a mano.
-  Sugerencia de tamaño: 320px de ancho, formato PNG.
--->
-
 <p align="center">
-  <img src="docs/screenshots/home.png" width="220" alt="Pantalla de inicio" />
-  <img src="docs/screenshots/detail.png" width="220" alt="Detalle de un recuerdo" />
+  <img src="docs/screenshots/gamer.png" width="220" alt="Zona Gamer: ruleta de decisiones" />
+  <img src="docs/screenshots/achievements.png" width="220" alt="Insignias y logros de la mesa" />
   <img src="docs/screenshots/map.png" width="220" alt="Mapa de recuerdos" />
-  <img src="docs/screenshots/gamer.png" width="220" alt="Zona Gamer" />
+  <img src="docs/screenshots/profile.png" width="220" alt="Perfil y estadísticas" />
 </p>
 
 ---
@@ -23,6 +18,7 @@ Aplicación multiplataforma (iOS + Web/PWA) para registrar experiencias gastron�
 - [Características](#características)
 - [Stack técnico](#stack-técnico)
 - [Decisiones de arquitectura](#decisiones-de-arquitectura)
+- [Seguridad](#seguridad)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Cómo ejecutarlo](#cómo-ejecutarlo)
 - [Estado actual (checkpoint v3.0 → v4.0)](#estado-actual-checkpoint-v30--v40)
@@ -67,9 +63,7 @@ El primer diseño autenticaba cada dispositivo con una sesión anónima de Fireb
 
 ### 2. Fotos en Cloudinary, no en Firebase Storage
 
-Firebase Storage exige plan de pago (Blaze) desde finales de 2024, incluso para uso dentro de la capa gratuita. Como el objetivo explícito del proyecto es coste cero, las fotos se suben a Cloudinary vía su API de subida sin firmar (`upload_preset` en modo *unsigned*, sin necesidad de exponer ninguna clave secreta en el cliente). Ver [`lib/core/services/storage_image_service.dart`](lib/core/services/storage_image_service.dart).
-
-> ⚠️ Nota de seguridad: un *upload preset* sin firmar es público por diseño (así funciona la subida sin backend propio). Antes de escalar el proyecto, conviene limitar ese preset en el panel de Cloudinary (tamaño máximo, formatos permitidos, límite de subidas) para reducir el riesgo de abuso.
+Firebase Storage exige plan de pago (Blaze) desde finales de 2024, incluso para uso dentro de la capa gratuita. Como el objetivo explícito del proyecto es coste cero, las fotos se suben a Cloudinary vía su API de subida sin firmar (`upload_preset` en modo *unsigned*, sin necesidad de exponer ninguna clave secreta en el cliente). Ver [`lib/core/services/storage_image_service.dart`](lib/core/services/storage_image_service.dart). Las implicaciones de seguridad de esta decisión están detalladas en la sección [Seguridad](#seguridad).
 
 Las fotos y perfiles que ya existían guardados solo en el almacenamiento local del primer dispositivo se migran a Cloudinary con [`legacy_photo_migration_io.dart`](lib/core/services/legacy_photo_migration_io.dart) — implementado con **exportación condicional** (`if (dart.library.io)`) para que ese código, que depende de `dart:io`, no rompa la compilación para Web (donde `dart:io` no existe).
 
@@ -78,6 +72,18 @@ Las fotos y perfiles que ya existían guardados solo en el almacenamiento local 
 Sin cuenta de pago de Apple Developer, una instalación nativa firmada con Apple ID gratuito caduca cada 7 días. La solución gratuita y permanente es servir la app como **PWA instalable** ("Añadir a pantalla de inicio"), sin pasar por App Store ni por ningún certificado que caduque.
 
 El primer despliegue de la PWA resultó lento porque Firebase Hosting servía los activos pesados (el motor de renderizado, ~7&nbsp;MB) con solo 1 hora de caché HTTP — cada apertura pasada esa hora volvía a descargarlo todo. Se corrigió con cabeceras de caché de larga duración para los activos versionados (`Cache-Control: immutable, max-age=31536000`) y caché corta solo para `index.html` y el *service worker*, que son los que deben revisarse en cada visita para detectar actualizaciones (ver `firebase.json`).
+
+## Seguridad
+
+Esta versión prioriza deliberadamente **velocidad de entrega y coste cero** sobre un endurecimiento de seguridad exhaustivo. Es una decisión consciente para un proyecto personal de 2 usuarios de confianza, no un descuido — pero queda documentada aquí explícitamente para que no se pierda de vista, y como lista de partida para la auditoría de seguridad ya planificada de cara a la v4.0.
+
+**Puntos conocidos, pendientes de revisión:**
+
+- **Upload preset de Cloudinary público.** El modo *unsigned* expone el nombre del preset en el código cliente por diseño — es lo que permite subir fotos sin backend propio. Cualquiera que lo encuentre en este repositorio podría, en teoría, subir archivos a la cuenta de Cloudinary del proyecto. *Mitigación pendiente*: limitar formato y tamaño máximo, y activar moderación de subidas en el panel de Cloudinary.
+- **Reglas de Firestore permisivas dentro del hogar.** Cualquier dispositivo autenticado (incluida una simple sesión anónima) puede leer y escribir cualquier documento bajo `users/{kHouseholdId}/**` (ver [`firestore.rules`](firestore.rules)). Es correcto para 2 usuarios de confianza que comparten todo; no sería válido si el proyecto creciera a usuarios sin relación entre sí.
+- **Autenticación puramente anónima.** No hay verificación de identidad real. `kHouseholdId` no se expone en ningún endpoint público, pero tampoco es un secreto criptográfico — no es la barrera de seguridad, solo de conveniencia.
+
+**Próximo paso explícito, antes o durante la v4.0**: auditoría de seguridad completa (reglas de Firestore, preset de Cloudinary, y evaluación de si migrar a autenticación real) — tratado como compromiso en el roadmap, no como tarea informal.
 
 ## Estructura del proyecto
 
@@ -137,8 +143,8 @@ Completado en esta versión:
 
 Ideas para la v4.0, sin comprometer el objetivo de coste cero:
 
+- [ ] **Auditoría de seguridad completa** — ver [Seguridad](#seguridad); primer punto antes de crecer el proyecto
 - [ ] Autenticación real (no solo anónima) si el proyecto crece más allá de un hogar
-- [ ] Restringir el *upload preset* de Cloudinary (tamaño/formato) por seguridad
 - [ ] Soporte Android nativo (el proyecto ya está preparado a nivel de Firebase)
 - [ ] Tests automatizados (unitarios para providers, widget tests para las pantallas clave)
 - [ ] Explorar monetización vía descargas (App Store / Play Store) manteniendo el núcleo gratuito
