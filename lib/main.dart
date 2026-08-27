@@ -734,7 +734,12 @@ ShellRoute(
                       left: 24,
                       right: 24,
                     ),
-                    child: AppDock(
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(
+                        maxWidth: 640,
+                      ),
+                      child: AppDock(
                       items: const [
                         Icons
                             .map_rounded,
@@ -754,6 +759,7 @@ ShellRoute(
                           context,
                         );
                       },
+                    ),
                     ),
                   ),
                 );

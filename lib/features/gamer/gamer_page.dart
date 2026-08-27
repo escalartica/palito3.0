@@ -880,7 +880,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
           ),
         ],
       ),
-      body: SafeArea(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 60),
           child: Column(
@@ -1352,6 +1355,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
               ),
             ],
           ),
+        ),
+      ),
         ),
       ),
     );

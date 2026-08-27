@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/dock_provider.dart';
 import 'memory_form_page.dart';
@@ -119,8 +120,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF5),
+      floatingActionButtonLocation: const ConstrainedEndFloatLocation(),
       floatingActionButton: _buildFloatingEditButton(context, currentMemory),
-      body: CustomScrollView(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           HeroHeader(
@@ -154,6 +159,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/categories.dart';
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/theme/components/home_widgets.dart';
 import '../../../core/theme/components/memory_card.dart';
 import '../../../core/theme/tokens/app_colors.dart';
@@ -550,7 +551,7 @@ class _HomePageState extends ConsumerState<HomePage>
       // en cuanto el body se envolvía en un ancho máximo para la PWA de
       // escritorio; ver UX-3 en TECHNICAL_AUDIT.md).
       floatingActionButtonLocation:
-          FloatingActionButtonLocation.endFloat,
+          const ConstrainedEndFloatLocation(),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(
           bottom: 109,

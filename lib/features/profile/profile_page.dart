@@ -273,7 +273,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
     return Scaffold(
       backgroundColor: _kBg,
-      body: CustomScrollView(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: CustomScrollView(
         slivers: [
           _buildAppBar(context),
           SliverPadding(
@@ -435,6 +438,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
