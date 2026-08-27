@@ -1375,21 +1375,17 @@ void _animatedMove(
                 ),
                 children: [
                   TileLayer(
+                    // CARTO (proveedor anterior) empezó a exigir una API
+                    // key incluso en su capa gratuita — se cambia a las
+                    // teselas estándar de OpenStreetMap, gratuitas sin
+                    // registro, coherente con el resto del proyecto
+                    // (coste cero).
                     urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                    subdomains:
-                        const [
-                      'a',
-                      'b',
-                      'c',
-                      'd',
-                    ],
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName:
                         'com.palito.app',
                     maxZoom:
                         19,
-                    retinaMode:
-                        true,
                   ),
 
                   // ------------------------------------------------

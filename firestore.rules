@@ -29,7 +29,15 @@ service cloud.firestore {
         'edyWrF7U3HPBbW6lKcuIzec0r0N2',
         '3RYayrII74T2vpALV1X75eVdGY42',
         'pqtpXx4WiOV3gVvhfmCOgiuqXw53',
-        'fudChOtrc2S5S9JVoUXEBVz0ltB2'
+        'fudChOtrc2S5S9JVoUXEBVz0ltB2',
+        // iPhone de CeH — uids anónimos generados durante las
+        // reinstalaciones del 27/08/2026 (cada `flutter install` hace un
+        // desinstalar+instalar completo, lo que borra la sesión anónima
+        // guardada en el llavero y genera un uid nuevo). Se guardan
+        // todos por si acaso; cerrar/abrir la app normal SÍ conserva el
+        // uid, solo una reinstalación completa lo cambia.
+        'byNbd1IRAjRreG5dDKBHzKfQmhm1',
+        'ZQA4t7bibeXxWuoSj2QLwVZ5imC3'
       ];
     }
 
