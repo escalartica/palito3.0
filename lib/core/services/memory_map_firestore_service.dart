@@ -752,60 +752,12 @@ class MemoryMapFirestoreService {
               lng,
             )) {
               memoriesWithCoordinates++;
-
-              debugPrint(
-                '📍 MEMORIA CON COORDENADAS',
-              );
-
-              debugPrint(
-                '   ID: ${doc.id}',
-              );
-
-              debugPrint(
-                '   Título: $title',
-              );
-
-              debugPrint(
-                '   Dirección: $address',
-              );
-
-              debugPrint(
-                '   Lat: $lat',
-              );
-
-              debugPrint(
-                '   Lng: $lng',
-              );
             } else {
               debugPrint(
-                '⚠️ MEMORIA SIN COORDENADAS',
-              );
-
-              debugPrint(
-                '   ID: ${doc.id}',
-              );
-
-              debugPrint(
-                '   Título: $title',
-              );
-
-              debugPrint(
-                '   Dirección: $address',
-              );
-
-              debugPrint(
-                '   location original: '
-                '${rawData['location']}',
-              );
-
-              debugPrint(
-                '   lat original: '
-                '${rawData['lat']}',
-              );
-
-              debugPrint(
-                '   lng original: '
-                '${rawData['lng']}',
+                '⚠️ MEMORIA SIN COORDENADAS: '
+                '${doc.id} "$title" ($address) — '
+                'location original: ${rawData['location']}, '
+                'lat: ${rawData['lat']}, lng: ${rawData['lng']}',
               );
             }
 
