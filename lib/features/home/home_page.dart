@@ -194,6 +194,9 @@ class _HomePageState extends ConsumerState<HomePage>
         memories.isEmpty &&
         ref.read(memoryProvider.notifier).hasStreamError;
 
+    final bool isPermissionDenied =
+        ref.read(memoryProvider.notifier).isPermissionDenied;
+
     final selectedCategory = ref.watch(
       selectedCategoryProvider,
     );
@@ -491,7 +494,9 @@ class _HomePageState extends ConsumerState<HomePage>
 
                 filteredMemories.isEmpty
                     ? (hasStreamError
-                          ? _buildErrorState()
+                          ? _buildErrorState(
+                              isPermissionDenied,
+                            )
                           : (hasLoaded
                                 ? _buildEmptyState()
                                 : _buildLoadingState()))
@@ -995,7 +1000,7 @@ class _HomePageState extends ConsumerState<HomePage>
   // siempre, sin ningún indicio de que algo iba mal. Mismo contenedor
   // visual que el estado vacío, para no introducir un salto de layout.
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(bool isPermissionDenied) {
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: 16,
@@ -1021,13 +1026,17 @@ class _HomePageState extends ConsumerState<HomePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.cloud_off_rounded,
+                isPermissionDenied
+                    ? Icons.lock_outline_rounded
+                    : Icons.cloud_off_rounded,
                 size: 32,
                 color: Colors.grey.shade400,
               ),
               const SizedBox(height: 10),
               Text(
-                "No se pudieron cargar tus recuerdos",
+                isPermissionDenied
+                    ? "Este dispositivo no tiene acceso todavía"
+                    : "No se pudieron cargar tus recuerdos",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   color: colorTextMain,
@@ -1037,7 +1046,11 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
               const SizedBox(height: 4),
               Text(
-                "Comprueba tu conexión — se actualizará solo en cuanto vuelva.",
+                isPermissionDenied
+                    ? "No es un problema de conexión — suele pasar tras "
+                          "reinstalar la app. Avisa para añadir este "
+                          "dispositivo a la lista autorizada."
+                    : "Comprueba tu conexión — se actualizará solo en cuanto vuelva.",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: Colors.grey.shade500,

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -964,12 +965,21 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       if (mounted) {
         // El detalle técnico ($e) ya queda en el log de arriba; al
         // usuario le sirve más un mensaje que pueda entender y que le
-        // diga qué hacer.
+        // diga qué hacer. Un permission-denied de firestore.rules (p.
+        // ej. tras reinstalar la app) no se arregla reintentando, así
+        // que se distingue de un fallo de red genérico.
+        final bool isPermissionDenied =
+            e is FirebaseException && e.code == 'permission-denied';
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              "No se pudo guardar el recuerdo. Comprueba tu conexión "
-              "e inténtalo de nuevo.",
+              isPermissionDenied
+                  ? "Este dispositivo no tiene acceso todavía. No es un "
+                        "problema de conexión — avisa para añadirlo a la "
+                        "lista autorizada."
+                  : "No se pudo guardar el recuerdo. Comprueba tu conexión "
+                        "e inténtalo de nuevo.",
             ),
           ),
         );

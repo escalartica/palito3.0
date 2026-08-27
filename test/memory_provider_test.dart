@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -216,6 +217,35 @@ void main() {
         container.read(memoryProvider).map((m) => m.id),
         ['recuperado'],
       );
+    });
+
+    test(
+        'un error de permission-denied activa isPermissionDenied; un '
+        'error genérico no', () async {
+      final notifier = container.read(memoryProvider.notifier);
+
+      expect(notifier.isPermissionDenied, isFalse);
+
+      fakeService.emitError(Exception('sin conexión'));
+      await _flushMicrotasks();
+
+      expect(notifier.hasStreamError, isTrue);
+      expect(notifier.isPermissionDenied, isFalse);
+
+      fakeService.emitError(
+        FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'permission-denied',
+        ),
+      );
+      await _flushMicrotasks();
+
+      expect(notifier.isPermissionDenied, isTrue);
+
+      fakeService.emit([_memory(id: 'recuperado')]);
+      await _flushMicrotasks();
+
+      expect(notifier.isPermissionDenied, isFalse);
     });
 
     test(

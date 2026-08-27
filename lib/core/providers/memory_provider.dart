@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -59,6 +60,8 @@ class MemoryNotifier
   bool _hasReceivedFirestoreData = false;
 
   bool _hasStreamError = false;
+
+  bool _isPermissionDenied = false;
 
   // ==========================================================================
   // INICIALIZACIÓN
@@ -183,6 +186,7 @@ class MemoryNotifier
               // Si veníamos de un error (p. ej. tras recuperar la
               // conexión), lo limpiamos: los datos ya están llegando.
               _hasStreamError = false;
+              _isPermissionDenied = false;
 
               final List<MemoryModel>
                   normalizedMemories =
@@ -238,6 +242,9 @@ class MemoryNotifier
               );
 
               _hasStreamError = true;
+              _isPermissionDenied =
+                  error is FirebaseException &&
+                  error.code == 'permission-denied';
 
               // Reasignamos el estado (misma lista, nueva referencia)
               // solo para notificar a quien esté escuchando
@@ -610,6 +617,15 @@ class MemoryNotifier
   /// Se limpia solo en cuanto vuelven a llegar datos.
   bool get hasStreamError {
     return _hasStreamError;
+  }
+
+  /// true si el error del stream es específicamente un rechazo de
+  /// `firestore.rules` (UID no autorizado) — p. ej. tras un reinstall
+  /// completo, que genera una sesión anónima nueva no incluida todavía
+  /// en la whitelist. Se distingue de un error de red genérico porque
+  /// el mensaje a mostrar (y la solución) es completamente distinto.
+  bool get isPermissionDenied {
+    return _isPermissionDenied;
   }
 
   // ==========================================================================
