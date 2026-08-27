@@ -262,18 +262,17 @@ class _HomePageState extends ConsumerState<HomePage>
       // STACK PRINCIPAL
       // =========================================================================
       //
-      // NOTA: se intentó envolver esto en Center+ConstrainedBox(maxWidth)
-      // para limitar el ancho en la PWA de escritorio (ver TECHNICAL_AUDIT.md,
-      // UX-3). Se revirtió tras comprobar visualmente (Chrome real) que
-      // rompe el FAB: el primer hijo de este Stack no está envuelto en
-      // Positioned.fill, así que el Stack deja de recibir las
-      // restricciones de alto que necesita para dimensionarse bien, y el
-      // FAB (Positioned bottom:125) queda recortado fuera del área
-      // visible. Antes de reintentarlo, migrar el FAB a
-      // Scaffold.floatingActionButton (más robusto que un Positioned
-      // manual) o envolver el contenido scrolleable en Positioned.fill.
+      // Center + ConstrainedBox: en móvil (donde el ancho ya es menor que
+      // el máximo) no cambia nada; en la PWA de escritorio evita que el
+      // contenido se estire a lo ancho de toda la ventana. Ahora es
+      // seguro: el FAB ya no vive dentro de este Stack (ver
+      // floatingActionButton más abajo), así que no depende de cómo este
+      // Stack calcule su tamaño.
 
-      body: Stack(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Stack(
         children: [
           // =====================================================================
           // CONTENIDO PRINCIPAL
@@ -535,61 +534,73 @@ class _HomePageState extends ConsumerState<HomePage>
             ),
           ),
 
-          // =====================================================================
-          // FAB ANIMADO
-          // =====================================================================
+        ],
+      ),
+        ),
+      ),
 
-          Positioned(
-            bottom: 125,
-            right: 20,
-            child: ScaleTransition(
-              scale: _fabAnimation,
-              child: FadeTransition(
-                opacity: _fabAnimation,
-                child: Container(
-                  decoration:
-                      BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: colorTextMain,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorTextMain,
-                        blurRadius: 0,
-                        offset:
-                            const Offset(
-                          3,
-                          3,
-                        ),
-                      ),
-                    ],
-                  ),
-                  child:
-                      FloatingActionButton(
-                    backgroundColor:
-                        colorAccentCoral,
-                    elevation: 0,
-                    onPressed: () =>
-                        context.push(
-                      '/new-memory',
-                    ),
-                    shape:
-                        const CircleBorder(),
-                    child:
-                        const Icon(
-                      Icons.add_rounded,
-                      color:
-                          Colors.white,
-                      size: 32,
+      // =========================================================================
+      // FAB ANIMADO
+      // =========================================================================
+      //
+      // Vive en el slot floatingActionButton de Scaffold, no como
+      // Positioned manual dentro del Stack del body — así su posición no
+      // depende de cómo el Stack calcule su propio tamaño (antes, un
+      // Positioned(bottom: 125) aquí se recortaba fuera de la pantalla
+      // en cuanto el body se envolvía en un ancho máximo para la PWA de
+      // escritorio; ver UX-3 en TECHNICAL_AUDIT.md).
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(
+          bottom: 109,
+        ),
+        child: ScaleTransition(
+          scale: _fabAnimation,
+          child: FadeTransition(
+            opacity: _fabAnimation,
+            child: Container(
+              decoration:
+                  BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: colorTextMain,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: colorTextMain,
+                    blurRadius: 0,
+                    offset:
+                        const Offset(
+                      3,
+                      3,
                     ),
                   ),
+                ],
+              ),
+              child:
+                  FloatingActionButton(
+                backgroundColor:
+                    colorAccentCoral,
+                elevation: 0,
+                onPressed: () =>
+                    context.push(
+                  '/new-memory',
+                ),
+                shape:
+                    const CircleBorder(),
+                child:
+                    const Icon(
+                  Icons.add_rounded,
+                  color:
+                      Colors.white,
+                  size: 32,
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

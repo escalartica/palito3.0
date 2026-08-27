@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../tokens/app_colors.dart';
+
 /// Chip de selección con el estilo neobrutalista de Palito (borde grueso,
 /// sombra dura, fondo amarillo si está seleccionado). Es el widget visual
 /// compartido por todos los formularios de recuerdo (`factories/*_fields.dart`)
@@ -63,18 +65,18 @@ class NeoChip extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFD400) : Colors.white,
+            color: isSelected ? AppColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF0F172A)
-                  : const Color(0xFF0F172A).withValues(alpha: 0.25),
+                  ? AppColors.textPrimary
+                  : AppColors.textPrimary.withValues(alpha: 0.25),
               width: 2.0,
             ),
             boxShadow: isSelected
                 ? const [
                     BoxShadow(
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       blurRadius: 0,
                       offset: Offset(0, 2),
                     ),
@@ -94,7 +96,7 @@ class NeoChip extends StatelessWidget {
                   icon,
                   key: ValueKey('${label}_$isSelected'),
                   size: 13,
-                  color: const Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(width: 4),
@@ -106,7 +108,7 @@ class NeoChip extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontSize: 11,
                     height: 1.1,
                   ),
@@ -159,7 +161,7 @@ class NeoChipGroup extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),

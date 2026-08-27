@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/theme/tokens/app_colors.dart';
+
 /// Piezas de UI de bajo nivel compartidas por varias secciones del
 /// formulario de recuerdo (`memory_form_page.dart` y los widgets bajo
 /// `features/memory_form/widgets/`). Antes vivían como métodos privados
@@ -21,7 +23,7 @@ class SectionLabel extends StatelessWidget {
       style: GoogleFonts.outfit(
         fontSize: 16,
         fontWeight: FontWeight.w900,
-        color: const Color(0xFF0F172A),
+        color: AppColors.textPrimary,
       ),
     );
   }
@@ -44,10 +46,10 @@ class NeoContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 3),
           ),
