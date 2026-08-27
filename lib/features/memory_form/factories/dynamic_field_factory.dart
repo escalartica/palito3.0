@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../features/memory_form/factories/croquetas_fields.dart';
-import '../../features/memory_form/factories/tortilla_fields.dart';
-import '../../features/memory_form/factories/ensaladilla_fields.dart';
-import '../../features/memory_form/factories/plato_estrella_fields.dart';
-import '../../features/memory_form/factories/menu_fields.dart';
-import '../../features/memory_form/factories/postre_fields.dart';
-import '../../features/memory_form/factories/ambiente_fields.dart';
-import '../../features/memory_form/factories/atencion_fields.dart';
+import 'croquetas_fields.dart';
+import 'tortilla_fields.dart';
+import 'ensaladilla_fields.dart';
+import 'plato_estrella_fields.dart';
+import 'menu_fields.dart';
+import 'postre_fields.dart';
+import 'ambiente_fields.dart';
+import 'atencion_fields.dart';
 
 abstract class DynamicFieldGenerator {
   List<Widget> buildFields(

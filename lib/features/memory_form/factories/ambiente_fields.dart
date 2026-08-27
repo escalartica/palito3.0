@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 
 class AmbienteFields implements DynamicFieldGenerator {
   @override
@@ -49,7 +50,7 @@ class AmbienteFields implements DynamicFieldGenerator {
         transitionBuilder: (child, animation) {
           return SizeTransition(
             sizeFactor: animation,
-            axisAlignment: -1,
+            alignment: Alignment.topCenter,
             child: FadeTransition(opacity: animation, child: child),
           );
         },
@@ -295,60 +296,60 @@ class AmbienteFields implements DynamicFieldGenerator {
                 ),
               ],
             ),
-            child: Column(
-              children: options.map((optionData) {
-                final String option = optionData['label'] as String;
-                final IconData icon = optionData['icon'] as IconData;
+            child: RadioGroup<String>(
+              groupValue: selectedValue,
+              onChanged: (value) => onUpdate(key, value),
+              child: Column(
+                children: options.map((optionData) {
+                  final String option = optionData['label'] as String;
+                  final IconData icon = optionData['icon'] as IconData;
 
-                final bool isSelected = selectedValue == option;
+                  final bool isSelected = selectedValue == option;
 
-                return InkWell(
-                  onTap: () {
-                    onUpdate(key, isSelected ? null : option);
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFFFFD400)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        Radio<String>(
-                          value: option,
-                          groupValue: selectedValue,
-                          activeColor: const Color(0xFF0F172A),
-                          onChanged: (value) {
-                            onUpdate(key, value);
-                          },
-                        ),
-                        Icon(icon, size: 17, color: const Color(0xFF0F172A)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            option,
-                            style: GoogleFonts.inter(
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: const Color(0xFF0F172A),
-                              fontSize: 13,
+                  return InkWell(
+                    onTap: () {
+                      onUpdate(key, isSelected ? null : option);
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFFFFD400)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: option,
+                            activeColor: const Color(0xFF0F172A),
+                          ),
+                          Icon(icon, size: 17, color: const Color(0xFF0F172A)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              option,
+                              style: GoogleFonts.inter(
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: const Color(0xFF0F172A),
+                                fontSize: 13,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ],
@@ -384,7 +385,9 @@ class AmbienteFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -407,86 +410,30 @@ class AmbienteFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return SizedBox(
+                  return NeoChip(
+                    label: option,
+                    icon: icon,
+                    isSelected: isSelected,
                     width: chipWidth,
-                    child: InkWell(
-                      onTap: () {
-                        if (isMulti) {
-                          final List selectedItems = data[key] is List
-                              ? List.from(data[key])
-                              : [];
+                    onTap: () {
+                      if (isMulti) {
+                        final List selectedItems = data[key] is List
+                            ? List.from(data[key])
+                            : [];
 
-                          final List newList = List.from(selectedItems);
+                        final List newList = List.from(selectedItems);
 
-                          if (isSelected) {
-                            newList.remove(option);
-                          } else {
-                            newList.add(option);
-                          }
-
-                          onUpdate(key, newList);
+                        if (isSelected) {
+                          newList.remove(option);
                         } else {
-                          onUpdate(key, isSelected ? null : option);
+                          newList.add(option);
                         }
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFFFFD400)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF0F172A)
-                                : const Color(
-                                    0xFF0F172A,
-                                  ).withValues(alpha: 0.25),
-                            width: 2.0,
-                          ),
-                          boxShadow: isSelected
-                              ? const [
-                                  BoxShadow(
-                                    color: Color(0xFF0F172A),
-                                    blurRadius: 0,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 14,
-                              color: const Color(0xFF0F172A),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                option,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: const Color(0xFF0F172A),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
+                        onUpdate(key, newList);
+                      } else {
+                        onUpdate(key, isSelected ? null : option);
+                      }
+                    },
                   );
                 }).toList(),
               );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 
 class PostreFields implements DynamicFieldGenerator {
   @override
@@ -336,31 +337,35 @@ class PostreFields implements DynamicFieldGenerator {
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildRadioOption(
-                    label: 'Postre',
-                    icon: Icons.cake_outlined,
-                    value: 'Postre',
-                    groupValue: selected,
-                    onChanged: (value) {
-                      onUpdate('tipo_postre', value);
-                    },
+            child: RadioGroup<String>(
+              groupValue: selected,
+              onChanged: (value) => onUpdate('tipo_postre', value),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildRadioOption(
+                      label: 'Postre',
+                      icon: Icons.cake_outlined,
+                      value: 'Postre',
+                      groupValue: selected,
+                      onChanged: (value) {
+                        onUpdate('tipo_postre', value);
+                      },
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _buildRadioOption(
-                    label: 'Helado',
-                    icon: Icons.icecream_outlined,
-                    value: 'Helado',
-                    groupValue: selected,
-                    onChanged: (value) {
-                      onUpdate('tipo_postre', value);
-                    },
+                  Expanded(
+                    child: _buildRadioOption(
+                      label: 'Helado',
+                      icon: Icons.icecream_outlined,
+                      value: 'Helado',
+                      groupValue: selected,
+                      onChanged: (value) {
+                        onUpdate('tipo_postre', value);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -411,9 +416,7 @@ class PostreFields implements DynamicFieldGenerator {
             const SizedBox(width: 4),
             Radio<String>(
               value: value,
-              groupValue: groupValue,
               activeColor: const Color(0xFF0F172A),
-              onChanged: onChanged,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ],
@@ -453,7 +456,9 @@ class PostreFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -477,8 +482,8 @@ class PostreFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return _buildAnimatedChip(
-                    option: option,
+                  return NeoChip(
+                    label: option,
                     icon: icon,
                     isSelected: isSelected,
                     width: chipWidth,
@@ -507,84 +512,6 @@ class PostreFields implements DynamicFieldGenerator {
             },
           ),
         ],
-      ),
-    );
-  }
-
-  // =========================================================================
-  // CHIP ANIMADO
-  // =========================================================================
-
-  Widget _buildAnimatedChip({
-    required String option,
-    required IconData icon,
-    required bool isSelected,
-    required double width,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: width,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0.96, end: 1.0),
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutBack,
-        builder: (context, scale, child) {
-          return Transform.scale(scale: scale, child: child);
-        },
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFFFD400) : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFF0F172A)
-                    : const Color(0xFF0F172A).withValues(alpha: 0.25),
-                width: 2.0,
-              ),
-              boxShadow: isSelected
-                  ? const [
-                      BoxShadow(
-                        color: Color(0xFF0F172A),
-                        blurRadius: 0,
-                        offset: Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedScale(
-                  scale: isSelected ? 1.12 : 1.0,
-                  duration: const Duration(milliseconds: 180),
-                  child: Icon(icon, size: 14, color: const Color(0xFF0F172A)),
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    option,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: const Color(0xFF0F172A),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

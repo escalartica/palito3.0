@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/storage_service.dart';
 import '../models/memory_model.dart';
 import '../services/memory_map_firestore_service.dart';
+import 'memory_map_provider.dart';
 
 /// ===========================================================================
 /// MEMORY NOTIFIER
@@ -25,10 +24,22 @@ import '../services/memory_map_firestore_service.dart';
 
 class MemoryNotifier
     extends StateNotifier<List<MemoryModel>> {
-  MemoryNotifier()
-      : _firestoreService =
-            MemoryMapFirestoreService(),
+  /// [firestoreService] es inyectable para poder sustituirlo por un doble
+  /// de prueba en tests (evita depender de un backend de Firebase real).
+  /// En producción siempre se usa el mismo [MemoryMapFirestoreService]
+  /// que consume el mapa (vía [memoryMapServiceProvider]), para no abrir
+  /// una segunda instancia del servicio ni un segundo listener de
+  /// Firestore sobre la misma colección.
+  MemoryNotifier({
+    required Ref ref,
+    MemoryMapFirestoreService? firestoreService,
+  })  : _firestoreService =
+            firestoreService ?? ref.read(memoryMapServiceProvider),
         super(<MemoryModel>[]) {
+    // Se registra primero, de forma síncrona, para no perder ninguna
+    // emisión del stream compartido con el mapa mientras se cargan las
+    // memorias locales.
+    _listenToFirestore(ref);
     _initialize();
   }
 
@@ -40,20 +51,14 @@ class MemoryNotifier
       _firestoreService;
 
   // ==========================================================================
-  // SUSCRIPCIÓN
-  // ==========================================================================
-
-  StreamSubscription<
-          List<MemoryModel>>?
-      _firestoreSubscription;
-
-  // ==========================================================================
   // ESTADO INTERNO
   // ==========================================================================
 
   bool _isDisposed = false;
 
   bool _hasReceivedFirestoreData = false;
+
+  bool _hasStreamError = false;
 
   // ==========================================================================
   // INICIALIZACIÓN
@@ -67,12 +72,6 @@ class MemoryNotifier
       );
 
       await _loadLocalMemories();
-
-      if (_isDisposed) {
-        return;
-      }
-
-      _listenToFirestore();
 
       debugPrint(
         '🧠 MemoryNotifier: '
@@ -148,87 +147,114 @@ class MemoryNotifier
   // ESCUCHAR FIRESTORE
   // ==========================================================================
 
-  void _listenToFirestore() {
+  void _listenToFirestore(Ref ref) {
     try {
       debugPrint(
         '🔥 MemoryNotifier: '
-        'iniciando escucha de Firestore...',
+        'iniciando escucha de Firestore '
+        '(stream compartido con el mapa)...',
       );
 
-      _firestoreSubscription =
-          _firestoreService
-              .getMemoryModelsStream()
-              .listen(
-        (
-          List<MemoryModel>
-              firestoreMemories,
-        ) async {
-          if (_isDisposed) {
-            return;
-          }
+      // Escucha memoryModelsStreamProvider en vez de abrir su propia
+      // suscripción a Firestore: así solo hay un listener en tiempo real
+      // sobre la colección de memorias, compartido con el mapa, en vez
+      // de uno por cada consumidor.
+      ref.listen<AsyncValue<List<MemoryModel>>>(
+        memoryModelsStreamProvider,
+        (previous, next) {
+          next.when(
+            data: (
+              List<MemoryModel>
+                  firestoreMemories,
+            ) async {
+              if (_isDisposed) {
+                return;
+              }
 
-          debugPrint(
-            '🔥 MemoryNotifier: '
-            'memorias recibidas de Firestore: '
-            '${firestoreMemories.length}',
+              debugPrint(
+                '🔥 MemoryNotifier: '
+                'memorias recibidas de Firestore: '
+                '${firestoreMemories.length}',
+              );
+
+              _hasReceivedFirestoreData =
+                  true;
+
+              // Si veníamos de un error (p. ej. tras recuperar la
+              // conexión), lo limpiamos: los datos ya están llegando.
+              _hasStreamError = false;
+
+              final List<MemoryModel>
+                  normalizedMemories =
+                  _normalizeMemories(
+                firestoreMemories,
+              );
+
+              if (!_isDisposed) {
+                state = normalizedMemories;
+              }
+
+              debugPrint(
+                '🧠 MemoryNotifier: '
+                'estado actualizado desde Firestore: '
+                '${normalizedMemories.length} memorias.',
+              );
+
+              try {
+                await StorageService
+                    .saveMemories(
+                  normalizedMemories,
+                );
+
+                debugPrint(
+                  '💾 MemoryNotifier: '
+                  'caché local sincronizada '
+                  'con Firestore.',
+                );
+              } catch (e, stack) {
+                debugPrint(
+                  '⚠️ MemoryNotifier: '
+                  'no se pudo actualizar la caché local: '
+                  '$e',
+                );
+
+                debugPrintStack(
+                  stackTrace: stack,
+                );
+              }
+            },
+            error: (
+              Object error,
+              StackTrace stack,
+            ) {
+              debugPrint(
+                '❌ MemoryNotifier: '
+                'error escuchando Firestore: '
+                '$error',
+              );
+
+              debugPrintStack(
+                stackTrace: stack,
+              );
+
+              _hasStreamError = true;
+
+              // Reasignamos el estado (misma lista, nueva referencia)
+              // solo para notificar a quien esté escuchando
+              // memoryProvider de que hay algo nuevo que mostrar — sin
+              // esto, un widget que solo mira `state` nunca se
+              // reconstruiría al llegar un error, porque `state` en sí
+              // no cambia de contenido.
+              if (!_isDisposed) {
+                state = List<MemoryModel>.from(
+                  state,
+                );
+              }
+            },
+            loading: () {},
           );
-
-          _hasReceivedFirestoreData =
-              true;
-
-          final List<MemoryModel>
-              normalizedMemories =
-              _normalizeMemories(
-            firestoreMemories,
-          );
-
-          if (!_isDisposed) {
-            state = normalizedMemories;
-          }
-
-          debugPrint(
-            '🧠 MemoryNotifier: '
-            'estado actualizado desde Firestore: '
-            '${normalizedMemories.length} memorias.',
-          );
-
-          try {
-            await StorageService
-                .saveMemories(
-              normalizedMemories,
-            );
-
-            debugPrint(
-              '💾 MemoryNotifier: '
-              'caché local sincronizada '
-              'con Firestore.',
-            );
-          } catch (e, stack) {
-            debugPrint(
-              '⚠️ MemoryNotifier: '
-              'no se pudo actualizar la caché local: '
-              '$e',
-            );
-
-            debugPrintStack(
-              stackTrace: stack,
-            );
-          }
         },
-        onError: (
-          Object error,
-          StackTrace stack,
-        ) {
-          debugPrint(
-            '❌ MemoryNotifier: '
-            'error escuchando Firestore: '
-            '$error',
-          );
-
-          debugPrintStack(
-            stackTrace: stack,
-          );
-        },
+        fireImmediately: true,
       );
     } catch (e, stack) {
       debugPrint(
@@ -579,6 +605,13 @@ class MemoryNotifier
     return _hasReceivedFirestoreData;
   }
 
+  /// true si la última emisión del stream de Firestore fue un error (p.
+  /// ej. sin conexión, o las reglas de seguridad rechazando el acceso).
+  /// Se limpia solo en cuanto vuelven a llegar datos.
+  bool get hasStreamError {
+    return _hasStreamError;
+  }
+
   // ==========================================================================
   // DISPOSE
   // ==========================================================================
@@ -587,14 +620,12 @@ class MemoryNotifier
   void dispose() {
     _isDisposed = true;
 
-    _firestoreSubscription
-        ?.cancel();
-
-    _firestoreSubscription = null;
-
+    // No hay que cancelar ninguna suscripción manual: el ref.listen de
+    // memoryModelsStreamProvider se limpia solo cuando Riverpod destruye
+    // este provider.
     debugPrint(
       '🧠 MemoryNotifier: '
-      'stream de Firestore cancelado.',
+      'notifier eliminado.',
     );
 
     super.dispose();
@@ -610,7 +641,7 @@ final memoryProvider =
         MemoryNotifier,
         List<MemoryModel>>(
   (ref) {
-    return MemoryNotifier();
+    return MemoryNotifier(ref: ref);
   },
 );
 

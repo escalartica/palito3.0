@@ -32,11 +32,21 @@ class MemoryMapFirestoreService {
   MemoryMapFirestoreService({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  })  : _injectedFirestore = firestore,
+        _injectedAuth = auth;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
+  // Se resuelven de forma perezosa (getters, no campos finales) para no
+  // tocar los singletons de Firebase en el momento de construir el
+  // servicio. Esto permite instanciar la clase (p. ej. en un subtipo de
+  // prueba que sobreescribe todos los métodos que los usan) antes de que
+  // Firebase.initializeApp() se haya ejecutado, como ocurre en tests.
+  final FirebaseFirestore? _injectedFirestore;
+  final FirebaseAuth? _injectedAuth;
+
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
+
+  FirebaseAuth get _auth => _injectedAuth ?? FirebaseAuth.instance;
 
   // ==========================================================================
   // CONFIGURACIÓN
@@ -558,55 +568,6 @@ class MemoryMapFirestoreService {
   // MEMORY MODEL -> FIRESTORE
   // ==========================================================================
 
-  Map<String, dynamic> _memoryModelToFirestoreData(
-    MemoryModel memory,
-  ) {
-    return <String, dynamic>{
-      'id': memory.id.trim(),
-
-      'title': memory.title,
-
-      'restaurantName':
-          memory.restaurantName,
-
-      'location': <String, dynamic>{
-        'address':
-            memory.location.address,
-        'lat':
-            memory.location.lat,
-        'lng':
-            memory.location.lng,
-      },
-
-      'wouldReturn':
-          memory.wouldReturn,
-
-      'rating':
-          memory.rating,
-
-      'imageUrls':
-          List<String>.from(
-        memory.imageUrls,
-      ),
-
-      'videoUrl':
-          memory.videoUrl,
-
-      'date':
-          Timestamp.fromDate(
-        memory.date,
-      ),
-
-      'category':
-          memory.category,
-
-      'specificFields':
-          Map<String, dynamic>.from(
-        memory.specificFields,
-      ),
-    };
-  }
-
   // ==========================================================================
   // FIRESTORE -> MEMORY MODEL
   // ==========================================================================
@@ -978,10 +939,58 @@ class MemoryMapFirestoreService {
 
     await saveMemory(
       memoryId: memoryId,
-      memoryData:
-          _memoryModelToFirestoreData(
-        memory,
-      ),
+      memoryData: memory.toFirestore(),
+    );
+  }
+
+  // ==========================================================================
+  // ACTUALIZAR SOLO COORDENADAS
+  // ==========================================================================
+
+  /// Actualiza únicamente `location.lat`/`location.lng` de una memoria ya
+  /// existente, sin tocar el resto del documento.
+  ///
+  /// Se usa para persistir el resultado de una geocodificación (ver
+  /// [MemoryGeocodingService]) y así no tener que repetirla en cada
+  /// arranque de la app para la misma dirección — a diferencia de
+  /// [saveMemory], que reescribe el documento completo a partir de un
+  /// mapa de datos nuevo, esto es una actualización parcial mínima.
+  Future<void> updateMemoryCoordinates({
+    required String memoryId,
+    required double lat,
+    required double lng,
+  }) async {
+    if (!_ensureAuthenticated(
+      operation: 'updateMemoryCoordinates',
+    )) {
+      return;
+    }
+
+    final String normalizedMemoryId =
+        memoryId.trim();
+
+    if (normalizedMemoryId.isEmpty) {
+      return;
+    }
+
+    final CollectionReference<
+            Map<String, dynamic>>?
+        memoriesCollection =
+        _userMemoriesCollection;
+
+    if (memoriesCollection == null) {
+      return;
+    }
+
+    await memoriesCollection
+        .doc(
+      normalizedMemoryId,
+    )
+        .update(
+      <String, dynamic>{
+        'location.lat': lat,
+        'location.lng': lng,
+      },
     );
   }
 
@@ -1050,18 +1059,37 @@ class MemoryMapFirestoreService {
       );
 
       // ======================================================================
+      // TRANSACCIÓN
+      // ======================================================================
+      //
+      // Lee ambos documentos y escribe el resultado dentro de la misma
+      // transacción para evitar una condición de carrera si los 2
+      // dispositivos del hogar editan el mismo recuerdo a la vez (leer
+      // con .get() y escribir después con un batch, como se hacía antes,
+      // deja una ventana entre lectura y escritura sin ninguna garantía
+      // de atomicidad).
+
+      await _firestore.runTransaction(
+        (
+          Transaction transaction,
+        ) async {
+      // ======================================================================
       // OBTENER DOCUMENTOS EXISTENTES
       // ======================================================================
 
       final DocumentSnapshot<
               Map<String, dynamic>>
           existingMemory =
-          await memoryReference.get();
+          await transaction.get(
+        memoryReference,
+      );
 
       final DocumentSnapshot<
               Map<String, dynamic>>
           existingLocation =
-          await locationReference.get();
+          await transaction.get(
+        locationReference,
+      );
 
       // ======================================================================
       // COPIA DE DATOS
@@ -1287,17 +1315,14 @@ class MemoryMapFirestoreService {
       }
 
       // ======================================================================
-      // BATCH
+      // ESCRITURA (dentro de la misma transacción)
       // ======================================================================
-
-      final WriteBatch batch =
-          _firestore.batch();
 
       // ----------------------------------------------------------------------
       // MEMORIA PRINCIPAL
       // ----------------------------------------------------------------------
 
-      batch.set(
+      transaction.set(
         memoryReference,
         data,
         SetOptions(
@@ -1309,19 +1334,13 @@ class MemoryMapFirestoreService {
       // LOCATION SECUNDARIO
       // ----------------------------------------------------------------------
 
-      batch.set(
+      transaction.set(
         locationReference,
         locationData,
         SetOptions(
           merge: true,
         ),
       );
-
-      // ======================================================================
-      // COMMIT
-      // ======================================================================
-
-      await batch.commit();
 
       debugPrint(
         '✅ Memoria guardada correctamente.',
@@ -1388,6 +1407,8 @@ class MemoryMapFirestoreService {
 
       debugPrint(
         '📍 Localización secundaria sincronizada.',
+      );
+        },
       );
     } catch (
       e,

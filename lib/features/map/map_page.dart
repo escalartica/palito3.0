@@ -2,17 +2,19 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/providers/memory_map_provider.dart';
 import '../../../../../core/models/memory_model.dart';
+import 'services/memory_geocoding_service.dart';
+import 'widgets/map_marker_builder.dart';
+import 'widgets/memory_bottom_sheet.dart';
+import 'widgets/memory_group_picker.dart';
 
 class MapPage extends ConsumerStatefulWidget {
   final String? initialCategory;
@@ -60,24 +62,10 @@ class _MapPageState extends ConsumerState<MapPage>
 
   final MapController _mapController = MapController();
 
-  /// Caché de geocodificación por dirección.
-  ///
-  /// La clave es la dirección normalizada.
-  ///
-  /// Esta caché NO identifica recuerdos.
-  /// Dos recuerdos distintos pueden compartir una coordenada.
-  final Map<String, LatLng> _geocodedCache = {};
-
-  /// Coordenada final asociada a cada recuerdo.
-  ///
-  /// La clave SIEMPRE es memory.id.
-  final Map<String, LatLng> _memoryCoordinates = {};
-
-  /// IDs actualmente en proceso de resolución.
-  final Set<String> _resolvingMemoryIds = {};
-
-  /// Firma de los datos procesados.
-  String _lastProcessedSignature = '';
+  /// Resuelve y cachea las coordenadas geográficas de los recuerdos
+  /// (geocodificación, geocodificación inversa y firma de datos
+  /// procesados).
+  final MemoryGeocodingService _geocodingService = MemoryGeocodingService();
 
   /// Controlador de animación de cámara.
   AnimationController? _cameraAnimationController;
@@ -85,17 +73,11 @@ class _MapPageState extends ConsumerState<MapPage>
   /// Controlador de animación del spiderfy.
   AnimationController? _spiderfyAnimationController;
 
-  /// Indica si existe una resolución global en curso.
-  bool _isResolvingCoordinates = false;
-
   /// Evita múltiples ajustes de cámara simultáneos.
   bool _isFittingCamera = false;
 
   /// Control de ciclo de vida.
   bool _isDisposed = false;
-
-  /// Generación de resolución.
-  int _coordinateResolutionGeneration = 0;
 
   /// IDs de grupos actualmente abiertos mediante spiderfy.
   ///
@@ -153,13 +135,6 @@ class _MapPageState extends ConsumerState<MapPage>
         .replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
-  String _normalizeAddress(String address) {
-    return address
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'\s+'), ' ');
-  }
-
   bool _isValidCoordinate(
     double? lat,
     double? lng,
@@ -181,28 +156,6 @@ class _MapPageState extends ConsumerState<MapPage>
     }
 
     return true;
-  }
-
-  double? _parseCoordinate(dynamic value) {
-    if (value is num) {
-      final result = value.toDouble();
-
-      return result.isFinite
-          ? result
-          : null;
-    }
-
-    if (value is String) {
-      final result = double.tryParse(
-        value.trim(),
-      );
-
-      if (result != null && result.isFinite) {
-        return result;
-      }
-    }
-
-    return null;
   }
 
   bool _matchesCategory(
@@ -251,547 +204,6 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   // ============================================================
-  // FIRMA DE DATOS
-  // ============================================================
-
-  String _buildMemorySignature(
-    List<MemoryModel> memories,
-  ) {
-    final sortedMemories =
-        List<MemoryModel>.from(
-      memories,
-    )..sort(
-        (a, b) => a.id.compareTo(b.id),
-      );
-
-    return sortedMemories
-        .map(
-          (memory) =>
-              '${memory.id}:'
-              '${memory.location.lat}:'
-              '${memory.location.lng}:'
-              '${memory.location.address}:'
-              '${memory.category}:'
-              '${memory.title}:'
-              '${memory.rating}:'
-              '${memory.wouldReturn}',
-        )
-        .join('|');
-  }
-
-  // ============================================================
-  // INDEXACIÓN LOCATIONS LEGACY
-  // ============================================================
-
-  Map<String, Map<String, dynamic>> _indexLocations(
-    List<Map<String, dynamic>> locations,
-  ) {
-    final Map<String, Map<String, dynamic>> result = {};
-
-    for (final location in locations) {
-      final id = location['id']
-          ?.toString()
-          .trim();
-
-      if (id != null && id.isNotEmpty) {
-        result['id:$id'] = location;
-      }
-
-      final memoryId =
-          location['memoryId']
-                  ?.toString()
-                  .trim() ??
-              location['memory_id']
-                  ?.toString()
-                  .trim() ??
-              location['memoryID']
-                  ?.toString()
-                  .trim();
-
-      if (memoryId != null &&
-          memoryId.isNotEmpty) {
-        result['memory:$memoryId'] =
-            location;
-      }
-    }
-
-    return result;
-  }
-
-  Map<String, dynamic>? _findLocationForMemory(
-    MemoryModel memory,
-    Map<String, Map<String, dynamic>> locationsByKey,
-  ) {
-    final byId =
-        locationsByKey['id:${memory.id}'];
-
-    if (byId != null) {
-      return byId;
-    }
-
-    final byMemoryId =
-        locationsByKey['memory:${memory.id}'];
-
-    if (byMemoryId != null) {
-      return byMemoryId;
-    }
-
-    return null;
-  }
-
-  // ============================================================
-  // RESOLUCIÓN DE COORDENADAS
-  // ============================================================
-
-  Future<void> _resolveAllCoordinates(
-    List<MemoryModel> memories,
-    List<Map<String, dynamic>> locations,
-  ) async {
-    if (_isDisposed || !mounted) {
-      return;
-    }
-
-    if (_isResolvingCoordinates) {
-      debugPrint(
-        '🗺️ Ya hay una resolución de coordenadas en curso.',
-      );
-
-      return;
-    }
-
-    _isResolvingCoordinates = true;
-
-    final int generation =
-        ++_coordinateResolutionGeneration;
-
-    debugPrint(
-      '============================================================',
-    );
-
-    debugPrint(
-      '🗺️ INICIANDO RESOLUCIÓN DE COORDENADAS',
-    );
-
-    debugPrint(
-      '🗺️ Generación: $generation',
-    );
-
-    debugPrint(
-      '🗺️ Memories recibidas: ${memories.length}',
-    );
-
-    debugPrint(
-      '📍 Locations legacy recibidas: ${locations.length}',
-    );
-
-    debugPrint(
-      '============================================================',
-    );
-
-    try {
-      final locationsByKey =
-          _indexLocations(
-        locations,
-      );
-
-      // ----------------------------------------------------------
-      // LIMPIAR MEMORIAS ELIMINADAS
-      // ----------------------------------------------------------
-
-      final currentMemoryIds = memories
-          .map(
-            (memory) => memory.id.trim(),
-          )
-          .where(
-            (id) => id.isNotEmpty,
-          )
-          .toSet();
-
-      _memoryCoordinates.removeWhere(
-        (id, _) =>
-            !currentMemoryIds.contains(id),
-      );
-
-      _resolvingMemoryIds.removeWhere(
-        (id) =>
-            !currentMemoryIds.contains(id),
-      );
-
-      // ----------------------------------------------------------
-      // PROCESAR MEMORIAS
-      // ----------------------------------------------------------
-
-      for (final memory in memories) {
-        if (_isDisposed || !mounted) {
-          return;
-        }
-
-        if (generation !=
-            _coordinateResolutionGeneration) {
-          debugPrint(
-            '🗺️ Resolución antigua invalidada.',
-          );
-
-          return;
-        }
-
-        final memoryId =
-            memory.id.trim();
-
-        if (memoryId.isEmpty) {
-          debugPrint(
-            '⚠️ Recuerdo ignorado porque no tiene ID.',
-          );
-
-          continue;
-        }
-
-        if (_memoryCoordinates.containsKey(
-          memoryId,
-        )) {
-          continue;
-        }
-
-        if (_resolvingMemoryIds.contains(
-          memoryId,
-        )) {
-          continue;
-        }
-
-        _resolvingMemoryIds.add(
-          memoryId,
-        );
-
-        try {
-          LatLng? coordinates;
-
-          debugPrint(
-            '------------------------------------------------------------',
-          );
-
-          debugPrint(
-            '📌 PROCESANDO MEMORY',
-          );
-
-          debugPrint(
-            '📌 ID: $memoryId',
-          );
-
-          debugPrint(
-            '📌 Título: ${memory.title}',
-          );
-
-          debugPrint(
-            '📌 Dirección: "${memory.location.address}"',
-          );
-
-          debugPrint(
-            '📌 Lat: ${memory.location.lat}',
-          );
-
-          debugPrint(
-            '📌 Lng: ${memory.location.lng}',
-          );
-
-          // ------------------------------------------------------
-          // 1. COORDENADAS DIRECTAS
-          // ------------------------------------------------------
-
-          if (_isValidCoordinate(
-            memory.location.lat,
-            memory.location.lng,
-          )) {
-            coordinates = LatLng(
-              memory.location.lat!,
-              memory.location.lng!,
-            );
-
-            _memoryCoordinates[
-              memoryId
-            ] = coordinates;
-
-            debugPrint(
-              '✅ [$memoryId] '
-              'Coordenadas desde memory.location.',
-            );
-
-            continue;
-          }
-
-          // ------------------------------------------------------
-          // 2. FALLBACK LEGACY
-          // ------------------------------------------------------
-
-          final locationData =
-              _findLocationForMemory(
-            memory,
-            locationsByKey,
-          );
-
-          if (locationData != null) {
-            debugPrint(
-              '📍 [$memoryId] '
-              'Encontrada location legacy asociada.',
-            );
-
-            final lat = _parseCoordinate(
-              locationData['lat'],
-            );
-
-            final lng = _parseCoordinate(
-              locationData['lng'],
-            );
-
-            if (_isValidCoordinate(
-              lat,
-              lng,
-            )) {
-              coordinates = LatLng(
-                lat!,
-                lng!,
-              );
-
-              _memoryCoordinates[
-                memoryId
-              ] = coordinates;
-
-              debugPrint(
-                '✅ [$memoryId] '
-                'Coordenadas desde locations legacy.',
-              );
-
-              continue;
-            }
-          }
-
-          // ------------------------------------------------------
-          // 3. CACHÉ POR DIRECCIÓN
-          // ------------------------------------------------------
-
-          final address =
-              memory.location.address.trim();
-
-          if (address.isNotEmpty) {
-            final cacheKey =
-                _normalizeAddress(
-              address,
-            );
-
-            final cachedCoordinates =
-                _geocodedCache[
-                  cacheKey
-                ];
-
-            if (cachedCoordinates != null) {
-              _memoryCoordinates[
-                memoryId
-              ] = cachedCoordinates;
-
-              debugPrint(
-                '✅ [$memoryId] '
-                'Coordenadas recuperadas desde caché.',
-              );
-
-              continue;
-            }
-          }
-
-          // ------------------------------------------------------
-          // 4. GEOCODIFICACIÓN
-          // ------------------------------------------------------
-
-          if (address.isEmpty) {
-            debugPrint(
-              '⚠️ [$memoryId] '
-              'No tiene dirección para geocodificar.',
-            );
-
-            continue;
-          }
-
-          String query = address;
-
-          final normalizedAddress =
-              _normalize(address);
-
-          if (normalizedAddress ==
-              'medellin') {
-            query =
-                'Medellín, Badajoz, España';
-          }
-
-          final normalizedQuery =
-              _normalize(query);
-
-          if (!normalizedQuery.contains(
-                'espana',
-              ) &&
-              !normalizedQuery.contains(
-                'spain',
-              )) {
-            query =
-                '$query, España';
-          }
-
-          debugPrint(
-            '🔎 [$memoryId] '
-            'Geocodificando: "$query"',
-          );
-
-          try {
-            final results =
-                await locationFromAddress(
-              query,
-            );
-
-            if (_isDisposed || !mounted) {
-              return;
-            }
-
-            if (generation !=
-                _coordinateResolutionGeneration) {
-              return;
-            }
-
-            if (results.isEmpty) {
-              debugPrint(
-                '⚠️ [$memoryId] '
-                'No se encontraron resultados.',
-              );
-
-              continue;
-            }
-
-            LatLng? resolvedCoordinates;
-
-            for (final result in results) {
-              if (_isValidCoordinate(
-                result.latitude,
-                result.longitude,
-              )) {
-                resolvedCoordinates =
-                    LatLng(
-                  result.latitude,
-                  result.longitude,
-                );
-
-                break;
-              }
-            }
-
-            if (resolvedCoordinates == null) {
-              debugPrint(
-                '⚠️ [$memoryId] '
-                'Todos los resultados fueron inválidos.',
-              );
-
-              continue;
-            }
-
-            coordinates =
-                resolvedCoordinates;
-
-            final cacheKey =
-                _normalizeAddress(
-              address,
-            );
-
-            _geocodedCache[
-              cacheKey
-            ] = coordinates;
-
-            _memoryCoordinates[
-              memoryId
-            ] = coordinates;
-
-            debugPrint(
-              '✅ [$memoryId] '
-              'Geocodificación correcta.',
-            );
-
-            debugPrint(
-              '📍 ${coordinates.latitude}, '
-              '${coordinates.longitude}',
-            );
-          } catch (e, stack) {
-            debugPrint(
-              '❌ [$memoryId] '
-              'Error geocodificando "$query": $e',
-            );
-
-            debugPrintStack(
-              stackTrace: stack,
-            );
-          }
-        } finally {
-          _resolvingMemoryIds.remove(
-            memoryId,
-          );
-        }
-      }
-
-      if (_isDisposed || !mounted) {
-        return;
-      }
-
-      if (generation !=
-          _coordinateResolutionGeneration) {
-        return;
-      }
-
-      debugPrint(
-        '============================================================',
-      );
-
-      debugPrint(
-        '🗺️ COORDENADAS RESUELTAS',
-      );
-
-      debugPrint(
-        '🗺️ ${_memoryCoordinates.length}/${memories.length}',
-      );
-
-      debugPrint(
-        '🗺️ Caché geocodificación: '
-        '${_geocodedCache.length}',
-      );
-
-      debugPrint(
-        '============================================================',
-      );
-
-      if (mounted && !_isDisposed) {
-        setState(() {});
-      }
-
-      WidgetsBinding.instance
-          .addPostFrameCallback(
-        (_) {
-          if (_isDisposed || !mounted) {
-            return;
-          }
-
-          if (generation !=
-              _coordinateResolutionGeneration) {
-            return;
-          }
-
-          if (_isUserInteractingWithMap) {
-            return;
-          }
-
-          _fitMapToFilteredMemories(
-            memories,
-            animated: true,
-          );
-        },
-      );
-    } finally {
-      _isResolvingCoordinates = false;
-    }
-  }
-
-  // ============================================================
   // SPIDERFY
   // ============================================================
 
@@ -800,189 +212,6 @@ class _MapPageState extends ConsumerState<MapPage>
   ) {
     return '${point.latitude.toStringAsFixed(6)}_'
         '${point.longitude.toStringAsFixed(6)}';
-  }
-
-  // Un marcador de grupo abre una hoja con la lista de recuerdos en ese
-  // punto en vez de "spiderfy" (expandir espacialmente los marcadores):
-  // en un mapa con marcadores cercanos entre sí, el toque para elegir uno
-  // de los marcadores expandidos coincidía con el gesto de pointer-down
-  // del propio mapa, que los volvía a colapsar antes de registrar el tap.
-  // Una lista es además más accesible y profesional que depender de la
-  // precisión táctil sobre marcadores diminutos.
-  void _showMemoryGroupPicker(
-    List<MemoryModel> memories,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          decoration: const BoxDecoration(
-            color: Color(0xFFFFFDF5),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(
-              top: BorderSide(color: Color(0xFF0F172A), width: 3),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Text(
-                '${memories.length} recuerdos en este lugar',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Elige cuál quieres ver',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.5,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: memories.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final memory = memories[index];
-                    return _buildGroupPickerRow(
-                      memory,
-                      _getCategoryColor(memory.category),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildGroupPickerRow(
-    MemoryModel memory,
-    Color categoryColor,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.pop(context);
-          _onMarkerTapped(memory);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0xFF0F172A),
-                offset: Offset(3, 3),
-                blurRadius: 0,
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: categoryColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF0F172A),
-                    width: 1.5,
-                  ),
-                ),
-                child: Icon(
-                  Icons.restaurant_rounded,
-                  color: categoryColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      memory.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      memory.category,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    size: 16,
-                    color: Colors.amber,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    memory.rating.toStringAsFixed(1),
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF0F172A),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _closeAllSpiderfyGroups() {
@@ -1034,728 +263,19 @@ class _MapPageState extends ConsumerState<MapPage>
   }
 
   // ============================================================
-  // MARKER NORMAL
-  // ============================================================
-
-  Marker _buildMarker(
-    MemoryModel memory,
-    LatLng point,
-  ) {
-    final categoryColor =
-        _getCategoryColor(
-      memory.category,
-    );
-
-    final wouldReturn =
-        memory.wouldReturn;
-
-    return Marker(
-      width: 68,
-      height: 36,
-      point: point,
-      child: GestureDetector(
-        onTap: () {
-          _onMarkerTapped(
-            memory,
-          );
-        },
-        child: Container(
-          alignment:
-              Alignment.center,
-          decoration:
-              BoxDecoration(
-            color:
-                categoryColor,
-            borderRadius:
-                BorderRadius.circular(
-              18,
-            ),
-            border:
-                Border.all(
-              color:
-                  Colors.white,
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black
-                    .withValues(
-                  alpha: 0.25,
-                ),
-                blurRadius: 8,
-                offset:
-                    const Offset(
-                  0,
-                  4,
-                ),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              Text(
-                '${memory.rating.toStringAsFixed(1)}★',
-                style:
-                    GoogleFonts.outfit(
-                  fontSize: 12,
-                  fontWeight:
-                      FontWeight.bold,
-                  color:
-                      Colors.white,
-                ),
-              ),
-              const SizedBox(
-                width: 3,
-              ),
-              Icon(
-                wouldReturn
-                    ? Icons.check_rounded
-                    : Icons.close_rounded,
-                size: 14,
-                color:
-                    Colors.white,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // MARKER GRUPO
-  // ============================================================
-
-  Marker _buildSpiderfyGroupMarker({
-    required LatLng point,
-    required int count,
-    required Color categoryColor,
-    required bool isExpanded,
-    required VoidCallback onTap,
-  }) {
-    return Marker(
-      width: 64,
-      height: 64,
-      point: point,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedScale(
-          scale:
-              isExpanded ? 1.12 : 1.0,
-          duration:
-              _spiderfyAnimationDuration,
-          curve:
-              Curves.easeOutBack,
-          child: Container(
-            alignment:
-                Alignment.center,
-            decoration:
-                BoxDecoration(
-              color:
-                  categoryColor,
-              shape:
-                  BoxShape.circle,
-              border:
-                  Border.all(
-                color:
-                    Colors.white,
-                width: 3,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black
-                      .withValues(
-                    alpha: 0.28,
-                  ),
-                  blurRadius: 10,
-                  offset:
-                      const Offset(
-                    0,
-                    4,
-                  ),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isExpanded
-                      ? Icons.close_rounded
-                      : Icons.place_rounded,
-                  size: 20,
-                  color:
-                      Colors.white,
-                ),
-                Text(
-                  '$count',
-                  style:
-                      GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // MARKER SPIDERFY
-  // ============================================================
-
-  Marker _buildSpiderfyMemoryMarker({
-    required MemoryModel memory,
-    required LatLng point,
-    required LatLng center,
-    required int index,
-    required int count,
-  }) {
-    final categoryColor =
-        _getCategoryColor(
-      memory.category,
-    );
-
-    final distance =
-        sqrt(
-          pow(
-                point.latitude -
-                    center.latitude,
-                2,
-              ) +
-              pow(
-                point.longitude -
-                    center.longitude,
-                2,
-              ),
-        );
-
-    final normalizedDistance =
-        distance /
-            _getSpiderfyRadius(
-              count,
-            );
-
-    final scale =
-        normalizedDistance.clamp(
-      0.0,
-      1.0,
-    );
-
-    return Marker(
-      width: 68,
-      height: 42,
-      point: point,
-      child: TweenAnimationBuilder<double>(
-        tween:
-            Tween<double>(
-          begin: 0.0,
-          end: scale,
-        ),
-        duration:
-            Duration(
-          milliseconds:
-              180 +
-              (index * 35),
-        ),
-        curve:
-            Curves.easeOutBack,
-        builder: (
-          context,
-          animationValue,
-          child,
-        ) {
-          return Opacity(
-            opacity:
-                animationValue,
-            child: Transform.scale(
-              scale:
-                  animationValue,
-              child:
-                  child,
-            ),
-          );
-        },
-        child: GestureDetector(
-          onTap: () {
-            _onMarkerTapped(
-              memory,
-            );
-          },
-          child: Container(
-            alignment:
-                Alignment.center,
-            decoration:
-                BoxDecoration(
-              color:
-                  categoryColor,
-              borderRadius:
-                  BorderRadius.circular(
-                20,
-              ),
-              border:
-                  Border.all(
-                color:
-                    Colors.white,
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black
-                      .withValues(
-                    alpha: 0.28,
-                  ),
-                  blurRadius: 9,
-                  offset:
-                      const Offset(
-                    0,
-                    4,
-                  ),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.center,
-              mainAxisSize:
-                  MainAxisSize.min,
-              children: [
-                Text(
-                  '${memory.rating.toStringAsFixed(1)}★',
-                  style:
-                      GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        Colors.white,
-                  ),
-                ),
-                const SizedBox(
-                  width: 3,
-                ),
-                Icon(
-                  memory.wouldReturn
-                      ? Icons.check_rounded
-                      : Icons.close_rounded,
-                  size: 13,
-                  color:
-                      Colors.white,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
   // MARKER TAP
   // ============================================================
 
   void _onMarkerTapped(
     MemoryModel memory,
   ) {
-    _showMemoryBottomSheet(
-      memory,
-    );
-  }
-
-  // ============================================================
-  // BOTTOM SHEET
-  // ============================================================
-
-  void _showMemoryBottomSheet(
-    MemoryModel memory,
-  ) {
-    final categoryColor =
-        _getCategoryColor(
-      memory.category,
-    );
-
-    final coordinates =
-        _memoryCoordinates[
-          memory.id
-        ];
-
-    final double? lat =
-        coordinates?.latitude;
-
-    final double? lng =
-        coordinates?.longitude;
-
-    showModalBottomSheet(
+    MemoryBottomSheet.show(
       context: context,
-      backgroundColor:
-          Colors.transparent,
-      isScrollControlled:
-          true,
-      builder: (context) {
-        return Container(
-          padding:
-              const EdgeInsets.fromLTRB(
-            24,
-            12,
-            24,
-            36,
-          ),
-          decoration:
-              const BoxDecoration(
-            color: Color(0xFFFFFDF5),
-            borderRadius:
-                BorderRadius.vertical(
-              top:
-                  Radius.circular(
-                32,
-              ),
-            ),
-            border: Border(
-              top: BorderSide(
-                color: Color(0xFF0F172A),
-                width: 3,
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    Colors.black26,
-                blurRadius: 25,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin:
-                      const EdgeInsets.only(
-                    bottom: 20,
-                  ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        Colors.grey.shade300,
-                    borderRadius:
-                        BorderRadius.circular(
-                      2,
-                    ),
-                  ),
-                ),
-              ),
-
-              // --------------------------------------------------
-              // TÍTULO + RATING
-              // --------------------------------------------------
-
-              Row(
-                mainAxisAlignment:
-                    MainAxisAlignment
-                        .spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      memory.title,
-                      style:
-                          GoogleFonts.outfit(
-                        fontSize: 22,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            const Color(
-                          0xFF0F172A,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          categoryColor
-                              .withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(
-                        14,
-                      ),
-                    ),
-                    child: Text(
-                      '${memory.rating.toStringAsFixed(1)} ★',
-                      style:
-                          GoogleFonts.outfit(
-                        fontWeight:
-                            FontWeight.bold,
-                        fontSize: 15,
-                        color:
-                            categoryColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 8,
-              ),
-
-              // --------------------------------------------------
-              // UBICACIÓN
-              // --------------------------------------------------
-
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on_rounded,
-                    size: 16,
-                    color:
-                        Colors.grey.shade500,
-                  ),
-                  const SizedBox(
-                    width: 6,
-                  ),
-                  Expanded(
-                    child:
-                        lat != null &&
-                                lng != null
-                            ? FutureBuilder<
-                                String>(
-                                future:
-                                    _resolveLocationName(
-                                  lat,
-                                  lng,
-                                  memory.location
-                                      .address,
-                                ),
-                                builder:
-                                    (
-                                  context,
-                                  snapshot,
-                                ) {
-                                  final text =
-                                      snapshot.data ??
-                                          memory
-                                              .location
-                                              .address;
-
-                                  return Text(
-                                    text.isNotEmpty
-                                        ? text
-                                        : 'Ubicación no disponible',
-                                    style:
-                                        GoogleFonts
-                                            .inter(
-                                      fontSize:
-                                          14,
-                                      color: Colors
-                                          .grey
-                                          .shade600,
-                                    ),
-                                    maxLines:
-                                        1,
-                                    overflow:
-                                        TextOverflow
-                                            .ellipsis,
-                                  );
-                                },
-                              )
-                            : Text(
-                                memory.location
-                                        .address
-                                        .isNotEmpty
-                                    ? memory
-                                        .location
-                                        .address
-                                    : 'Ubicación no disponible',
-                                style:
-                                    GoogleFonts.inter(
-                                  fontSize:
-                                      14,
-                                  color: Colors
-                                      .grey
-                                      .shade600,
-                                ),
-                                maxLines:
-                                    1,
-                                overflow:
-                                    TextOverflow
-                                        .ellipsis,
-                              ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 16,
-              ),
-
-              // --------------------------------------------------
-              // CHIPS
-              // --------------------------------------------------
-
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(
-                    label: Text(
-                      memory.category,
-                    ),
-                    backgroundColor:
-                        categoryColor
-                            .withValues(
-                      alpha: 0.15,
-                    ),
-                    labelStyle:
-                        GoogleFonts.inter(
-                      fontWeight:
-                          FontWeight.w600,
-                      fontSize: 13,
-                      color:
-                          categoryColor,
-                    ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        10,
-                      ),
-                    ),
-                    side: BorderSide(
-                      color:
-                          categoryColor,
-                      width: 1.5,
-                    ),
-                  ),
-                  Chip(
-                    label: Text(
-                      memory.wouldReturn
-                          ? '¡Volvería!'
-                          : 'No volvería',
-                    ),
-                    backgroundColor:
-                        (memory.wouldReturn
-                                ? Colors.green
-                                : Colors.red)
-                            .withValues(
-                      alpha: 0.12,
-                    ),
-                    labelStyle:
-                        GoogleFonts.inter(
-                      fontWeight:
-                          FontWeight.w600,
-                      fontSize: 13,
-                      color: memory.wouldReturn
-                          ? Colors.green.shade800
-                          : Colors.red.shade800,
-                    ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        10,
-                      ),
-                    ),
-                    side: BorderSide(
-                      color: memory.wouldReturn
-                          ? Colors.green.shade700
-                          : Colors.red.shade700,
-                      width: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 24,
-              ),
-
-              // --------------------------------------------------
-              // BOTÓN DETALLE
-              // --------------------------------------------------
-
-              SizedBox(
-                width:
-                    double.infinity,
-                height: 52,
-                child:
-                    ElevatedButton(
-                  style:
-                      ElevatedButton
-                          .styleFrom(
-                    backgroundColor:
-                        const Color(
-                      0xFFFFD400,
-                    ),
-                    foregroundColor:
-                        const Color(
-                      0xFF0F172A,
-                    ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        18,
-                      ),
-                      side: const BorderSide(
-                        color: Color(0xFF0F172A),
-                        width: 2,
-                      ),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: () {
-                    HapticFeedback.selectionClick();
-
-                    Navigator.pop(
-                      context,
-                    );
-
-                    context.push(
-                      '/memory-detail',
-                      extra: memory,
-                    );
-                  },
-                  child: Text(
-                    'Ver Experiencia Completa',
-                    style:
-                        GoogleFonts.outfit(
-                      fontWeight:
-                          FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      memory: memory,
+      getCategoryColor: _getCategoryColor,
+      getCoordinates: (memoryId) =>
+          _geocodingService.memoryCoordinates[memoryId],
+      resolveLocationName: _geocodingService.resolveLocationName,
     );
   }
 
@@ -1771,9 +291,6 @@ static const double _mapMaxZoom = 18.0;
 
 /// Zoom utilizado cuando solo existe un recuerdo.
 static const double _singleMemoryZoom = 13.5;
-
-/// Zoom utilizado para centrar la ubicación actual.
-static const double _currentLocationZoom = 14.5;
 
 /// Padding visual utilizado para el cálculo del encuadre.
 /// No depende de CameraFit.
@@ -1819,7 +336,7 @@ void _fitMapToFilteredMemories(
 
   for (final memory in filteredMemories) {
     final point =
-        _memoryCoordinates[memory.id];
+        _geocodingService.memoryCoordinates[memory.id];
 
     if (point != null &&
         _isValidCoordinate(
@@ -2422,69 +939,6 @@ void _animatedMove(
   }
 
   // ============================================================
-  // NOMBRE DE UBICACIÓN
-  // ============================================================
-
-  Future<String> _resolveLocationName(
-    double lat,
-    double lng,
-    String currentAddress,
-  ) async {
-    final normalizedAddress =
-        currentAddress.trim();
-
-    if (normalizedAddress.isNotEmpty &&
-        !normalizedAddress.startsWith(
-          'GPS:',
-        ) &&
-        !normalizedAddress.startsWith(
-          'Lat:',
-        ) &&
-        normalizedAddress.length > 3) {
-      return normalizedAddress;
-    }
-
-    try {
-      final placemarks =
-          await placemarkFromCoordinates(
-        lat,
-        lng,
-      );
-
-      if (placemarks.isNotEmpty) {
-        final place =
-            placemarks.first;
-
-        final locality =
-            place.locality ??
-                place.subAdministrativeArea ??
-                place.administrativeArea ??
-                '';
-
-        final subLocality =
-            place.subLocality ?? '';
-
-        if (locality.isNotEmpty) {
-          return subLocality.isNotEmpty &&
-                  subLocality != locality
-              ? '$subLocality, $locality'
-              : locality;
-        }
-      }
-    } catch (e) {
-      debugPrint(
-        '⚠️ Error obteniendo nombre de ubicación: $e',
-      );
-    }
-
-    return normalizedAddress.isNotEmpty
-        ? normalizedAddress
-        : 'Ubicación GPS '
-            '(${lat.toStringAsFixed(2)}, '
-            '${lng.toStringAsFixed(2)})';
-  }
-
-  // ============================================================
   // COLOR CATEGORÍA
   // ============================================================
 
@@ -2631,23 +1085,12 @@ void _animatedMove(
           );
 
           // ======================================================
-          // FIRMA
-          // ======================================================
-
-          final signature =
-              _buildMemorySignature(
-            allMemories,
-          );
-
-          // ======================================================
           // RESOLVER COORDENADAS
           // ======================================================
 
-          if (_lastProcessedSignature !=
-              signature) {
-            _lastProcessedSignature =
-                signature;
-
+          if (_geocodingService.shouldResolve(
+            allMemories,
+          )) {
             // Los grupos anteriores pueden haber dejado
             // referencias a recuerdos que ya no existen.
             _closeAllSpiderfyGroups();
@@ -2660,9 +1103,22 @@ void _animatedMove(
                   return;
                 }
 
-                _resolveAllCoordinates(
+                _geocodingService.resolveAllCoordinates(
                   allMemories,
                   locations,
+                  isActive: () =>
+                      !_isDisposed && mounted,
+                  onCoordinatesUpdated: () {
+                    if (mounted && !_isDisposed) {
+                      setState(() {});
+                    }
+                  },
+                  onCameraFitNeeded: (memories) {
+                    _fitMapToFilteredMemories(
+                      memories,
+                      animated: true,
+                    );
+                  },
                 );
               },
             );
@@ -2696,7 +1152,7 @@ void _animatedMove(
           for (final memory
               in filteredMemories) {
             final point =
-                _memoryCoordinates[
+                _geocodingService.memoryCoordinates[
                   memory.id
                 ];
 
@@ -2748,7 +1204,7 @@ void _animatedMove(
                     memories.first;
 
                 final originalPoint =
-                    _memoryCoordinates[
+                    _geocodingService.memoryCoordinates[
                       memory.id
                     ];
 
@@ -2757,9 +1213,11 @@ void _animatedMove(
                 }
 
                 markers.add(
-                  _buildMarker(
-                    memory,
-                    originalPoint,
+                  MapMarkerBuilder.buildMarker(
+                    memory: memory,
+                    point: originalPoint,
+                    getCategoryColor: _getCategoryColor,
+                    onMarkerTapped: _onMarkerTapped,
                   ),
                 );
 
@@ -2789,7 +1247,7 @@ void _animatedMove(
               // --------------------------------------------------
 
               markers.add(
-                _buildSpiderfyGroupMarker(
+                MapMarkerBuilder.buildSpiderfyGroupMarker(
                   point:
                       center,
                   count:
@@ -2798,9 +1256,14 @@ void _animatedMove(
                       categoryColor,
                   isExpanded:
                       isExpanded,
+                  spiderfyAnimationDuration:
+                      _spiderfyAnimationDuration,
                   onTap: () {
-                    _showMemoryGroupPicker(
-                      memories,
+                    MemoryGroupPicker.show(
+                      context: context,
+                      memories: memories,
+                      getCategoryColor: _getCategoryColor,
+                      onMemorySelected: _onMarkerTapped,
                     );
                   },
                 ),
@@ -2830,7 +1293,7 @@ void _animatedMove(
                   );
 
                   markers.add(
-                    _buildSpiderfyMemoryMarker(
+                    MapMarkerBuilder.buildSpiderfyMemoryMarker(
                       memory:
                           memory,
                       point:
@@ -2841,6 +1304,9 @@ void _animatedMove(
                           i,
                       count:
                           memories.length,
+                      getCategoryColor: _getCategoryColor,
+                      onMarkerTapped: _onMarkerTapped,
+                      getSpiderfyRadius: _getSpiderfyRadius,
                     ),
                   );
                 }
@@ -2985,6 +1451,7 @@ void _animatedMove(
                       Row(
                     children: [
                       IconButton(
+                        tooltip: 'Volver al inicio',
                         onPressed:
                             () {
                           _closeAllSpiderfyGroups();
@@ -3310,7 +1777,7 @@ void _animatedMove(
 
     _isDisposed = true;
 
-    _coordinateResolutionGeneration++;
+    _geocodingService.dispose();
 
     _cameraAnimationController
         ?.stop();
@@ -3330,13 +1797,7 @@ void _animatedMove(
     _spiderfyAnimationController =
         null;
 
-    _resolvingMemoryIds.clear();
-
     _expandedSpiderfyGroups.clear();
-
-    _memoryCoordinates.clear();
-
-    _geocodedCache.clear();
 
     super.dispose();
   }

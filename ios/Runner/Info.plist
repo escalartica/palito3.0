@@ -70,15 +70,14 @@
     <!-- Permisos añadidos para evitar el bloqueo de la App -->
     <key>NSCameraUsageDescription</key>
     <string>Necesitamos acceso a la cámara para que puedas registrar tus recuerdos gastronómicos.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Necesitamos acceso al micrófono para grabar videos de tus platos favoritos.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Necesitamos acceso a la galería para que puedas seleccionar fotos de tus platos.</string>
-    
-    <!-- Permisos de Ubicación añadidos -->
+
+    <!-- Permiso de Ubicación: solo "when in use" — la app nunca lee la
+         ubicación en segundo plano, así que no se declara
+         NSLocationAlwaysUsageDescription (Apple penaliza en la revisión
+         de App Store los permisos declarados que no se usan). -->
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
-    <key>NSLocationAlwaysUsageDescription</key>
     <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
 </dict>
 </plist>

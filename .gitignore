@@ -51,3 +51,8 @@ skills-lock.json
 
 # Caché local de la CLI de Firebase
 .firebase/
+
+# Firma de release de Android — nunca debe subirse al repositorio
+android/key.properties
+*.jks
+*.keystore

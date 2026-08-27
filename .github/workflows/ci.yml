@@ -1,0 +1,31 @@
+name: CI
+
+# Blinda lo que ya funciona hoy en local (flutter analyze sin issues,
+# suite de tests en verde) para que un cambio futuro no rompa ninguna de
+# las dos cosas sin que nadie se entere hasta usar la app en producción.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Analizar código estático
+        run: flutter analyze
+
+      - name: Ejecutar tests
+        run: flutter test

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 
 class PlatoEstrellaFields implements DynamicFieldGenerator {
   @override
@@ -274,7 +275,9 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -297,111 +300,50 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return SizedBox(
+                  return NeoChip(
+                    label: option,
+                    icon: icon,
+                    isSelected: isSelected,
                     width: chipWidth,
-                    child: InkWell(
-                      onTap: () {
-                        if (isMulti) {
-                          final List selectedItems = data[key] is List
-                              ? List.from(data[key])
-                              : [];
+                    onTap: () {
+                      if (isMulti) {
+                        final List selectedItems = data[key] is List
+                            ? List.from(data[key])
+                            : [];
 
-                          final List newList = List.from(selectedItems);
+                        final List newList = List.from(selectedItems);
 
-                          if (isSelected) {
-                            newList.remove(option);
+                        if (isSelected) {
+                          newList.remove(option);
 
-                            // Si se desmarca "Otro", limpiamos el campo personalizado.
-                            if (option == 'Otro') {
-                              onUpdate('otra_tecnica', null);
-                            }
-                          } else {
-                            newList.add(option);
+                          // Si se desmarca "Otro", limpiamos el campo personalizado.
+                          if (option == 'Otro') {
+                            onUpdate('otra_tecnica', null);
                           }
-
-                          onUpdate(key, newList);
                         } else {
-                          // Si se pulsa el chip ya seleccionado,
-                          // se deselecciona.
-                          if (isSelected) {
-                            onUpdate(key, null);
-
-                            // Limpiamos los datos personalizados asociados.
-                            if (key == 'tipo_plato') {
-                              onUpdate('otro_tipo_plato', null);
-                            }
-
-                            if (key == 'equilibrio') {
-                              onUpdate('otro_equilibrio', null);
-                            }
-                          } else {
-                            onUpdate(key, option);
-                          }
+                          newList.add(option);
                         }
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFFFFD400)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF0F172A)
-                                : const Color(
-                                    0xFF0F172A,
-                                  ).withValues(alpha: 0.25),
-                            width: 2.0,
-                          ),
-                          boxShadow: isSelected
-                              ? const [
-                                  BoxShadow(
-                                    color: Color(0xFF0F172A),
-                                    blurRadius: 0,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 150),
-                              child: Icon(
-                                icon,
-                                key: ValueKey('${option}_$isSelected'),
-                                size: 14,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                option,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: const Color(0xFF0F172A),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
+                        onUpdate(key, newList);
+                      } else {
+                        // Si se pulsa el chip ya seleccionado,
+                        // se deselecciona.
+                        if (isSelected) {
+                          onUpdate(key, null);
+
+                          // Limpiamos los datos personalizados asociados.
+                          if (key == 'tipo_plato') {
+                            onUpdate('otro_tipo_plato', null);
+                          }
+
+                          if (key == 'equilibrio') {
+                            onUpdate('otro_equilibrio', null);
+                          }
+                        } else {
+                          onUpdate(key, option);
+                        }
+                      }
+                    },
                   );
                 }).toList(),
               );

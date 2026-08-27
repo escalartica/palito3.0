@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/models/memory_model.dart';
 import '../../core/providers/memory_provider.dart';
 import '../../core/providers/gamer_provider.dart';
 import '../../core/services/gamer_firestore_service.dart';
@@ -194,19 +193,40 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   }
 
   Future<void> _pickImageForProfile(int index) async {
-    final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+    // Foto de perfil pequeña y circular: no hace falta subirla a
+    // resolución de cámara completa.
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1024,
+    );
     if (image == null) return;
 
     final bytes = await image.readAsBytes();
 
-    final downloadUrl = await StorageImageService.uploadProfileImage(
-      profileIndex: index,
-      bytes: bytes,
-    );
+    try {
+      final downloadUrl = await StorageImageService.uploadProfileImage(
+        profileIndex: index,
+        bytes: bytes,
+      );
 
-    if (!mounted) return;
-    setState(() => _savedImagePaths[index] = downloadUrl);
-    HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      setState(() => _savedImagePaths[index] = downloadUrl);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      // Sin esto, un fallo de red al subir la foto quedaba como una
+      // excepción sin capturar: ni se avisaba al usuario ni se sabía
+      // por qué la foto "no se guardó".
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo subir la foto. Comprueba tu conexión '
+            'e inténtalo de nuevo.',
+          ),
+        ),
+      );
+    }
   }
 
   void _saveProfileChanges() {
@@ -295,7 +315,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       const SizedBox(height: 12),
                       gamerStatsAsync.when(
                         loading: () => const _GamerStatsRow(),
-                        error: (_, __) => const _GamerStatsRow(
+                        error: (_, _) => const _GamerStatsRow(
                           pointsValue: 0,
                           streakValue: 0,
                         ),

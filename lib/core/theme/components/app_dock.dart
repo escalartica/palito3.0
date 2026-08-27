@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/dock_provider.dart';
+import '../tokens/app_colors.dart';
 
-// Paleta de colores neo-brutalista
-const Color palitoDark = Color(0xFF0F172A);
-const Color palitoYellow = Color(0xFFFFD400);
+// Paleta de colores neo-brutalista (alias locales sobre AppColors, la
+// fuente única de verdad — ver core/theme/tokens/app_colors.dart).
+const Color palitoDark = AppColors.textPrimary;
+const Color palitoYellow = AppColors.primary;
 
 class AppDock extends ConsumerWidget {
   final List<IconData> items;

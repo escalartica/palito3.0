@@ -78,8 +78,13 @@ final memoriesStreamProvider =
 /// memory.location.lng
 ///
 
+// autoDispose: a diferencia de memoryModelsStreamProvider (que
+// memoryProvider mantiene vivo permanentemente para toda la app), este
+// stream solo lo consume la pantalla de Mapa. Sin autoDispose, visitar
+// el Mapa una sola vez dejaría un listener de Firestore abierto para
+// siempre, incluso navegando a otras pantallas.
 final locationsStreamProvider =
-    StreamProvider<List<Map<String, dynamic>>>((ref) {
+    StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
   final service =
       ref.watch(
     memoryMapServiceProvider,

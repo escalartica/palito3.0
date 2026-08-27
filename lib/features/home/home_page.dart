@@ -6,19 +6,22 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/categories.dart';
+import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/home_widgets.dart';
 import '../../../core/theme/components/memory_card.dart';
+import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/dock_provider.dart';
 
 // ===========================================================================
-// PALETA
+// PALETA (alias locales sobre AppColors, la fuente única de verdad — ver
+// core/theme/tokens/app_colors.dart)
 // ===========================================================================
 
-const Color colorBackground = Color(0xFFF4F4F8);
-const Color colorCardSurface = Colors.white;
-const Color colorTextMain = Color(0xFF0F172A);
-const Color colorAccentCoral = Color(0xFFFF4D29);
+const Color colorBackground = AppColors.background;
+const Color colorCardSurface = AppColors.surface;
+const Color colorTextMain = AppColors.textPrimary;
+const Color colorAccentCoral = AppColors.accent;
 
 // ===========================================================================
 // HOME PAGE
@@ -174,6 +177,22 @@ class _HomePageState extends ConsumerState<HomePage>
       memoryProvider,
     );
 
+    // Evita el "flash" del estado vacío ("No hay experiencias guardadas")
+    // durante el primer arranque, mientras la caché local / Firestore
+    // todavía no han respondido — antes se mostraba brevemente como si
+    // el usuario no tuviera ningún recuerdo, aunque sí los tuviera.
+    final bool hasLoaded =
+        memories.isNotEmpty ||
+        ref.read(memoryProvider.notifier).hasReceivedFirestoreData;
+
+    // Si Firestore está fallando (sin red, permisos, etc.) y todavía no
+    // hay ningún recuerdo que mostrar (ni en caché local ni ya
+    // recibido), esto evita que la pantalla se quede en "Cargando..."
+    // para siempre sin que el usuario sepa que algo va mal.
+    final bool hasStreamError =
+        memories.isEmpty &&
+        ref.read(memoryProvider.notifier).hasStreamError;
+
     final selectedCategory = ref.watch(
       selectedCategoryProvider,
     );
@@ -219,12 +238,40 @@ class _HomePageState extends ConsumerState<HomePage>
       },
     );
 
+    // =========================================================================
+    // RECUERDO DESTACADO (PORTADA)
+    // =========================================================================
+    //
+    // La portada es lo primero que ve el usuario, así que debe mostrar
+    // siempre una foto real y apetecible en vez de forzar el mejor
+    // valorado aunque no tenga foto (eso dejaba el hueco vacío en el sitio
+    // más visible de la app). Se elige el mejor valorado QUE TENGA FOTO;
+    // solo se cae al estado vacío si de verdad no hay ninguna foto en la
+    // categoría seleccionada.
+    final MemoryModel? heroMemory = filteredMemories.isEmpty
+        ? null
+        : filteredMemories.firstWhere(
+            (memory) => memory.imageUrls.isNotEmpty,
+            orElse: () => filteredMemories.first,
+          );
+
     return Scaffold(
       backgroundColor: colorBackground,
 
       // =========================================================================
       // STACK PRINCIPAL
       // =========================================================================
+      //
+      // NOTA: se intentó envolver esto en Center+ConstrainedBox(maxWidth)
+      // para limitar el ancho en la PWA de escritorio (ver TECHNICAL_AUDIT.md,
+      // UX-3). Se revirtió tras comprobar visualmente (Chrome real) que
+      // rompe el FAB: el primer hijo de este Stack no está envuelto en
+      // Positioned.fill, así que el Stack deja de recibir las
+      // restricciones de alto que necesita para dimensionarse bien, y el
+      // FAB (Positioned bottom:125) queda recortado fuera del área
+      // visible. Antes de reintentarlo, migrar el FAB a
+      // Scaffold.floatingActionButton (más robusto que un Positioned
+      // manual) o envolver el contenido scrolleable en Positioned.fill.
 
       body: Stack(
         children: [
@@ -373,12 +420,7 @@ class _HomePageState extends ConsumerState<HomePage>
                                   .height *
                               0.34,
                       child: HomeHero(
-                        memory:
-                            filteredMemories
-                                    .isNotEmpty
-                                ? filteredMemories
-                                    .first
-                                : null,
+                        memory: heroMemory,
                       ),
                     ),
                   ),
@@ -448,7 +490,11 @@ class _HomePageState extends ConsumerState<HomePage>
                 // =================================================================
 
                 filteredMemories.isEmpty
-                    ? _buildEmptyState()
+                    ? (hasStreamError
+                          ? _buildErrorState()
+                          : (hasLoaded
+                                ? _buildEmptyState()
+                                : _buildLoadingState()))
                     : Padding(
                         padding:
                             const EdgeInsets.symmetric(
@@ -504,18 +550,18 @@ class _HomePageState extends ConsumerState<HomePage>
                   decoration:
                       BoxDecoration(
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colorTextMain,
+                      width: 2,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            colorAccentCoral
-                                .withValues(
-                          alpha: 0.4,
-                        ),
-                        blurRadius: 16,
+                        color: colorTextMain,
+                        blurRadius: 0,
                         offset:
                             const Offset(
-                          0,
-                          6,
+                          3,
+                          3,
                         ),
                       ),
                     ],
@@ -592,6 +638,153 @@ class _HomePageState extends ConsumerState<HomePage>
   // TARJETA DE MEMORIA ANIMADA
   // ===========================================================================
 
+  // ===========================================================================
+  // CONFIRMACIÓN DE BORRADO
+  // ===========================================================================
+  //
+  // El swipe-to-delete es fácil de disparar sin querer mientras se hace
+  // scroll por la lista (un gesto ligeramente diagonal). Por eso el borrado
+  // real solo ocurre si el usuario confirma explícitamente en este diálogo.
+
+  Future<bool> _confirmDeleteMemory(
+    dynamic memory,
+  ) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: colorTextMain.withValues(alpha: 0.55),
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBF0),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorTextMain, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xFF0F172A),
+                blurRadius: 0,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colorTextMain, width: 2),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.red.shade600,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '¿Eliminar recuerdo?',
+                style: GoogleFonts.outfit(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: colorTextMain,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text.rich(
+                TextSpan(
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: colorTextMain.withValues(alpha: 0.75),
+                  ),
+                  children: [
+                    const TextSpan(text: '"'),
+                    TextSpan(
+                      text: memory.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const TextSpan(
+                      text: '" se eliminará permanentemente. '
+                          'Esta acción no se puede deshacer.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDialogButton(
+                      label: 'Cancelar',
+                      backgroundColor: Colors.white,
+                      textColor: colorTextMain,
+                      onTap: () => Navigator.of(dialogContext).pop(false),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildDialogButton(
+                      label: 'Eliminar',
+                      backgroundColor: colorAccentCoral,
+                      textColor: Colors.white,
+                      onTap: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return confirmed ?? false;
+  }
+
+  Widget _buildDialogButton({
+    required String label,
+    required Color backgroundColor,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorTextMain, width: 1.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0xFF0F172A),
+              blurRadius: 0,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAnimatedMemoryCard({
     required dynamic memory,
     required int index,
@@ -662,6 +855,12 @@ class _HomePageState extends ConsumerState<HomePage>
           direction:
               DismissDirection
                   .endToStart,
+          confirmDismiss: (
+            _,
+          ) =>
+              _confirmDeleteMemory(
+            memory,
+          ),
           onDismissed: (
             _,
           ) =>
@@ -728,27 +927,15 @@ class _HomePageState extends ConsumerState<HomePage>
               const EdgeInsets.all(
             28,
           ),
-          decoration:
-              BoxDecoration(
-            color:
-                colorCardSurface,
-            borderRadius:
-                BorderRadius.circular(
-              20,
-            ),
+          decoration: BoxDecoration(
+            color: colorCardSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorTextMain, width: 2),
             boxShadow: [
               BoxShadow(
-                color:
-                    Colors.black
-                        .withValues(
-                  alpha: 0.03,
-                ),
-                blurRadius: 10,
-                offset:
-                    const Offset(
-                  0,
-                  4,
-                ),
+                color: colorTextMain,
+                blurRadius: 0,
+                offset: const Offset(3, 3),
               ),
             ],
           ),
@@ -776,6 +963,128 @@ class _HomePageState extends ConsumerState<HomePage>
                       colorTextMain,
                   fontWeight:
                       FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ESTADO DE ERROR
+  // ===========================================================================
+  //
+  // Antes, si el stream de Firestore fallaba (sin red, reglas de
+  // seguridad rechazando el acceso, etc.) y no había nada en caché
+  // local, la pantalla se quedaba en "Cargando tus recuerdos..." para
+  // siempre, sin ningún indicio de que algo iba mal. Mismo contenedor
+  // visual que el estado vacío, para no introducir un salto de layout.
+
+  Widget _buildErrorState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 20,
+      ),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: colorCardSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorTextMain, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: colorTextMain,
+                blurRadius: 0,
+                offset: const Offset(3, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_off_rounded,
+                size: 32,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "No se pudieron cargar tus recuerdos",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  color: colorTextMain,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Comprueba tu conexión — se actualizará solo en cuanto vuelva.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: Colors.grey.shade500,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // ESTADO DE CARGA
+  // ===========================================================================
+  //
+  // Mismo contenedor visual que el estado vacío, para que no haya un salto
+  // brusco de layout cuando los datos terminan de llegar.
+
+  Widget _buildLoadingState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 20,
+      ),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: colorCardSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorTextMain, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: colorTextMain,
+                blurRadius: 0,
+                offset: const Offset(3, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: colorAccentCoral,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Cargando tus recuerdos...",
+                style: GoogleFonts.outfit(
+                  color: colorTextMain,
+                  fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
               ),

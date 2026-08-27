@@ -1,5 +1,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 /// ===========================================================================
@@ -855,11 +856,23 @@ class MemoryModel {
   /// - Unix timestamp en segundos.
   /// - Unix timestamp en milisegundos.
   ///
-  /// Si no existe una fecha válida:
-  ///     DateTime.now()
+  /// Si no existe una fecha (`value == null`, el caso normal de un
+  /// recuerdo nuevo que todavía no tiene fecha asignada):
+  ///     DateTime.now(), sin avisar — es el comportamiento esperado.
+  ///
+  /// Si existe un valor pero no se reconoce en ningún formato soportado
+  /// (documento corrupto, o un formato nuevo que este parser todavía no
+  /// entiende):
+  ///     DateTime.now() igualmente (para no romper el guardado/lectura
+  ///     por un solo campo), pero avisando por debugPrint — antes se
+  ///     enmascaraba en silencio, indistinguible de un recuerdo nuevo.
   static DateTime _parseDate(
     dynamic value,
   ) {
+    if (value == null) {
+      return DateTime.now();
+    }
+
     if (value is Timestamp) {
       return value.toDate();
     }
@@ -869,10 +882,18 @@ class MemoryModel {
     }
 
     if (value is num) {
-      return _parseUnixTimestamp(
-            value,
-          ) ??
-          DateTime.now();
+      final DateTime? fromUnix =
+          _parseUnixTimestamp(
+        value,
+      );
+
+      if (fromUnix != null) {
+        return fromUnix;
+      }
+
+      _warnUnrecognizedDate(value);
+
+      return DateTime.now();
     }
 
     if (value is String) {
@@ -906,14 +927,38 @@ class MemoryModel {
       );
 
       if (numericValue != null) {
-        return _parseUnixTimestamp(
-              numericValue,
-            ) ??
-            DateTime.now();
+        final DateTime? fromUnix =
+            _parseUnixTimestamp(
+          numericValue,
+        );
+
+        if (fromUnix != null) {
+          return fromUnix;
+        }
       }
+
+      _warnUnrecognizedDate(value);
+
+      return DateTime.now();
     }
 
+    _warnUnrecognizedDate(value);
+
     return DateTime.now();
+  }
+
+  /// Avisa de que un valor de fecha no nulo no se pudo interpretar en
+  /// ningún formato soportado, para que quede constancia de que hay un
+  /// documento con datos de fecha corruptos o en un formato nuevo — en
+  /// vez de que el fallback a DateTime.now() lo enmascare en silencio.
+  static void _warnUnrecognizedDate(
+    dynamic value,
+  ) {
+    debugPrint(
+      '⚠️ MemoryModel._parseDate: valor de fecha no reconocido, '
+      'se usará la fecha actual como fallback. '
+      'Valor: $value (${value.runtimeType})',
+    );
   }
 
   /// Convierte Unix timestamp a DateTime.

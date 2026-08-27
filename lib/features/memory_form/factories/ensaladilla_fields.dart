@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 import 'package:flutter/services.dart';
 
 class EnsaladillaFields implements DynamicFieldGenerator {
@@ -297,7 +298,9 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -321,94 +324,32 @@ class EnsaladillaFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return SizedBox(
+                  return NeoChip(
+                    label: option,
+                    icon: icon,
+                    isSelected: isSelected,
                     width: chipWidth,
-                    child: InkWell(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
+                    onTap: () {
+                      HapticFeedback.selectionClick();
 
-                        if (isMulti) {
-                          final List selectedItems = data[key] is List
-                              ? List.from(data[key])
-                              : [];
+                      if (isMulti) {
+                        final List selectedItems = data[key] is List
+                            ? List.from(data[key])
+                            : [];
 
-                          final List newList = List.from(selectedItems);
+                        final List newList = List.from(selectedItems);
 
-                          if (isSelected) {
-                            newList.remove(option);
-                          } else {
-                            newList.add(option);
-                          }
-
-                          onUpdate(key, newList);
+                        if (isSelected) {
+                          newList.remove(option);
                         } else {
-                          onUpdate(key, isSelected ? null : option);
+                          newList.add(option);
                         }
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFFFFD400)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF0F172A)
-                                : const Color(
-                                    0xFF0F172A,
-                                  ).withValues(alpha: 0.25),
-                            width: 2.0,
-                          ),
-                          boxShadow: isSelected
-                              ? const [
-                                  BoxShadow(
-                                    color: Color(0xFF0F172A),
-                                    blurRadius: 0,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: AnimatedScale(
-                          scale: isSelected ? 1.02 : 1.0,
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutBack,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                icon,
-                                size: 14,
-                                color: const Color(0xFF0F172A),
-                              ),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  option,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: const Color(0xFF0F172A),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+
+                        onUpdate(key, newList);
+                      } else {
+                        onUpdate(key, isSelected ? null : option);
+                      }
+                    },
                   );
                 }).toList(),
               );
@@ -425,7 +366,7 @@ class EnsaladillaFields implements DynamicFieldGenerator {
             transitionBuilder: (child, animation) {
               return SizeTransition(
                 sizeFactor: animation,
-                axisAlignment: -1,
+                alignment: Alignment.topCenter,
                 child: FadeTransition(opacity: animation, child: child),
               );
             },

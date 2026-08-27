@@ -1,28 +1,44 @@
 rules_version = '2';
 
-// Palito de Sabores — app privada de 2 personas (Eme y CeH), no
+// Palito de Sabores — app privada del hogar de Eme y CeH, no
 // multi-tenant. Todos los datos viven bajo users/{kHouseholdId} (ver
 // lib/core/config/household_config.dart) y se comparten entre todos los
-// dispositivos del hogar. La única barrera de seguridad es exigir sesión
-// de Firebase Auth (anónima o no) — no hay aislamiento por uid porque el
-// objetivo del producto es precisamente que ambos móviles vean los
-// mismos datos.
+// dispositivos del hogar.
+//
+// Antes: bastaba con "request.auth != null" — cualquier sesión de
+// Firebase Auth, incluida una anónima creada por un desconocido que
+// solo necesitara conocer el projectId (no es secreto, viaja en el
+// propio bundle de la app), podía leer/escribir todos los datos del
+// hogar. Ahora se exige además que el uid de esa sesión esté en la
+// whitelist de _isHouseholdMember() — los uids anónimos reales de los
+// dispositivos del hogar (Firebase Console > Authentication > Users).
+//
+// Mantenimiento: instalar la app en un dispositivo nuevo (o borrar
+// datos/reinstalar en uno existente) genera un uid anónimo distinto,
+// que hay que añadir aquí a mano y volver a desplegar las reglas para
+// que ese dispositivo pueda sincronizar. Es el coste de mantenimiento
+// de este enfoque de coste cero — si el hogar dejara de ser un grupo
+// pequeño y conocido de dispositivos, el paso natural sería sustituir
+// esto por autenticación real (no anónima).
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isHouseholdMember() {
+      return request.auth != null && request.auth.uid in [
+        'kazI88gXtoQTLM8vDgHQS1rcLrf2',
+        'JYTa1rC8K5O3Gj4CE1aazAUT6AU2',
+        'edyWrF7U3HPBbW6lKcuIzec0r0N2',
+        '3RYayrII74T2vpALV1X75eVdGY42',
+        'pqtpXx4WiOV3gVvhfmCOgiuqXw53',
+        'fudChOtrc2S5S9JVoUXEBVz0ltB2'
+      ];
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isHouseholdMember();
     }
 
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null;
-    }
-
-    match /game_sessions/{sessionId} {
-      allow read, write: if request.auth != null;
-    }
-
-    match /memories/{memoryId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isHouseholdMember();
     }
 
     match /{document=**} {

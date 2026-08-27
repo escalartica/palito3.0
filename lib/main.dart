@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'package:palito_3_0/firebase_options.dart';
 import 'package:palito_3_0/core/services/household_migration_service.dart';
@@ -46,6 +49,17 @@ if (!firebaseReady) {
 debugPrint(
 '❌ Firebase no pudo inicializarse correctamente.',
 );
+}
+
+// ============================================================
+// OBSERVABILIDAD (ANALYTICS + CRASHLYTICS)
+// ============================================================
+//
+// Antes no había ninguna forma de saber si algo fallaba en producción
+// salvo que un usuario lo reportara a mano.
+
+if (firebaseReady) {
+_initializeObservability();
 }
 
 // ============================================================
@@ -169,6 +183,60 @@ return false;
 }
 
 // ================================================================
+// OBSERVABILIDAD (ANALYTICS + CRASHLYTICS)
+// ================================================================
+//
+// Crashlytics no está disponible en Flutter Web (solo iOS/Android), así
+// que se omite en esa plataforma en vez de fallar. Analytics sí
+// funciona en las tres plataformas.
+//
+// En debug (desarrollo local) se desactiva la recogida en ambos: no
+// tiene sentido mezclar sesiones de prueba del propio desarrollo con
+// datos reales de uso, ni llenar Crashlytics de errores provocados a
+// propósito mientras se depura.
+
+final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+void _initializeObservability() {
+try {
+analytics.setAnalyticsCollectionEnabled(!kDebugMode);
+
+if (!kIsWeb) {
+  FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+    !kDebugMode,
+  );
+
+  FlutterError.onError =
+      FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+  PlatformDispatcher.instance.onError = (
+    Object error,
+    StackTrace stack,
+  ) {
+    FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      fatal: true,
+    );
+
+    return true;
+  };
+}
+
+debugPrint(
+  '📊 Analytics/Crashlytics inicializados '
+  '(recogida activa: ${!kDebugMode}).',
+);
+} catch (e, stack) {
+debugPrint(
+  '⚠️ No se pudo inicializar Analytics/Crashlytics: $e',
+);
+
+debugPrintStack(stackTrace: stack);
+}
+}
+
+// ================================================================
 // FIREBASE AUTHENTICATION
 // ================================================================
 
@@ -197,17 +265,22 @@ debugPrint(
   '🔐 Usuario Firebase ya autenticado.',
 );
 
-debugPrint(
-  '🔐 UID: ${existingUser.uid}',
-);
+// UID y email identifican la sesión — en una build Web de
+// producción quedarían visibles en la consola del navegador para
+// cualquiera que la abra, así que solo se imprimen en debug.
+if (kDebugMode) {
+  debugPrint(
+    '🔐 UID: ${existingUser.uid}',
+  );
 
-debugPrint(
-  '🔐 Anónimo: ${existingUser.isAnonymous}',
-);
+  debugPrint(
+    '🔐 Anónimo: ${existingUser.isAnonymous}',
+  );
 
-debugPrint(
-  '🔐 Email: ${existingUser.email}',
-);
+  debugPrint(
+    '🔐 Email: ${existingUser.email}',
+  );
+}
 
 return;
 
@@ -247,17 +320,19 @@ debugPrint(
   '✅ AUTENTICACIÓN FIREBASE CORRECTA',
 );
 
-debugPrint(
-  '🔐 UID: ${user.uid}',
-);
+if (kDebugMode) {
+  debugPrint(
+    '🔐 UID: ${user.uid}',
+  );
 
-debugPrint(
-  '🔐 Usuario anónimo: ${user.isAnonymous}',
-);
+  debugPrint(
+    '🔐 Usuario anónimo: ${user.isAnonymous}',
+  );
 
-debugPrint(
-  '🔐 Email: ${user.email}',
-);
+  debugPrint(
+    '🔐 Email: ${user.email}',
+  );
+}
 
 } on FirebaseAuthException catch (e, stack) {
 firebaseAuthenticated = false;
@@ -429,13 +504,15 @@ if (user != null) {
     '✅ Firebase Auth: USUARIO AUTENTICADO',
   );
 
-  debugPrint(
-    '🔐 UID: ${user.uid}',
-  );
+  if (kDebugMode) {
+    debugPrint(
+      '🔐 UID: ${user.uid}',
+    );
 
-  debugPrint(
-    '🔐 Usuario anónimo: ${user.isAnonymous}',
-  );
+    debugPrint(
+      '🔐 Usuario anónimo: ${user.isAnonymous}',
+    );
+  }
 } else {
   debugPrint(
     '❌ Firebase Auth: SIN USUARIO',
@@ -491,6 +568,14 @@ GlobalKey<NavigatorState>();
 final _router = GoRouter(
 navigatorKey: _rootNavigatorKey,
 initialLocation: '/',
+// El `if` evita tocar FirebaseAnalytics.instance (y por tanto
+// Firebase.app()) cuando Firebase no se ha inicializado — el caso de
+// los tests de widget, que construyen PalitoDeSaboresApp sin pasar por
+// main().
+observers: [
+if (firebaseInitialized)
+  FirebaseAnalyticsObserver(analytics: analytics),
+],
 routes: [
 // ============================================================
 // DETALLE DE MEMORIA

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/memory_model.dart';
-import '../../../features/memory_form/widgets/smart_image.dart';
+import 'smart_image.dart';
+import '../tokens/app_colors.dart';
 import 'neo_pressable.dart';
 
-// Paleta de colores neo-brutalista
-const Color palitoDark = Color(0xFF0F172A);
-const Color palitoYellow = Color(0xFFFFD400);
+// Paleta de colores neo-brutalista (alias locales sobre AppColors, la
+// fuente única de verdad — ver core/theme/tokens/app_colors.dart).
+const Color palitoDark = AppColors.textPrimary;
+const Color palitoYellow = AppColors.primary;
 
 // 1. Variante Compacta (Para listas principales)
 class MemoryCardCompact extends StatelessWidget {
@@ -51,6 +53,7 @@ class MemoryCardCompact extends StatelessWidget {
                                   child: SmartImage(
                                     imagePath: firstImageUrl,
                                     fit: BoxFit.cover,
+                                    width: 60,
                                   ),
                                 ),
                               )
@@ -185,6 +188,7 @@ class MemoryCardLarge extends StatelessWidget {
                         child: SmartImage(
                           imagePath: firstImageUrl,
                           fit: BoxFit.cover,
+                          width: 280,
                         ),
                       )
                     : Container(

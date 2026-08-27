@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../memory_form/widgets/smart_image.dart';
+import '../../../core/theme/components/smart_image.dart';
 
 class MemoryGalleryWidget extends StatelessWidget {
   final Map<String, dynamic> data;

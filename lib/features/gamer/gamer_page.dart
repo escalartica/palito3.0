@@ -11,6 +11,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palito_3_0/core/providers/gamer_provider.dart';
 import 'package:palito_3_0/core/theme/components/neo_pressable.dart';
 import '../gamer/zona_gamer_card.dart';
+import 'data/gamer_content.dart';
+import 'gamer_game_logic.dart';
+import 'widgets/add_player_modal.dart';
+import 'widgets/badges_modal.dart';
+import 'widgets/challenge_outcome_modal.dart';
+import 'widgets/mode_selector.dart';
+import 'widgets/pro_modal.dart';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const _kDark = Color(0xFF0F172A);
@@ -73,61 +80,9 @@ class _GamerPageState extends ConsumerState<GamerPage>
   final List<Map<String, String>> _history = [];
   final Map<String, int> _punishmentCounts = {};
 
-  final List<Map<String, dynamic>> _achievements = [
-    {
-      'id': 'king_flavor',
-      'title': 'Rey del Sabor',
-      'desc': 'Alcanzar los 40 puntos o más en la sesión.',
-      'icon': Icons.workspace_premium_rounded,
-      'color': Colors.amber,
-      'unlocked': false,
-    },
-    {
-      'id': 'spicy_streak',
-      'title': 'Racha Picante',
-      'desc': 'Acumular una racha de más de 10 decisiones.',
-      'icon': Icons.local_fire_department_rounded,
-      'color': Colors.deepOrange,
-      'unlocked': false,
-    },
-    {
-      'id': 'soul_table',
-      'title': 'Alma de la Mesa',
-      'desc': 'Interactuar con todos los comensales.',
-      'icon': Icons.groups_rounded,
-      'color': Colors.purple,
-      'unlocked': false,
-    },
-  ];
+  final List<Map<String, dynamic>> _achievements = buildGamerAchievements();
 
-  final List<String> _palitoChallenges = [
-    '🏆 ¡Pide un plato sorpresa!',
-    '💸 ¡Toca pagar la primera ronda de bebidas de toda la mesa!',
-    '🍰 ¡Elige el postre a ciegas sin mirar la carta y acierta los ingredientes!',
-    '🔍 ¡Haz una cata técnica obligatoria al plato del compañero de al lado!',
-    '🎙️ ¡Inaugura el banquete haciendo un brindis épico dedicado a Palito!',
-    '🌶️ ¡Prueba el bocado más picante o exótico disponible en la comanda!',
-    '🥔 ¡Encuentra la mejor patata de toda la mesa y proclámala oficialmente!',
-    '🕵️ ¡Adivina el ingrediente secreto de un plato sin preguntar a nadie!',
-    '🤫 ¡Elige un plato para compartir sin decirle a nadie qué es!',
-    '📸 ¡Haz la foto gastronómica más artística de la noche!',
-    '👃 ¡Huele un plato con los ojos cerrados e intenta adivinar qué lleva!',
-    '🔄 ¡Intercambia tu plato con alguien durante un bocado!',
-    '🎯 ¡Pide algo que jamás hayas probado antes!',
-    '🧠 ¡Describe tu plato sin mencionar ninguno de sus ingredientes!',
-    '🎤 ¡Presenta el siguiente plato como si fueras el chef de un restaurante Michelin!',
-    '🧂 ¡Adivina si el plato necesita más sal antes de probarlo!',
-    '🗺️ ¡Busca en el menú un plato típico de una región que nunca hayas visitado!',
-    '💎 ¡Declara cuál es el bocado más valioso de la mesa y explica por qué!',
-    '🔥 ¡Encuentra el plato con más personalidad de toda la comanda!',
-    '❤️ ¡Regala tu mejor bocado a la persona que elijas!',
-    '🎭 ¡Describe tu plato usando solo tres palabras dramáticas!',
-    '📖 ¡Inventa una historia de 20 segundos sobre el origen de tu plato!',
-    '🧐 ¡Analiza un plato como si fueras un detective buscando pistas!',
-    '🥇 ¡Elige al campeón absoluto de la mesa y corona tu Plato de la Noche!',
-    '🎰 ¡Deja que Palito decida tu próximo bocado!',
-    '🚨 ¡ALERTA PALITO! Tienes que probar el plato que menos te apetezca!',
-  ];
+  final List<String> _palitoChallenges = buildPalitoChallenges();
 
   String? _currentChallenge;
 
@@ -294,12 +249,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
     for (final a in _achievements) {
       if (a['unlocked'] == true) continue;
-      final met = switch (a['id']) {
-        'king_flavor' => maxPoints >= 40,
-        'spicy_streak' => streak >= 10,
-        'soul_table' => _decisionsCount >= 5,
-        _ => false,
-      };
+      final met = GamerGameLogic.isAchievementMet(
+        achievementId: a['id']?.toString() ?? '',
+        maxPoints: maxPoints,
+        streak: streak,
+        decisionsCount: _decisionsCount,
+      );
       if (met) {
         a['unlocked'] = true;
         if (!fromLoad) newlyUnlocked.add(a);
@@ -328,17 +283,21 @@ class _GamerPageState extends ConsumerState<GamerPage>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: _kDark, width: 2.5),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
+                color: color,
                 shape: BoxShape.circle,
+                border: Border.all(color: _kDark, width: 2),
               ),
-              child: Icon(icon, size: 40, color: color),
+              child: Icon(icon, size: 40, color: Colors.white),
             ),
             const SizedBox(height: 16),
             Text(
@@ -378,6 +337,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: _kDark, width: 2),
                   ),
                 ),
                 onPressed: () => Navigator.pop(ctx),
@@ -545,108 +505,11 @@ class _GamerPageState extends ConsumerState<GamerPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFF8EE),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                '🎯 Evaluar Juicio de $playerName',
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: _kDark,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  challengeText,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: _kDark,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _resolveChallengeResult(playerName, false);
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade50,
-                        foregroundColor: Colors.red.shade700,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(
-                        '❌ No Superado',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _resolveChallengeResult(playerName, true);
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(
-                        '✅ ¡Superado!',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      builder: (ctx) => ChallengeOutcomeModal(
+        playerName: playerName,
+        challengeText: challengeText,
+        onOutcome: (succeeded) =>
+            _resolveChallengeResult(playerName, succeeded),
       ),
     );
   }
@@ -684,6 +547,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Cerrar',
                   onPressed: () => Navigator.pop(ctx),
                 ),
               ],
@@ -758,421 +622,22 @@ class _GamerPageState extends ConsumerState<GamerPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.military_tech_rounded,
-                          color: Color(0xFFFF9F1C),
-                          size: 28,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Insignias y Logros de la Mesa',
-                            style: GoogleFonts.outfit(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: _kDark,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ranking ordenado por puntuación, medallas e insignias desbloqueadas.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ...sorted.map((player) {
-                final playerColor = player['color'] as Color;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: playerColor.withValues(
-                                alpha: 0.2,
-                              ),
-                              child: Icon(
-                                player['icon'] as IconData,
-                                color: playerColor,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                player['name'] as String,
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: _kDark,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _BadgePill(
-                            text: '🏆 ${player['medals']} medallas',
-                            bgColor: _kYellow.withValues(alpha: 0.25),
-                          ),
-                          const SizedBox(height: 6),
-                          _BadgePill(
-                            text: '⭐ ${player['points']} pts',
-                            bgColor: _kRed.withValues(alpha: 0.15),
-                            textColor: _kRed,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-              Text(
-                'Logros Especiales Globales',
-                style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _kDark,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ..._achievements.map((a) {
-                final unlocked = a['unlocked'] == true;
-                final color = a['color'] as Color;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: unlocked
-                        ? color.withValues(alpha: 0.08)
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: unlocked
-                          ? color.withValues(alpha: 0.3)
-                          : Colors.grey.shade300,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        a['icon'] as IconData,
-                        color: unlocked ? color : Colors.grey.shade400,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              a['title'] as String,
-                              style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: unlocked ? _kDark : Colors.grey.shade500,
-                              ),
-                            ),
-                            Text(
-                              a['desc'] as String,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        unlocked
-                            ? Icons.check_circle_rounded
-                            : Icons.lock_rounded,
-                        color: unlocked ? color : Colors.grey.shade400,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
+      builder: (ctx) =>
+          BadgesModal(players: sorted, achievements: _achievements),
     );
   }
 
   void _showZonaGamerProModal() {
-    final totalPts = _players.fold<int>(
-      0,
-      (s, p) => s + (p['points'] as int? ?? 0),
-    );
-    final totalForPct = totalPts == 0 ? 1 : totalPts;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
-                          color: Colors.deepPurple,
-                          size: 26,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Panel Pro de Zona Gamer',
-                            style: GoogleFonts.outfit(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: _kDark,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Estadísticas globales en tiempo real y rendimiento analítico de la sesión en Palito.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _ProStat(
-                      label: '👥 Comensales',
-                      value: '${_players.length}',
-                    ),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: Colors.grey.shade300,
-                    ),
-                    _ProStat(
-                      label: '⚡ Decisiones',
-                      value: '$_decisionsCount',
-                      valueColor: _kRed,
-                    ),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: Colors.grey.shade300,
-                    ),
-                    _ProStat(
-                      label: '📜 Historial',
-                      value: '${_history.length} jugadas',
-                      valueColor: Colors.deepPurple,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Distribución de Puntos por Comensal',
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: _kDark,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ..._players.map((player) {
-                final pts = player['points'] as int? ?? 0;
-                final medals = player['medals'] as int? ?? 0;
-                final pct = (pts / totalForPct).clamp(0.0, 1.0);
-                final playerColor = player['color'] as Color;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                player['icon'] as IconData,
-                                size: 14,
-                                color: playerColor,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                player['name'] as String,
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: _kDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            '$pts pts ($medals 🏆)',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: pct,
-                          minHeight: 8,
-                          backgroundColor: Colors.grey.shade100,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            playerColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showBadgesModal();
-                  },
-                  child: Text(
-                    'Ver Podio e Insignias',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.red.shade200),
-                    backgroundColor: Colors.red.shade50,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _resetSessionScores();
-                  },
-                  child: Text(
-                    '🔄 Reiniciar Sesión',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.red.shade600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
+      builder: (ctx) => ProModal(
+        players: _players,
+        decisionsCount: _decisionsCount,
+        historyCount: _history.length,
+        onViewBadges: _showBadgesModal,
+        onResetSession: _resetSessionScores,
       ),
     );
   }
@@ -1182,81 +647,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Nuevo Comensal',
-                  style: GoogleFonts.outfit(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: _kDark,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                hintText: 'Nombre del amigo o familiar...',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kYellow,
-                  foregroundColor: _kDark,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                onPressed: _addPlayer,
-                child: Text(
-                  'Añadir a la Mesa',
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
+      builder: (ctx) =>
+          AddPlayerModal(controller: _nameController, onAdd: _addPlayer),
     );
   }
 
@@ -1302,31 +694,32 @@ class _GamerPageState extends ConsumerState<GamerPage>
           _selectedWinner = winner;
           _decisionsCount++;
 
-          if (_selectedMode == 0) {
-            pointsWon = 5;
-            winner['points'] = (winner['points'] ?? 0) + pointsWon;
-            eventDetail = 'Ruleta Pro: Elección de Plato';
-            _history.insert(0, {
-              'winner': winnerName,
-              'detail': '🍽️ ¡Le toca elegir plato!',
-              'time': TimeOfDay.now().format(context),
-            });
-          } else {
-            final challenge =
-                _palitoChallenges[random.nextInt(_palitoChallenges.length)];
-            _currentChallenge = challenge;
+          final outcome = GamerGameLogic.computeSpinOutcome(
+            selectedMode: _selectedMode,
+            challenges: _palitoChallenges,
+            random: random,
+          );
+
+          pointsWon = outcome.pointsAwarded;
+          eventDetail = outcome.eventDetail;
+          winner['points'] = (winner['points'] ?? 0) + pointsWon;
+
+          if (outcome.awardsMedal) {
+            winner['medals'] = (winner['medals'] ?? 0) + 1;
             _punishmentCounts[winnerName] =
                 (_punishmentCounts[winnerName] ?? 0) + 1;
-            pointsWon = 10;
-            winner['points'] = (winner['points'] ?? 0) + pointsWon;
-            winner['medals'] = (winner['medals'] ?? 0) + 1;
-            eventDetail = 'Juicio Picante';
-            _history.insert(0, {
-              'winner': winnerName,
-              'detail': '🔥 Juicio Picante asignado',
-              'time': TimeOfDay.now().format(context),
-            });
           }
+
+          if (outcome.challenge != null) {
+            _currentChallenge = outcome.challenge;
+          }
+
+          _history.insert(0, {
+            'winner': winnerName,
+            'detail': outcome.historyDetail,
+            'time': TimeOfDay.now().format(context),
+          });
+
           if (_history.length > 5) _history.removeLast();
         });
 
@@ -1494,7 +887,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Selector de modo ──────────────────────────────────────────
-              _ModeSelector(
+              ModeSelector(
                 selectedMode: _selectedMode,
                 onSelect: (m) {
                   HapticFeedback.selectionClick();
@@ -1539,7 +932,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             width: 52,
                             height: 52,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               width: 52,
                               height: 52,
                               color: Colors.white,
@@ -1963,154 +1356,4 @@ class _GamerPageState extends ConsumerState<GamerPage>
       ),
     );
   }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Widgets auxiliares privados
-// ════════════════════════════════════════════════════════════════════════════
-
-class _ModeSelector extends StatelessWidget {
-  const _ModeSelector({required this.selectedMode, required this.onSelect});
-  final int selectedMode;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: _kDark, width: 2),
-      boxShadow: const [
-        BoxShadow(color: _kDark, offset: Offset(3, 3), blurRadius: 0),
-      ],
-    ),
-    child: Row(
-      children: [
-        _ModeTab(
-          label: '🎯 Ruleta Pro',
-          index: 0,
-          selectedMode: selectedMode,
-          activeColor: _kYellow,
-          onTap: onSelect,
-        ),
-        _ModeTab(
-          label: '🔥 Juicio Picante',
-          index: 1,
-          selectedMode: selectedMode,
-          activeColor: _kRed,
-          onTap: onSelect,
-          activeTextColor: Colors.white,
-        ),
-      ],
-    ),
-  );
-}
-
-class _ModeTab extends StatelessWidget {
-  const _ModeTab({
-    required this.label,
-    required this.index,
-    required this.selectedMode,
-    required this.activeColor,
-    required this.onTap,
-    this.activeTextColor,
-  });
-  final String label;
-  final int index, selectedMode;
-  final Color activeColor;
-  final Color? activeTextColor;
-  final ValueChanged<int> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = selectedMode == index;
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onTap(index),
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected ? activeColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              border: isSelected ? Border.all(color: _kDark, width: 2) : null,
-              boxShadow: isSelected
-                  ? const [
-                      BoxShadow(
-                        color: _kDark,
-                        offset: Offset(2, 2),
-                        blurRadius: 0,
-                      ),
-                    ]
-                  : null,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: isSelected
-                    ? (activeTextColor ?? _kDark)
-                    : Colors.grey.shade500,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BadgePill extends StatelessWidget {
-  const _BadgePill({required this.text, required this.bgColor, this.textColor});
-  final String text;
-  final Color bgColor;
-  final Color? textColor;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(
-      text,
-      style: GoogleFonts.inter(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: textColor ?? _kDark,
-      ),
-    ),
-  );
-}
-
-class _ProStat extends StatelessWidget {
-  const _ProStat({required this.label, required this.value, this.valueColor});
-  final String label, value;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Text(
-        label,
-        style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        value,
-        style: GoogleFonts.outfit(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: valueColor ?? _kDark,
-        ),
-      ),
-    ],
-  );
 }

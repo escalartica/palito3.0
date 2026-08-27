@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart'; // Añadido para mantener las tipografías
-import '../../memory_form/widgets/smart_image.dart';
+import '../../../core/theme/components/smart_image.dart';
 import '../../../core/models/memory_model.dart';
 
 class HeroCard extends ConsumerWidget {
@@ -64,7 +64,7 @@ class HeroCard extends ConsumerWidget {
           // Imagen de fondo o placeholder
           Positioned.fill(
             child: (path != null && path.isNotEmpty)
-                ? SmartImage(imagePath: path, fit: BoxFit.cover)
+                ? SmartImage(imagePath: path, fit: BoxFit.cover, width: 800)
                 : Container(
                     color: const Color(0xFFF8FAFC),
                     child: const Icon(

@@ -6,7 +6,15 @@ import '../../../core/models/memory_model.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/providers/dock_provider.dart';
 import 'memory_form_page.dart';
-import '../memory_form/widgets/smart_image.dart';
+import '../../core/theme/components/smart_image.dart';
+import 'widgets/animated_card.dart';
+import 'widgets/circle_button.dart';
+import 'widgets/hero_header.dart';
+import 'widgets/icon_box.dart';
+import 'widgets/location_section.dart';
+import 'widgets/rating_card.dart';
+import 'widgets/section_title.dart';
+import 'widgets/variedades_card.dart';
 
 class MemoryDetailPage extends ConsumerStatefulWidget {
   final MemoryModel memory;
@@ -22,8 +30,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
-
-  bool _imagePressed = false;
 
   @override
   void initState() {
@@ -92,10 +98,24 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         Map<String, dynamic>.from(currentMemory.specificFields)
           ..remove('description')
           ..remove('nota')
-          ..remove('otro_sabor');
+          ..remove('otro_sabor')
+          ..remove('es_surtido')
+          ..remove('variedades');
 
     final String? otroSabor = currentMemory.specificFields['otro_sabor']
         ?.toString();
+
+    // Croquetas variadas: cada sabor del surtido con su propia valoración
+    // (ver CroquetasFields / _VariedadesBuilder), en vez del volcado
+    // genérico de specificFields que quedaría como un Map.toString() feo.
+    final List<Map<String, dynamic>> variedades =
+        currentMemory.specificFields['variedades'] is List
+        ? List<Map<String, dynamic>>.from(
+            (currentMemory.specificFields['variedades'] as List).map(
+              (item) => Map<String, dynamic>.from(item as Map),
+            ),
+          )
+        : const <Map<String, dynamic>>[];
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF5),
@@ -103,7 +123,15 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          _buildHeroHeader(context, currentMemory, firstImageUrl),
+          HeroHeader(
+            memory: currentMemory,
+            firstImageUrl: firstImageUrl,
+            onBack: () => Navigator.pop(context),
+            onEdit: () => _openEditPage(context, currentMemory),
+            onImageTap: firstImageUrl != null
+                ? () => _openFullScreenImage(context, firstImageUrl)
+                : null,
+          ),
 
           SliverToBoxAdapter(
             child: SlideTransition(
@@ -119,6 +147,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                     showRestaurantSubtitle,
                     extraFields,
                     otroSabor,
+                    variedades,
                   ),
                 ),
               ),
@@ -126,233 +155,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           ),
         ],
       ),
-    );
-  }
-
-  // ============================================================
-  // CABECERA HERO
-  // ============================================================
-
-  Widget _buildHeroHeader(
-    BuildContext context,
-    MemoryModel memory,
-    String? firstImageUrl,
-  ) {
-    return SliverAppBar(
-      expandedHeight: 360,
-      pinned: true,
-      stretch: true,
-      backgroundColor: const Color(0xFFFFFDF5),
-      elevation: 0,
-      automaticallyImplyLeading: false,
-
-      leading: Padding(
-        padding: const EdgeInsets.all(8),
-        child: _buildCircleButton(
-          // arrow_back_rounded para igualar el peso visual de
-          // edit_rounded (el chevron "ios_new" tiene un trazo mucho más
-          // grueso al mismo tamaño lógico) y para usar el mismo icono de
-          // "volver" que el resto de la app (perfil, gamer).
-          icon: Icons.arrow_back_rounded,
-          tooltip: 'Volver',
-          onTap: () => Navigator.pop(context),
-        ),
-      ),
-
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: _buildCircleButton(
-            icon: Icons.edit_rounded,
-            tooltip: 'Editar recuerdo',
-            onTap: () => _openEditPage(context, memory),
-          ),
-        ),
-      ],
-
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [
-          StretchMode.zoomBackground,
-          StretchMode.blurBackground,
-        ],
-        background: GestureDetector(
-          onTap: firstImageUrl != null
-              ? () => _openFullScreenImage(context, firstImageUrl)
-              : null,
-          onTapDown: (_) {
-            if (mounted) {
-              setState(() {
-                _imagePressed = true;
-              });
-            }
-          },
-          onTapUp: (_) {
-            if (mounted) {
-              setState(() {
-                _imagePressed = false;
-              });
-            }
-          },
-          onTapCancel: () {
-            if (mounted) {
-              setState(() {
-                _imagePressed = false;
-              });
-            }
-          },
-          child: AnimatedScale(
-            scale: _imagePressed ? 0.985 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Hero(
-                  tag: 'memory-image-${memory.id}',
-                  child: firstImageUrl != null && firstImageUrl.isNotEmpty
-                      ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
-                      : _buildImagePlaceholder(),
-                ),
-
-                _buildImageGradient(),
-
-                if (firstImageUrl != null && firstImageUrl.isNotEmpty)
-                  Positioned(
-                    right: 18,
-                    bottom: 48,
-                    child: _buildImagePreviewBadge(),
-                  ),
-
-                Positioned(
-                  left: 24,
-                  right: 24,
-                  bottom: 46,
-                  child: _buildHeroTitle(memory),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagePlaceholder() {
-    return Container(
-      color: Colors.grey.shade200,
-      child: const Center(
-        child: Icon(
-          Icons.restaurant_rounded,
-          size: 70,
-          color: Color(0xFF0F172A),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageGradient() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withValues(alpha: 0.12),
-            Colors.transparent,
-            Colors.black.withValues(alpha: 0.78),
-          ],
-          stops: const [0.0, 0.42, 1.0],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagePreviewBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFF0F172A),
-            blurRadius: 0,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.fullscreen_rounded,
-            size: 16,
-            color: Color(0xFF0F172A),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'Ver foto',
-            style: GoogleFonts.outfit(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroTitle(MemoryModel memory) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          memory.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.outfit(
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-            letterSpacing: -0.8,
-            height: 1.05,
-            shadows: const [
-              Shadow(
-                color: Colors.black54,
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-        if (memory.restaurantName.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(
-                Icons.storefront_rounded,
-                size: 16,
-                color: Color(0xFFFFD400),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  memory.restaurantName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
     );
   }
 
@@ -367,6 +169,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     bool showRestaurantSubtitle,
     Map<String, dynamic> extraFields,
     String? otroSabor,
+    List<Map<String, dynamic>> variedades,
   ) {
     return Container(
       decoration: const BoxDecoration(
@@ -391,9 +194,13 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           if (showRestaurantSubtitle && memory.restaurantName.isNotEmpty)
             const SizedBox(height: 20),
 
-          _buildRatingCard(memory),
+          RatingCard(memory: memory),
 
           const SizedBox(height: 20),
+
+          if (variedades.isNotEmpty) VariedadesCard(variedades: variedades),
+
+          if (variedades.isNotEmpty) const SizedBox(height: 20),
 
           if (extraFields.isNotEmpty ||
               (otroSabor != null && otroSabor.isNotEmpty))
@@ -415,7 +222,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
           const SizedBox(height: 24),
 
-          _buildLocationSection(memory),
+          LocationSection(memory: memory),
         ],
       ),
     );
@@ -491,10 +298,13 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   }
 
   Widget _buildRestaurantCard(MemoryModel memory) {
-    return _buildAnimatedCard(
+    return AnimatedCard(
       child: Row(
         children: [
-          _buildIconBox(Icons.storefront_rounded, const Color(0xFFFFD400)),
+          const IconBox(
+            icon: Icons.storefront_rounded,
+            backgroundColor: Color(0xFFFFD400),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -530,145 +340,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   // PUNTUACIÓN
   // ============================================================
 
-  Widget _buildRatingCard(MemoryModel memory) {
-    final rating = memory.rating.clamp(0.0, 10.0);
-    final progress = rating / 10.0;
-
-    return _buildAnimatedCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  _buildIconBox(Icons.star_rounded, const Color(0xFFFFD400)),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Puntuación',
-                    style: GoogleFonts.outfit(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              _buildRatingNumber(rating),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 1000),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) {
-                return LinearProgressIndicator(
-                  value: value,
-                  minHeight: 10,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    Color(0xFFFFD400),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '0',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-              Text(
-                _ratingLabel(rating),
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              Text(
-                '10',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRatingNumber(double rating) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFD400),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFF0F172A),
-            blurRadius: 0,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.star_rounded, size: 18, color: Color(0xFF0F172A)),
-          const SizedBox(width: 5),
-          Text(
-            rating.toStringAsFixed(1),
-            style: GoogleFonts.outfit(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _ratingLabel(double rating) {
-    if (rating >= 9) {
-      return 'Extraordinario';
-    }
-
-    if (rating >= 8) {
-      return 'Excelente';
-    }
-
-    if (rating >= 7) {
-      return 'Muy bueno';
-    }
-
-    if (rating >= 5) {
-      return 'Correcto';
-    }
-
-    return 'Por mejorar';
-  }
-
   // ============================================================
   // DETALLES DINÁMICOS
   // ============================================================
@@ -684,14 +355,17 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
       entries.add(MapEntry('otro_sabor', otroSabor));
     }
 
-    return _buildAnimatedCard(
+    return AnimatedCard(
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _buildIconBox(Icons.tune_rounded, const Color(0xFFFFD400)),
+              const IconBox(
+                icon: Icons.tune_rounded,
+                backgroundColor: Color(0xFFFFD400),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -794,12 +468,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(
+        const SectionTitle(
           icon: Icons.format_quote_rounded,
           title: 'Tu opinión',
         ),
         const SizedBox(height: 12),
-        _buildAnimatedCard(
+        AnimatedCard(
           padding: const EdgeInsets.all(20),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -913,178 +587,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   }
 
   // ============================================================
-  // UBICACIÓN
-  // ============================================================
-
-  Widget _buildLocationSection(MemoryModel memory) {
-    final hasCoordinates =
-        memory.location.lat != null && memory.location.lng != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle(icon: Icons.location_on_rounded, title: 'Ubicación'),
-
-        const SizedBox(height: 12),
-
-        _buildAnimatedCard(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildIconBox(
-                    Icons.location_on_rounded,
-                    const Color(0xFFFFD400),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      memory.location.address,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              if (hasCoordinates) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFDF5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.my_location_rounded,
-                        size: 16,
-                        color: Color(0xFF0F172A),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${memory.location.lat!.toStringAsFixed(5)}, '
-                          '${memory.location.lng!.toStringAsFixed(5)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        size: 17,
-                        color: Color(0xFF2E7D32),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
   // COMPONENTES REUTILIZABLES
   // ============================================================
-
-  Widget _buildSectionTitle({required IconData icon, required String title}) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF0F172A)),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: GoogleFonts.outfit(
-            fontSize: 19,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIconBox(IconData icon, Color backgroundColor) {
-    return Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-      ),
-      child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
-    );
-  }
-
-  Widget _buildAnimatedCard({
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFF0F172A),
-            blurRadius: 0,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  // Botón "cristal oscuro": fondo negro semitransparente + icono blanco.
-  // Sobre una fotografía el contraste puede variar mucho según la zona de
-  // la imagen (cielos claros, mesas oscuras...) — un scrim oscuro con
-  // icono blanco es el único par de colores que garantiza legibilidad
-  // sobre cualquier foto, a diferencia de un chip blanco/oscuro fijo.
-  Widget _buildCircleButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    required String tooltip,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const CircleBorder(
-          side: BorderSide(color: Colors.white, width: 1.5),
-        ),
-        elevation: 0,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: Icon(icon, color: Colors.white, size: 17),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildFloatingEditButton(BuildContext context, MemoryModel memory) {
     return FloatingActionButton.extended(
@@ -1182,7 +686,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                   Positioned(
                     top: 16,
                     right: 16,
-                    child: _buildCircleButton(
+                    child: CircleButton(
                       icon: Icons.close_rounded,
                       tooltip: 'Cerrar',
                       onTap: () => Navigator.pop(context),

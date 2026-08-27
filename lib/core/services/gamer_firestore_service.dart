@@ -41,11 +41,19 @@ class GamerFirestoreService {
   GamerFirestoreService({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  })  : _injectedFirestore = firestore,
+        _injectedAuth = auth;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
+  // Resolución perezosa (ver el mismo patrón y justificación en
+  // MemoryMapFirestoreService): no se tocan los singletons de Firebase
+  // hasta el primer uso real.
+  final FirebaseFirestore? _injectedFirestore;
+  final FirebaseAuth? _injectedAuth;
+
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
+
+  FirebaseAuth get _auth => _injectedAuth ?? FirebaseAuth.instance;
 
   // ==========================================================================
   // CONSTANTES
@@ -73,39 +81,6 @@ class GamerFirestoreService {
 
   String? get currentUid {
     return _auth.currentUser?.uid;
-  }
-
-  // ==========================================================================
-  // REFERENCIA A LA COLECCIÓN GAMER DEL USUARIO ACTUAL
-  // ==========================================================================
-
-  // Igual que en MemoryMapFirestoreService: la ruta usa kHouseholdId (no
-  // el uid anónimo del dispositivo) para que Eme y CeH compartan las
-  // mismas estadísticas sin importar en qué teléfono jueguen.
-  CollectionReference<Map<String, dynamic>>? get _userGamerCollection {
-    if (_auth.currentUser == null) {
-      return null;
-    }
-
-    return _firestore
-        .collection(usersCollection)
-        .doc(kHouseholdId)
-        .collection(gamerStatsCollection);
-  }
-
-  // ==========================================================================
-  // REFERENCIA A MAIN_STATS DEL USUARIO ACTUAL
-  // ==========================================================================
-
-  DocumentReference<Map<String, dynamic>>? get _currentMainStatsDocument {
-    final CollectionReference<Map<String, dynamic>>? collection =
-        _userGamerCollection;
-
-    if (collection == null) {
-      return null;
-    }
-
-    return collection.doc(mainStatsDocument);
   }
 
   // ==========================================================================
@@ -164,43 +139,6 @@ class GamerFirestoreService {
       }
 
       return int.tryParse(cleanValue) ?? fallback;
-    }
-
-    return fallback;
-  }
-
-  // ==========================================================================
-  // CONVERSIÓN SEGURA A BOOL
-  // ==========================================================================
-
-  static bool _parseBool(
-    dynamic value, {
-    bool fallback = false,
-  }) {
-    if (value is bool) {
-      return value;
-    }
-
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-
-      if (normalized == 'true' ||
-          normalized == '1' ||
-          normalized == 'yes' ||
-          normalized == 'si' ||
-          normalized == 'sí') {
-        return true;
-      }
-
-      if (normalized == 'false' ||
-          normalized == '0' ||
-          normalized == 'no') {
-        return false;
-      }
-    }
-
-    if (value is num) {
-      return value != 0;
     }
 
     return fallback;

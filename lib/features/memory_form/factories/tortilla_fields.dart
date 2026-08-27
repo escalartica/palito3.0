@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 
 class TortillaFields implements DynamicFieldGenerator {
   @override
@@ -256,7 +257,9 @@ class TortillaFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -280,8 +283,8 @@ class TortillaFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return _buildAnimatedChip(
-                    option: option,
+                  return NeoChip(
+                    label: option,
                     icon: icon,
                     isSelected: isSelected,
                     width: chipWidth,
@@ -339,7 +342,7 @@ class TortillaFields implements DynamicFieldGenerator {
                   ? Padding(
                       padding: const EdgeInsets.only(top: 10),
                       child: _buildOtroField(
-                        controller: customController!,
+                        controller: customController,
                         data: data,
                         onUpdate: onUpdate,
                       ),
@@ -347,85 +350,6 @@ class TortillaFields implements DynamicFieldGenerator {
                   : const SizedBox.shrink(),
             ),
         ],
-      ),
-    );
-  }
-
-  // ===========================================================================
-  // CHIP ANIMADO
-  // ===========================================================================
-
-  Widget _buildAnimatedChip({
-    required String option,
-    required IconData icon,
-    required bool isSelected,
-    required double width,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: width,
-      child: AnimatedScale(
-        scale: isSelected ? 1.02 : 1.0,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutBack,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFFFD400) : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFF0F172A)
-                    : const Color(0xFF0F172A).withValues(alpha: 0.25),
-                width: 2.0,
-              ),
-              boxShadow: isSelected
-                  ? const [
-                      BoxShadow(
-                        color: Color(0xFF0F172A),
-                        blurRadius: 0,
-                        offset: Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Icon(
-                    icon,
-                    key: ValueKey(isSelected),
-                    size: 14,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    option,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: const Color(0xFF0F172A),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

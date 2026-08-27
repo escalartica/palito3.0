@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/memory_model.dart';
-import '../../../features/memory_form/widgets/smart_image.dart';
+import 'smart_image.dart';
+import '../tokens/app_colors.dart';
 
-// Paleta de colores neo-brutalista
-const Color palitoDark = Color(0xFF0F172A);
-const Color palitoYellow = Color(0xFFFFD400);
+// Paleta de colores neo-brutalista (alias locales sobre AppColors, la
+// fuente única de verdad — ver core/theme/tokens/app_colors.dart).
+const Color palitoDark = AppColors.textPrimary;
+const Color palitoYellow = AppColors.primary;
 
 class HomeHero extends StatelessWidget {
   final MemoryModel? memory;
@@ -13,10 +15,14 @@ class HomeHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos la primera imagen si existe, o usamos una por defecto
+    // Solo mostramos una imagen real del propio recuerdo. Antes, si no
+    // había foto, se rellenaba con una foto de stock de un restaurante
+    // aleatorio de Unsplash — parecía una foto real del sitio/plato
+    // cuando no lo era. Mejor ser honestos: mostramos un estado vacío
+    // reconocible en vez de una imagen que no tiene nada que ver.
     final imageUrl = (memory != null && memory!.imageUrls.isNotEmpty)
         ? memory!.imageUrls.first
-        : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=800';
+        : null;
 
     final title = memory?.title ?? "Tu mejor experiencia";
     final category = memory?.category ?? "Palito";
@@ -38,9 +44,15 @@ class HomeHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(21),
         child: Stack(
           children: [
-            // 1. Imagen de fondo inteligente
+            // 1. Imagen de fondo inteligente (o estado vacío si no hay foto)
             Positioned.fill(
-              child: SmartImage(imagePath: imageUrl, fit: BoxFit.cover),
+              child: imageUrl != null
+                  ? SmartImage(
+                      imagePath: imageUrl,
+                      fit: BoxFit.cover,
+                      width: 800,
+                    )
+                  : _buildEmptyImage(),
             ),
 
             // 2. Gradiente oscuro inferior para mejorar la lectura del texto
@@ -162,6 +174,60 @@ class HomeHero extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Solo se ve cuando NINGÚN recuerdo de la categoría seleccionada tiene
+  // foto todavía (el caso normal es que la portada ya elige automáticamente
+  // el mejor valorado que SÍ tenga foto — ver home_page.dart). Con el mismo
+  // botón circular de cámara que ya se usa en el formulario, para que se
+  // sienta parte del mismo sistema visual en vez de un relleno genérico.
+  Widget _buildEmptyImage() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFF6D6), palitoYellow],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palitoYellow,
+              shape: BoxShape.circle,
+              border: Border.all(color: palitoDark, width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: palitoDark,
+                  blurRadius: 0,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.camera_alt_rounded,
+              size: 24,
+              color: palitoDark,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Aún sin foto — ¡sube la primera!',
+            style: TextStyle(
+              color: palitoDark.withValues(alpha: 0.65),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

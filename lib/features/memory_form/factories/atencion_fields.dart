@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../../../../core/factories/dynamic_field_factory.dart';
+import 'dynamic_field_factory.dart';
+import '../../../core/theme/components/neo_chip.dart';
 
 class AtencionFields implements DynamicFieldGenerator {
   @override
@@ -155,7 +156,11 @@ class AtencionFields implements DynamicFieldGenerator {
           },
           {'label': 'Como en casa', 'icon': Icons.home_rounded},
           {
-            'label': 'Enciclopedia gastronómica',
+            // "Enciclopedia gastronómica" se cortaba a mitad de palabra en
+            // la rejilla de 3 columnas (la palabra "Enciclopedia" por sí
+            // sola ya no cabe en el ancho del chip). Frase más corta con
+            // el mismo espíritu, sin ninguna palabra que desborde.
+            'label': 'Sabe de todo',
             'icon': Icons.menu_book_rounded,
           },
           {'label': 'Equipo inolvidable', 'icon': Icons.groups_rounded},
@@ -203,7 +208,9 @@ class AtencionFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
-              const columns = 3;
+              final int columns = NeoChip.columnsFor(
+                options.map((o) => o['label'] as String).toList(),
+              );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -227,96 +234,39 @@ class AtencionFields implements DynamicFieldGenerator {
                     isSelected = data[key] == option;
                   }
 
-                  return SizedBox(
+                  return NeoChip(
+                    label: option,
+                    icon: icon,
+                    isSelected: isSelected,
                     width: chipWidth,
-                    child: InkWell(
-                      onTap: () {
-                        if (isMulti) {
-                          final List selectedItems = data[key] is List
-                              ? List.from(data[key])
-                              : [];
+                    onTap: () {
+                      if (isMulti) {
+                        final List selectedItems = data[key] is List
+                            ? List.from(data[key])
+                            : [];
 
-                          final newList = List.from(selectedItems);
+                        final newList = List.from(selectedItems);
 
-                          if (isSelected) {
-                            newList.remove(option);
-                          } else {
-                            newList.add(option);
-                          }
-
-                          onUpdate(key, newList);
+                        if (isSelected) {
+                          newList.remove(option);
                         } else {
-                          onUpdate(key, isSelected ? null : option);
-
-                          // Si se deselecciona "Otro",
-                          // limpiamos el texto personalizado.
-                          if (option == 'Otro' &&
-                              isSelected &&
-                              otroKey != null) {
-                            onUpdate(otroKey, '');
-                            otroController?.clear();
-                          }
+                          newList.add(option);
                         }
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFFFFD400)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF0F172A)
-                                : const Color(
-                                    0xFF0F172A,
-                                  ).withValues(alpha: 0.25),
-                            width: 2.0,
-                          ),
-                          boxShadow: isSelected
-                              ? const [
-                                  BoxShadow(
-                                    color: Color(0xFF0F172A),
-                                    blurRadius: 0,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 14,
-                              color: const Color(0xFF0F172A),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                option,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: const Color(0xFF0F172A),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+
+                        onUpdate(key, newList);
+                      } else {
+                        onUpdate(key, isSelected ? null : option);
+
+                        // Si se deselecciona "Otro",
+                        // limpiamos el texto personalizado.
+                        if (option == 'Otro' &&
+                            isSelected &&
+                            otroKey != null) {
+                          onUpdate(otroKey, '');
+                          otroController?.clear();
+                        }
+                      }
+                    },
                   );
                 }).toList(),
               );

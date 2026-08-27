@@ -1,5 +1,7 @@
 # Design Philosophy: Palito de Sabores
 
+> **Nota (2026-08-27): este documento describe una dirección de diseño temprana ("minimalista al estilo Apple", tipografía serif, sombras sutiles) que ya no coincide con lo implementado.** La app usa hoy un sistema **neobrutalista** (bordes duros de 2-3px, sombras sólidas sin difuminar, sin degradados, tipografía Outfit/Inter) — ver la sección "Decisiones de arquitectura" de [`README.md`](README.md) para la descripción vigente. Se conserva este documento como referencia histórica de por qué se pivotó, no como guía activa.
+
 ## La Esencia
 Palito de Sabores es un diario gastronómico que debe sentirse como si Apple hubiera diseñado la experiencia: **minimalista, funcional y profundamente emocional.** ## Pilares Fundamentales
 1. **Contenido es el Protagonista:** La interfaz desaparece para que el recuerdo (la foto, el sabor, el lugar) destaque.

@@ -4,21 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
-import '../../core/services/storage_image_service.dart';
 import '../../core/providers/dock_provider.dart';
 import '../../core/data/categories.dart';
 import '../../core/theme/tokens/app_spacing.dart';
-import '../../core/providers/memory_provider.dart';
 import '../../core/models/memory_model.dart';
-import '../../features/memory_form/widgets/smart_image.dart';
-import '../../core/factories/dynamic_field_factory.dart';
-import 'package:palito_3_0/core/providers/memory_map_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../memory_form/factories/dynamic_field_factory.dart';
+import '../../features/memory_form/widgets/category_section.dart';
+import '../../features/memory_form/widgets/location_section.dart';
+import '../../features/memory_form/widgets/photo_section.dart';
+import '../../features/memory_form/widgets/rating_section.dart';
+import '../../features/memory_form/widgets/dialog_helpers.dart';
+import '../../features/memory_form/widgets/form_field_containers.dart';
+import '../../features/memory_form/controllers/memory_save_controller.dart';
 
 class MemoryFormPage extends ConsumerStatefulWidget {
   final Category? initialCategory;
@@ -37,6 +38,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   final _descController = TextEditingController();
   final _otroSaborController = TextEditingController();
 
+  // Claves para poder hacer scroll automático hasta el campo que falla
+  // la validación al guardar — en un formulario largo, el aviso por
+  // SnackBar solo no bastaba para que se supiera dónde estaba.
+  final _restaurantSectionKey = GlobalKey();
+  final _locationSectionKey = GlobalKey();
+  final _ratingSectionKey = GlobalKey();
+  final _wouldReturnSectionKey = GlobalKey();
+
   XFile? _tempMediaFile;
   Uint8List? _tempMediaBytes;
   String? _existingImagePath;
@@ -45,6 +54,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   bool _isGettingLocation = false;
   bool? _wouldReturnState;
   double _rating = 0.0;
+
+  // Distingue "el usuario ha movido el slider" de "sigue en el valor
+  // inicial sin tocar" — ambos casos pueden valer 0.0, pero solo el
+  // primero es una puntuación de 0 deliberada.
+  bool _hasInteractedWithRating = false;
 
   late String _selectedCategory;
 
@@ -137,6 +151,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       _wouldReturnState = m.wouldReturn;
 
       _rating = m.rating;
+      // Al editar, el valor ya viene de un recuerdo guardado (no es un
+      // slider recién inicializado), así que cuenta como "ya decidido".
+      _hasInteractedWithRating = true;
 
       _dynamicData = Map<String, dynamic>.from(m.specificFields);
 
@@ -311,6 +328,29 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     }
   }
 
+  // Invalida las coordenadas GPS actuales si el usuario edita a mano el
+  // texto de la dirección después de haberlas obtenido (ya no describen
+  // el mismo lugar).
+  void _handleLocationTextChanged(String _) {
+    if (_currentLocation != null) {
+      final currentText = _locationController.text.trim();
+
+      final savedAddress = _currentLocation!.address.trim();
+
+      if (currentText != savedAddress) {
+        setState(() {
+          _currentLocation = null;
+        });
+
+        debugPrint(
+          '📍 Coordenadas GPS '
+          'invalidadas porque cambió '
+          'la dirección.',
+        );
+      }
+    }
+  }
+
   // ============================================================
   // IMÁGENES
   // ============================================================
@@ -338,7 +378,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildImageSourceTile(
+                ImageSourceTile(
                   icon: Icons.camera_alt_rounded,
                   title: "Hacer una foto",
                   onTap: () {
@@ -347,7 +387,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   },
                 ),
                 const SizedBox(height: 8),
-                _buildImageSourceTile(
+                ImageSourceTile(
                   icon: Icons.photo_library_rounded,
                   title: "Elegir de la galería",
                   onTap: () {
@@ -363,39 +403,18 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     );
   }
 
-  Widget _buildImageSourceTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFD400),
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        ),
-        child: Icon(icon, color: const Color(0xFF0F172A)),
-      ),
-      title: Text(
-        title,
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.bold,
-          color: const Color(0xFF0F172A),
-        ),
-      ),
-      onTap: onTap,
-    );
-  }
-
   Future<void> _pickMedia(ImageSource source) async {
     final picker = ImagePicker();
 
     final XFile? pickedFile = await picker.pickImage(
       source: source,
       imageQuality: 80,
+      // Limita la resolución de subida: una foto de cámara moderna (10+
+      // MP) no aporta nada extra en ninguna pantalla de la app, y el
+      // preset "unsigned" de Cloudinary no tiene límite de tamaño propio
+      // configurado — cuanto más grande el original, más rápido se
+      // agota la cuota gratuita mensual.
+      maxWidth: 1600,
     );
 
     if (pickedFile != null && mounted) {
@@ -412,85 +431,6 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
       _photoAnimationController.forward(from: 0);
     }
-  }
-
-  // ============================================================
-  // GEOCODIFICACIÓN
-  // ============================================================
-
-  Future<LocationData?> _resolveAddressToLocation(String address) async {
-    final cleanAddress = address.trim();
-
-    if (cleanAddress.isEmpty) {
-      return null;
-    }
-
-    final gpsRegex = RegExp(
-      r'GPS:\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)',
-      caseSensitive: false,
-    );
-
-    final gpsMatch = gpsRegex.firstMatch(cleanAddress);
-
-    if (gpsMatch != null) {
-      final lat = double.tryParse(gpsMatch.group(1) ?? '');
-
-      final lng = double.tryParse(gpsMatch.group(2) ?? '');
-
-      if (lat != null &&
-          lng != null &&
-          lat >= -90 &&
-          lat <= 90 &&
-          lng >= -180 &&
-          lng <= 180) {
-        return LocationData(address: cleanAddress, lat: lat, lng: lng);
-      }
-    }
-
-    final queries = <String>[cleanAddress];
-
-    if (!cleanAddress.toLowerCase().contains('españa') &&
-        !cleanAddress.toLowerCase().contains('spain')) {
-      queries.add('$cleanAddress, España');
-    }
-
-    if (cleanAddress.toLowerCase() == 'medellín' ||
-        cleanAddress.toLowerCase() == 'medellin') {
-      queries.insert(0, 'Medellín, Badajoz, España');
-    }
-
-    for (final query in queries) {
-      try {
-        debugPrint('🔎 Intentando geocodificar: "$query"');
-
-        final locations = await locationFromAddress(query);
-
-        if (locations.isNotEmpty) {
-          final location = locations.first;
-
-          final lat = location.latitude;
-          final lng = location.longitude;
-
-          if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-            debugPrint(
-              '✅ Coordenadas encontradas para "$query": '
-              '$lat, $lng',
-            );
-
-            return LocationData(address: cleanAddress, lat: lat, lng: lng);
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ Fallo geocodificando "$query": $e');
-      }
-    }
-
-    debugPrint(
-      '❌ No se pudieron obtener coordenadas para: '
-      '"$cleanAddress"',
-    );
-
-    return null;
   }
 
   // ============================================================
@@ -517,6 +457,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         centerTitle: true,
         leading: _buildAnimatedIconButton(
           icon: Icons.arrow_back,
+          tooltip: 'Volver',
           onTap: () => context.pop(),
         ),
       ),
@@ -537,25 +478,49 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   delegate: SliverChildListDelegate([
                     _buildAnimatedSection(
                       index: 0,
-                      child: _buildCategorySection(),
+                      child: CategorySection(
+                        selectedCategory: _selectedCategory,
+                        onCategoryChanged: (val) {
+                          setState(() {
+                            _selectedCategory = val;
+                            _dynamicData.clear();
+                          });
+                        },
+                      ),
                     ),
                     const SizedBox(height: 20),
 
                     _buildAnimatedSection(
                       index: 1,
-                      child: _buildRestaurantSection(),
+                      child: KeyedSubtree(
+                        key: _restaurantSectionKey,
+                        child: _buildRestaurantSection(),
+                      ),
                     ),
                     const SizedBox(height: 20),
 
                     _buildAnimatedSection(
                       index: 2,
-                      child: _buildLocationSection(),
+                      child: LocationSection(
+                        key: _locationSectionKey,
+                        controller: _locationController,
+                        isGettingLocation: _isGettingLocation,
+                        gpsAnimationController: _gpsAnimationController,
+                        onGpsTap: _getCurrentLocation,
+                        onAddressChanged: _handleLocationTextChanged,
+                      ),
                     ),
                     const SizedBox(height: 24),
 
                     _buildAnimatedSection(
                       index: 3,
-                      child: _buildPhotoSection(),
+                      child: PhotoSection(
+                        onTap: _showImageSourceDialog,
+                        photoAnimationController: _photoAnimationController,
+                        tempMediaFile: _tempMediaFile,
+                        tempMediaBytes: _tempMediaBytes,
+                        existingImagePath: _existingImagePath,
+                      ),
                     ),
                     const SizedBox(height: 8),
 
@@ -596,13 +561,28 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
                     _buildAnimatedSection(
                       index: 4,
-                      child: _buildRatingSection(),
+                      child: RatingSection(
+                        key: _ratingSectionKey,
+                        rating: _rating,
+                        ratingAnimationController: _ratingAnimationController,
+                        onChanged: (v) {
+                          setState(() {
+                            _rating = v;
+                            _hasInteractedWithRating = true;
+                          });
+
+                          _ratingAnimationController.forward(from: 0);
+                        },
+                      ),
                     ),
                     const SizedBox(height: 20),
 
                     _buildAnimatedSection(
                       index: 5,
-                      child: _buildReturnSection(),
+                      child: KeyedSubtree(
+                        key: _wouldReturnSectionKey,
+                        child: _buildReturnSection(),
+                      ),
                     ),
                     const SizedBox(height: 20),
 
@@ -629,50 +609,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // SECCIONES
   // ============================================================
 
-  Widget _buildCategorySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel("Categoría"),
-        const SizedBox(height: 8),
-        _buildNeoContainer(
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedCategory,
-              isExpanded: true,
-              dropdownColor: Colors.white,
-              style: GoogleFonts.outfit(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
-              ),
-              items: gastronomicCategories.map((cat) {
-                return DropdownMenuItem(value: cat.name, child: Text(cat.name));
-              }).toList(),
-              onChanged: (val) {
-                if (val == null || val == _selectedCategory) {
-                  return;
-                }
-
-                setState(() {
-                  _selectedCategory = val;
-                  _dynamicData.clear();
-                });
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildRestaurantSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel("Restaurante / Lugar"),
+        const SectionLabel("Restaurante / Lugar"),
         const SizedBox(height: 8),
-        _buildNeoContainer(
+        NeoContainer(
           child: TextField(
             controller: _restaurantController,
             style: GoogleFonts.inter(
@@ -680,350 +623,102 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
-            decoration: _inputDecoration("Ej. Taberna La Bulería"),
+            decoration: memoryFormInputDecoration("Ej. Taberna La Bulería"),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildLocationSection() {
+  // Antes era un Switch binario sobre un estado de 3 valores (sin
+  // responder / sí / no): "sin responder" y "no" se veían exactamente
+  // igual (el switch apagado), así que no había forma de saber si ya
+  // habías contestado "No" o si simplemente no lo habías tocado. Con dos
+  // botones explícitos, cada respuesta tiene su propio estado visual.
+  Widget _buildReturnSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel("Ubicación"),
+        const SectionLabel("¿Volverías a este lugar?"),
         const SizedBox(height: 8),
-        _buildNeoContainer(
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _locationController,
-                  onChanged: (_) {
-                    if (_currentLocation != null) {
-                      final currentText = _locationController.text.trim();
-
-                      final savedAddress = _currentLocation!.address.trim();
-
-                      if (currentText != savedAddress) {
-                        setState(() {
-                          _currentLocation = null;
-                        });
-
-                        debugPrint(
-                          '📍 Coordenadas GPS '
-                          'invalidadas porque cambió '
-                          'la dirección.',
-                        );
-                      }
-                    }
-                  },
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  decoration: _inputDecoration(
-                    "Escribe una ciudad o dirección",
-                  ),
-                ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildReturnOption(
+                label: "Sí",
+                icon: Icons.check_circle_rounded,
+                isSelected: _wouldReturnState == true,
+                selectedColor: const Color(0xFFFFD400),
+                onTap: () => setState(() => _wouldReturnState = true),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: _buildGpsButton(),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildReturnOption(
+                label: "No",
+                icon: Icons.cancel_rounded,
+                isSelected: _wouldReturnState == false,
+                selectedColor: const Color(0xFFFFCDBD),
+                onTap: () => setState(() => _wouldReturnState = false),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildGpsButton() {
-    return GestureDetector(
-      onTap: _isGettingLocation ? null : _getCurrentLocation,
+  Widget _buildReturnOption({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color selectedColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.all(8),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: _isGettingLocation
-              ? const Color(0xFFFFE77A)
-              : const Color(0xFFFFD400),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF0F172A), width: 2),
-          boxShadow: _isGettingLocation
-              ? const []
-              : const [
+          color: isSelected ? selectedColor : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF0F172A),
+            width: isSelected ? 2.5 : 1.5,
+          ),
+          boxShadow: isSelected
+              ? const [
                   BoxShadow(
                     color: Color(0xFF0F172A),
                     blurRadius: 0,
-                    offset: Offset(0, 2),
+                    offset: Offset(0, 3),
                   ),
-                ],
+                ]
+              : null,
         ),
-        child: RotationTransition(
-          turns: _gpsAnimationController,
-          child: Icon(
-            _isGettingLocation ? Icons.sync_rounded : Icons.my_location_rounded,
-            color: const Color(0xFF0F172A),
-            size: 18,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhotoSection() {
-    final hasImage =
-        _tempMediaFile != null ||
-        (_existingImagePath != null && _existingImagePath!.isNotEmpty);
-
-    return GestureDetector(
-      onTap: _showImageSourceDialog,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1.0).animate(
-          CurvedAnimation(
-            parent: _photoAnimationController,
-            curve: Curves.easeOutBack,
-          ),
-        ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 350),
-          height: 180,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFAEB),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0xFF0F172A),
-                blurRadius: 0,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_tempMediaBytes != null)
-                  Image.memory(_tempMediaBytes!, fit: BoxFit.cover)
-                else if (_existingImagePath != null &&
-                    _existingImagePath!.isNotEmpty)
-                  SmartImage(imagePath: _existingImagePath, fit: BoxFit.cover)
-                else
-                  _buildEmptyPhotoState(),
-
-                if (hasImage)
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: _buildChangePhotoBadge(),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyPhotoState() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.85, end: 1.0),
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeOutBack,
-          builder: (context, scale, child) {
-            return Transform.scale(scale: scale, child: child);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD400),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF0F172A), width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.camera_alt_rounded,
-              size: 24,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          "Añadir foto del plato o lugar",
-          style: GoogleFonts.outfit(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChangePhotoBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFD400),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFF0F172A),
-            blurRadius: 0,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.edit, size: 14, color: Color(0xFF0F172A)),
-          const SizedBox(width: 6),
-          Text(
-            "Cambiar foto",
-            style: GoogleFonts.outfit(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
               color: const Color(0xFF0F172A),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRatingSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel("Puntuación general"),
-        const SizedBox(height: 8),
-        _buildNeoContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    activeTrackColor: const Color(0xFF0F172A),
-                    inactiveTrackColor: Colors.grey.shade300,
-                    thumbColor: const Color(0xFFFFD400),
-                    overlayColor: const Color(
-                      0xFFFFD400,
-                    ).withValues(alpha: 0.2),
-                    trackHeight: 6,
-                  ),
-                  child: Slider(
-                    value: _rating,
-                    min: 0,
-                    max: 10,
-                    divisions: 10,
-                    onChanged: (v) {
-                      setState(() {
-                        _rating = v;
-                      });
-
-                      _ratingAnimationController.forward(from: 0);
-                    },
-                  ),
-                ),
-              ),
-              ScaleTransition(
-                scale: Tween<double>(begin: 0.85, end: 1.0).animate(
-                  CurvedAnimation(
-                    parent: _ratingAnimationController,
-                    curve: Curves.easeOutBack,
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD400),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFF0F172A),
-                      width: 2,
-                    ),
-                  ),
-                  child: Text(
-                    _rating.toStringAsFixed(1),
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReturnSection() {
-    final isSelected = _wouldReturnState == true;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel("¿Volverías a este lugar?"),
-        const SizedBox(height: 8),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFFAEB) : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0xFF0F172A),
-                blurRadius: 0,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: SwitchListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            title: Text(
-              "¿Volverías?",
+            const SizedBox(width: 6),
+            Text(
+              label,
               style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: const Color(0xFF0F172A),
                 fontSize: 14,
               ),
             ),
-            value: _wouldReturnState ?? false,
-            activeThumbColor: const Color(0xFFFFD400),
-            onChanged: (v) {
-              setState(() {
-                _wouldReturnState = v;
-              });
-            },
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -1031,9 +726,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel("Nota personal"),
+        const SectionLabel("Nota personal"),
         const SizedBox(height: 8),
-        _buildNeoContainer(
+        NeoContainer(
           child: TextField(
             controller: _descController,
             maxLines: 3,
@@ -1042,7 +737,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
               fontWeight: FontWeight.w500,
               fontSize: 14,
             ),
-            decoration: _inputDecoration(
+            decoration: memoryFormInputDecoration(
               "Escribe tus impresiones...",
               contentPadding: const EdgeInsets.all(14),
             ),
@@ -1073,6 +768,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
               ? const Color(0xFFFFE77A)
               : const Color(0xFFFFD400),
           foregroundColor: const Color(0xFF0F172A),
+          // Sin esto, al deshabilitar el botón (onPressed: null mientras
+          // se guarda) Material aplicaba su color de "disabled" por
+          // defecto en vez del amarillo que se le pasaba arriba — el
+          // botón se veía completamente oscuro y el texto "Guardando..."
+          // ilegible sobre ese fondo.
+          disabledBackgroundColor: const Color(0xFFFFE77A),
+          disabledForegroundColor: const Color(0xFF0F172A),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
@@ -1119,8 +821,6 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // ============================================================
 
   Widget _buildAnimatedSection({required int index, required Widget child}) {
-    final delay = Duration(milliseconds: 50 * index);
-
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 500 + (index * 50)),
@@ -1138,35 +838,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     );
   }
 
-  Widget _buildNeoContainer({
-    required Widget child,
-    EdgeInsetsGeometry? padding,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding:
-          padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xFF0F172A),
-            blurRadius: 0,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
   Widget _buildAnimatedIconButton({
     required IconData icon,
     required VoidCallback onTap,
+    String? tooltip,
   }) {
-    return Padding(
+    final Widget button = Padding(
       padding: const EdgeInsets.all(8),
       child: Material(
         color: Colors.transparent,
@@ -1192,35 +869,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         ),
       ),
     );
-  }
 
-  InputDecoration _inputDecoration(
-    String hint, {
-    EdgeInsetsGeometry? contentPadding,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: GoogleFonts.inter(
-        color: Colors.grey.shade400,
-        fontWeight: FontWeight.w400,
-        fontSize: 14,
-      ),
-      border: InputBorder.none,
-      contentPadding:
-          contentPadding ??
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    );
-  }
+    if (tooltip == null) {
+      return button;
+    }
 
-  Widget _buildSectionLabel(String title) {
-    return Text(
-      title,
-      style: GoogleFonts.outfit(
-        fontSize: 16,
-        fontWeight: FontWeight.w900,
-        color: const Color(0xFF0F172A),
-      ),
-    );
+    return Tooltip(message: tooltip, child: button);
   }
 
   // ============================================================
@@ -1229,22 +883,32 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Future<void> _saveMemory() async {
     if (_restaurantController.text.trim().isEmpty) {
-      _showError("Nombre de restaurante");
+      _showError("Nombre de restaurante", key: _restaurantSectionKey);
       return;
     }
 
     if (_locationController.text.trim().isEmpty) {
-      _showError("Ubicación");
+      _showError("Ubicación", key: _locationSectionKey);
       return;
     }
 
     if (_rating <= 0.0) {
-      _showError("Puntuación");
-      return;
+      if (!_hasInteractedWithRating) {
+        // El slider sigue en su valor inicial: probablemente se olvidó
+        // de puntuar, no quiere dar un 0 a propósito.
+        _showError("Puntuación", key: _ratingSectionKey);
+        return;
+      }
+
+      // Sí ha movido el slider hasta 0: puede ser intencional (una
+      // experiencia realmente mala), así que se confirma en vez de
+      // bloquear o guardar sin preguntar.
+      final bool confirmedZero = await _confirmZeroRating();
+      if (!confirmedZero) return;
     }
 
     if (_wouldReturnState == null) {
-      _showError("¿Volverías?");
+      _showError("¿Volverías?", key: _wouldReturnSectionKey);
       return;
     }
 
@@ -1259,237 +923,55 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     _saveAnimationController.repeat();
 
     try {
-      // ========================================================
-      // 0. ID (se genera antes para poder usarlo como carpeta de Storage)
-      // ========================================================
-
-      final memoryId = widget.memory?.id ?? const Uuid().v4();
-
-      // ========================================================
-      // 1. GUARDAR IMAGEN (Firebase Storage — visible en ambos móviles)
-      // ========================================================
-
-      List<String> finalImagePaths = List<String>.from(
-        widget.memory?.imageUrls ?? <String>[],
-      );
-
-      if (_tempMediaBytes != null) {
-        final downloadUrl = await StorageImageService.uploadMemoryImage(
-          memoryId: memoryId,
-          bytes: _tempMediaBytes!,
-        );
-
-        finalImagePaths = [downloadUrl];
-      } else if (_existingImagePath != null && _existingImagePath!.isNotEmpty) {
-        finalImagePaths = [_existingImagePath!];
-      }
-
-      // ========================================================
-      // 2. RESOLVER UBICACIÓN
-      // ========================================================
-
-      final String addressText = _locationController.text.trim();
-
-      LocationData? resolvedLocation;
-
-      if (_currentLocation != null &&
-          _currentLocation!.lat != null &&
-          _currentLocation!.lng != null) {
-        final currentLat = _currentLocation!.lat!;
-        final currentLng = _currentLocation!.lng!;
-
-        if (_currentLocation!.address.trim().toLowerCase() ==
-            addressText.toLowerCase()) {
-          resolvedLocation = LocationData(
-            address: addressText,
-            lat: currentLat,
-            lng: currentLng,
-          );
-
-          debugPrint(
-            '📍 Usando coordenadas GPS actuales: '
-            '$currentLat, $currentLng',
-          );
-        }
-      }
-
-      if (resolvedLocation == null &&
-          _isEditing &&
-          widget.memory != null &&
-          widget.memory!.location.lat != null &&
-          widget.memory!.location.lng != null &&
-          widget.memory!.location.address.trim().toLowerCase() ==
-              addressText.toLowerCase()) {
-        resolvedLocation = LocationData(
-          address: addressText,
-          lat: widget.memory!.location.lat,
-          lng: widget.memory!.location.lng,
-        );
-
-        debugPrint(
-          '📍 Conservando coordenadas anteriores: '
-          '${resolvedLocation.lat}, '
-          '${resolvedLocation.lng}',
-        );
-      }
-
-      resolvedLocation ??= await _resolveAddressToLocation(addressText);
-
-      if (resolvedLocation == null ||
-          resolvedLocation.lat == null ||
-          resolvedLocation.lng == null) {
-        debugPrint(
-          '❌ No se pudo obtener coordenadas '
-          'para la ubicación "$addressText".',
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "No se pudo localizar esta dirección. "
-                "Usa el botón GPS o escribe una ciudad/dirección válida.",
-              ),
-            ),
-          );
-        }
-
-        return;
-      }
-
-      final double lat = resolvedLocation.lat!;
-
-      final double lng = resolvedLocation.lng!;
-
-      debugPrint(
-        '📍 UBICACIÓN FINAL VALIDADA: '
-        'address=$addressText, '
-        'lat=$lat, '
-        'lng=$lng',
-      );
-
-      // ========================================================
-      // 3. LOCATIONDATA FINAL
-      // ========================================================
-
-      final finalLocation = LocationData(
-        address: addressText,
-        lat: lat,
-        lng: lng,
-      );
-
-      // ========================================================
-      // 4. DATOS DINÁMICOS
-      // ========================================================
-
-      final Map<String, dynamic> finalDynamicData = Map<String, dynamic>.from(
-        _dynamicData,
-      );
-
-      if (_descController.text.trim().isNotEmpty) {
-        finalDynamicData['description'] = _descController.text.trim();
-      } else {
-        finalDynamicData.remove('description');
-      }
-
-      if (_otroSaborController.text.trim().isNotEmpty) {
-        finalDynamicData['otro_sabor'] = _otroSaborController.text.trim();
-      }
-
-      // ========================================================
-      // 6. MODELO FINAL
-      // ========================================================
-
-      final newMemory = MemoryModel(
-        id: memoryId,
-        title: _restaurantController.text.trim(),
+      final MemorySaveResult result = await MemorySaveController(ref).save(
+        existingMemory: widget.memory,
         restaurantName: _restaurantController.text.trim(),
-        location: finalLocation,
+        addressText: _locationController.text.trim(),
+        currentGpsLocation: _currentLocation,
         wouldReturn: _wouldReturnState ?? false,
         rating: _rating,
-        imageUrls: finalImagePaths,
-        videoUrl: widget.memory?.videoUrl,
-        date: widget.memory?.date ?? DateTime.now(),
+        tempMediaBytes: _tempMediaBytes,
+        existingImagePath: _existingImagePath,
         category: _selectedCategory,
-        specificFields: finalDynamicData,
+        dynamicData: _dynamicData,
+        description: _descController.text.trim(),
+        otroSabor: _otroSaborController.text.trim(),
       );
 
-      // ========================================================
-      // 7. DATOS FIRESTORE
-      // ========================================================
+      if ((result.couldNotGeocode || result.couldNotUploadPhoto) && mounted) {
+        final List<String> warnings = [
+          if (result.couldNotUploadPhoto)
+            "no se pudo subir la foto (revisa tu conexión y vuelve a "
+                "intentarlo editando el recuerdo)",
+          if (result.couldNotGeocode)
+            "no se pudo localizar la dirección en el mapa (puedes "
+                "corregirla luego con el botón GPS)",
+        ];
 
-      final Map<String, dynamic> firestoreMemoryData =
-          Map<String, dynamic>.from(newMemory.toJson());
-
-      firestoreMemoryData['timestamp'] = FieldValue.serverTimestamp();
-
-      firestoreMemoryData['location'] = {
-        'address': addressText,
-        'lat': lat,
-        'lng': lng,
-      };
-
-      firestoreMemoryData['id'] = memoryId;
-
-      debugPrint(
-        '💾 FIRESTORE MEMORY DATA: '
-        '$firestoreMemoryData',
-      );
-
-      // ========================================================
-      // 8. GUARDAR EN PROVIDER LOCAL
-      // ========================================================
-
-      if (_isEditing) {
-        ref.read(memoryProvider.notifier).updateMemory(newMemory);
-      } else {
-        ref.read(memoryProvider.notifier).addMemory(newMemory);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Recuerdo guardado, pero ${warnings.join(' y ')}.",
+            ),
+          ),
+        );
       }
-
-      // ========================================================
-      // 9. GUARDAR EN FIRESTORE
-      // ========================================================
-
-      final memoryMapService = ref.read(memoryMapServiceProvider);
-
-      await memoryMapService.saveMemory(
-        memoryId: memoryId,
-        memoryData: firestoreMemoryData,
-      );
-
-      // ========================================================
-      // 10. SINCRONIZAR COLLECTION LOCATIONS
-      // ========================================================
-
-      await memoryMapService.saveLocation(
-        locationId: memoryId,
-        locationData: {
-          'memoryId': memoryId,
-          'title': newMemory.title,
-          'restaurantName': newMemory.restaurantName,
-          'address': addressText,
-          'lat': lat,
-          'lng': lng,
-          'category': _selectedCategory,
-          'rating': _rating,
-          'wouldReturn': _wouldReturnState ?? false,
-        },
-      );
-
-      debugPrint('✅ RECUERDO GUARDADO COMPLETAMENTE');
-
-      debugPrint(
-        '🗺️ COORDENADAS DISPONIBLES PARA EL MAPA: '
-        '$lat, $lng',
-      );
     } catch (e, stack) {
       debugPrint('❌ Error guardando recuerdo: $e');
 
       debugPrintStack(stackTrace: stack);
 
       if (mounted) {
+        // El detalle técnico ($e) ya queda en el log de arriba; al
+        // usuario le sirve más un mensaje que pueda entender y que le
+        // diga qué hacer.
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error guardando el recuerdo: $e")),
+          const SnackBar(
+            content: Text(
+              "No se pudo guardar el recuerdo. Comprueba tu conexión "
+              "e inténtalo de nuevo.",
+            ),
+          ),
         );
       }
 
@@ -1514,12 +996,118 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // ERRORES
   // ============================================================
 
-  void _showError(String field) {
+  void _showError(String field, {GlobalKey? key}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         content: Text("Por favor, completa: $field"),
       ),
     );
+
+    // Con 8-10 bloques de campos, el aviso solo por SnackBar obligaba a
+    // buscar el campo a mano — ahora, si sabemos dónde está, hacemos
+    // scroll automático hasta él.
+    final BuildContext? fieldContext = key?.currentContext;
+
+    if (fieldContext != null) {
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        alignment: 0.1,
+      );
+    }
+  }
+
+  Future<bool> _confirmZeroRating() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.55),
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBF0),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF0F172A), width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xFF0F172A),
+                blurRadius: 0,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF6D6),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF0F172A),
+                    width: 2,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.star_border_rounded,
+                  color: Color(0xFF0F172A),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '¿Guardar con puntuación 0?',
+                style: GoogleFonts.outfit(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Has dejado el slider en 0. Confirma que es la '
+                'puntuación que quieres darle, no que se te ha '
+                'olvidado moverlo.',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.75),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: DialogButton(
+                      label: 'Volver a puntuar',
+                      backgroundColor: Colors.white,
+                      onTap: () => Navigator.of(dialogContext).pop(false),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DialogButton(
+                      label: 'Guardar con 0',
+                      backgroundColor: const Color(0xFFFFD400),
+                      onTap: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return confirmed ?? false;
   }
 }

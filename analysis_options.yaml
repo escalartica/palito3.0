@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # build/ contiene artefactos generados (incluidos checkouts de Swift
+  # Package Manager de dependencias como flutterfire, con sus propios
+  # tests) que no son código de este proyecto y no deben analizarse.
+  exclude:
+    - build/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
