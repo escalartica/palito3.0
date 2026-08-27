@@ -280,9 +280,34 @@ class _GamerPageState extends ConsumerState<GamerPage>
     IconData icon,
     Color color,
   ) {
-    showDialog(
+    // showGeneralDialog en vez de showDialog: el logro es el momento de
+    // mayor carga emocional de la app (raro, "delight" en el sentido de
+    // apple-design), así que se le da una entrada propia con rebote —a
+    // diferencia del fade+scale genérico de Material— en vez de reusar
+    // el mismo Curves.easeOutBack ya usado en el resto de la UI para
+    // mantener coherencia de vocabulario.
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      barrierLabel: 'Logro desbloqueado',
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 400),
+      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+        // reverseCurve sin rebote: el rebote solo tiene sentido
+        // "llegando" (el logro apareciendo), no "yéndose" — reproducir
+        // el mismo easeOutBack al revés se ve como si el diálogo se
+        // desinflara de forma rara.
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeIn,
+        );
+        return Opacity(
+          opacity: animation.value.clamp(0.0, 1.0),
+          child: Transform.scale(scale: curved.value, child: child),
+        );
+      },
+      pageBuilder: (ctx, animation, secondaryAnimation) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: _kDark, width: 2.5),

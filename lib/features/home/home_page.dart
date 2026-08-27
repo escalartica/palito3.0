@@ -937,7 +937,22 @@ class _HomePageState extends ConsumerState<HomePage>
         vertical: 20,
       ),
       child: Center(
-        child: Container(
+        // Entrada suave (sin rebote: no es una celebración, solo evita que
+        // el estado vacío aparezca de golpe la primera vez que se ve).
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(
+                scale: 0.95 + (0.05 * value),
+                child: child,
+              ),
+            );
+          },
+          child: Container(
           width:
               double.infinity,
           padding:
@@ -985,6 +1000,7 @@ class _HomePageState extends ConsumerState<HomePage>
               ),
             ],
           ),
+          ),
         ),
       ),
     );
@@ -1007,7 +1023,20 @@ class _HomePageState extends ConsumerState<HomePage>
         vertical: 20,
       ),
       child: Center(
-        child: Container(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(
+                scale: 0.95 + (0.05 * value),
+                child: child,
+              ),
+            );
+          },
+          child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
@@ -1058,6 +1087,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -1251,80 +1281,90 @@ class _HomePageState extends ConsumerState<HomePage>
     final bool isSelected =
         label == selected;
 
+    return _FilterChip(
+      label: label,
+      isSelected: isSelected,
+      onTap: () {
+        ref
+            .read(
+              selectedCategoryProvider
+                  .notifier,
+            )
+            .state = label;
+      },
+    );
+  }
+}
+
+/// Chip de categoría del filtro de Home. Extraído a su propio
+/// StatefulWidget (en vez de un método en _HomePageState) para que el
+/// feedback de pulsación (escala sutil, sin rebote — se pulsa muchas
+/// veces por sesión) viva en un `setState` local y no fuerce reconstruir
+/// toda la página en cada tap-down/up.
+class _FilterChip extends StatefulWidget {
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  State<_FilterChip> createState() => _FilterChipState();
+}
+
+class _FilterChipState extends State<_FilterChip> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding:
-          const EdgeInsets.only(
-        right: 8,
-      ),
-      child:
-          GestureDetector(
-        onTap: () {
-          ref
-              .read(
-                selectedCategoryProvider
-                    .notifier,
-              )
-              .state = label;
-        },
-        child:
-            AnimatedContainer(
-          duration:
-              const Duration(
-            milliseconds: 250,
-          ),
-          curve:
-              Curves.easeOutCubic,
-          alignment:
-              Alignment.center,
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 6,
-          ),
-          decoration:
-              BoxDecoration(
-            color: isSelected
-                ? colorTextMain
-                : colorCardSurface,
-            borderRadius:
-                BorderRadius.circular(
-              14,
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.96 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 6,
             ),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    Colors.black
-                        .withValues(
-                  alpha:
-                      isSelected
-                          ? 0.12
-                          : 0.03,
+            decoration: BoxDecoration(
+              color: widget.isSelected ? colorTextMain : colorCardSurface,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: widget.isSelected ? 0.12 : 0.03,
+                  ),
+                  blurRadius: widget.isSelected ? 6 : 4,
+                  offset: const Offset(0, 2),
                 ),
-                blurRadius:
-                    isSelected
-                        ? 6
-                        : 4,
-                offset:
-                    const Offset(
-                  0,
-                  2,
-                ),
+              ],
+            ),
+            child: Text(
+              widget.label,
+              style: GoogleFonts.outfit(
+                color: widget.isSelected ? Colors.white : Colors.grey.shade700,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
-            ],
-          ),
-          child:
-              Text(
-            label,
-            style:
-                GoogleFonts.outfit(
-              color: isSelected
-                  ? Colors.white
-                  : Colors
-                      .grey
-                      .shade700,
-              fontSize: 13,
-              fontWeight:
-                  FontWeight.w600,
             ),
           ),
         ),
