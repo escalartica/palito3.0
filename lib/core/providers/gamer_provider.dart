@@ -1,6 +1,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/services/gamer_firestore_service.dart';
 
 // ============================================================================
@@ -26,7 +27,9 @@ import 'package:palito_3_0/core/services/gamer_firestore_service.dart';
 
 final gamerServiceProvider = Provider<GamerFirestoreService>(
   (ref) {
-    return GamerFirestoreService();
+    final String? householdId = ref.watch(currentHouseholdIdProvider);
+
+    return GamerFirestoreService(householdId: householdId);
   },
 );
 

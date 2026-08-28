@@ -9,8 +9,6 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'package:palito_3_0/firebase_options.dart';
-import 'package:palito_3_0/core/services/household_migration_service.dart';
-import 'package:palito_3_0/core/services/legacy_photo_migration.dart';
 import 'package:palito_3_0/core/models/memory_model.dart';
 import 'package:palito_3_0/core/theme/app_theme.dart';
 import 'package:palito_3_0/core/theme/components/app_dock.dart';
@@ -68,20 +66,6 @@ _initializeObservability();
 
 if (firebaseReady) {
 await _ensureFirebaseAuthentication();
-}
-
-// ============================================================
-// MIGRACIÓN A HOGAR COMPARTIDO
-// ============================================================
-//
-// Copia (una sola vez, por dispositivo) los datos guardados bajo el
-// antiguo uid anónimo de este teléfono al documento compartido del
-// hogar, para que los recuerdos y estadísticas ya registrados no se
-// pierdan al pasar a la arquitectura multi-dispositivo.
-
-if (firebaseAuthenticated) {
-await migrateLegacyUserDataToHousehold();
-await migrateLegacyPhotosToStorage();
 }
 
 // ============================================================

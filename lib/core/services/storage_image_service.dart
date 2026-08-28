@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/cloudinary_config.dart';
-import '../config/household_config.dart';
 
 /// Sube fotos a Cloudinary (gratis, sin tarjeta) en vez de al almacenamiento
 /// local del dispositivo, para que sean visibles en todos los móviles del
@@ -61,17 +60,23 @@ class StorageImageService {
   }
 
   /// Sube la foto de perfil de un comensal (índice 0, 1 o 2), guarda su
-  /// URL en Firestore (households/{hogar}, campo profileImages) para que
-  /// sea la misma en todos los dispositivos, y la devuelve.
+  /// URL en Firestore (households/{householdId}, campo profileImages) para
+  /// que sea la misma en todos los dispositivos, y la devuelve.
+  ///
+  /// NOTA (multi-tenant Fase C): sigue indexado por `profileIndex` (0/1/2)
+  /// en vez de por uid porque profile_page.dart todavía usa esas pestañas
+  /// fijas — pasa a indexarse por uid cuando esa pantalla se reescriba
+  /// sobre pertenencia real al hogar.
   static Future<String> uploadProfileImage({
+    required String householdId,
     required int profileIndex,
     required Uint8List bytes,
   }) async {
     final url = await _uploadToCloudinary(bytes, 'profile_$profileIndex.jpg');
 
     await FirebaseFirestore.instance
-        .collection('users')
-        .doc(kHouseholdId)
+        .collection('households')
+        .doc(householdId)
         .set(
           {
             'profileImages': {'$profileIndex': url},
@@ -84,10 +89,13 @@ class StorageImageService {
 
   /// Devuelve la URL de la foto de perfil de [profileIndex] si existe, o
   /// `null` si ese comensal todavía no tiene foto.
-  static Future<String?> getProfileImageUrl(int profileIndex) async {
+  static Future<String?> getProfileImageUrl(
+    String householdId,
+    int profileIndex,
+  ) async {
     final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(kHouseholdId)
+        .collection('households')
+        .doc(householdId)
         .get();
 
     final data = doc.data();

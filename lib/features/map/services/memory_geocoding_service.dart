@@ -29,11 +29,11 @@ import '../../../core/services/memory_map_firestore_service.dart';
 /// reencuadrar la cámara).
 class MemoryGeocodingService {
   MemoryGeocodingService({
-    MemoryMapFirestoreService? firestoreService,
-  }) : _firestoreService =
-            firestoreService ?? MemoryMapFirestoreService();
+    required MemoryMapFirestoreService firestoreService,
+  }) : _firestoreService = firestoreService;
 
-  /// Inyectable para tests; en producción siempre es una instancia real.
+  /// Inyectable para tests; en producción, la misma instancia compartida
+  /// que expone `memoryMapServiceProvider`.
   final MemoryMapFirestoreService _firestoreService;
 
   /// Caché de geocodificación por dirección.

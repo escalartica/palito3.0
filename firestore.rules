@@ -1,52 +1,104 @@
 rules_version = '2';
 
-// Palito de Sabores — app privada del hogar de Eme y CeH, no
-// multi-tenant. Todos los datos viven bajo users/{kHouseholdId} (ver
-// lib/core/config/household_config.dart) y se comparten entre todos los
-// dispositivos del hogar.
+// Palito de Sabores — reglas para el modelo multi-tenant (households +
+// cuentas reales con Sign in with Apple), en sustitución del modelo
+// anterior de un único hogar fijo (users/{kHouseholdId}) con una
+// whitelist de uids anónimos.
 //
-// Antes: bastaba con "request.auth != null" — cualquier sesión de
-// Firebase Auth, incluida una anónima creada por un desconocido que
-// solo necesitara conocer el projectId (no es secreto, viaja en el
-// propio bundle de la app), podía leer/escribir todos los datos del
-// hogar. Ahora se exige además que el uid de esa sesión esté en la
-// whitelist de _isHouseholdMember() — los uids anónimos reales de los
-// dispositivos del hogar (Firebase Console > Authentication > Users).
+// Modelo:
+//   users/{uid}              — perfil propio de cada usuario (solo él
+//                               puede leerlo/escribirlo). Guarda
+//                               `householdId`: a qué hogar pertenece.
+//   households/{householdId} — datos compartidos por sus miembros
+//                               (memories, locations, gamer_stats,
+//                               game_history, profileImages).
+//   invites/{code}            — códigos de invitación de un solo uso
+//                               para unirse a un hogar.
 //
-// Mantenimiento: instalar la app en un dispositivo nuevo (o borrar
-// datos/reinstalar en uno existente) genera un uid anónimo distinto,
-// que hay que añadir aquí a mano y volver a desplegar las reglas para
-// que ese dispositivo pueda sincronizar. Es el coste de mantenimiento
-// de este enfoque de coste cero — si el hogar dejara de ser un grupo
-// pequeño y conocido de dispositivos, el paso natural sería sustituir
-// esto por autenticación real (no anónima).
+// IMPORTANTE (no desplegar todavía): estas reglas asumen que la app ya
+// resuelve el hogar del usuario a partir de users/{uid}.householdId
+// (ver lib/core/providers/household_provider.dart) en vez del antiguo
+// kHouseholdId fijo. Desplegarlas antes de que la Fase B (Sign in with
+// Apple) y la Fase E (migración de los datos reales) estén completas
+// cortaría el acceso de los dos usuarios actuales, que siguen
+// funcionando hoy con sesión anónima sobre users/palito-hogar/**. Los
+// datos antiguos bajo ese documento no se tocan aquí — quedan como
+// copia de seguridad de solo-Consola hasta la migración.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isHouseholdMember() {
-      return request.auth != null && request.auth.uid in [
-        'kazI88gXtoQTLM8vDgHQS1rcLrf2',
-        'JYTa1rC8K5O3Gj4CE1aazAUT6AU2',
-        'edyWrF7U3HPBbW6lKcuIzec0r0N2',
-        '3RYayrII74T2vpALV1X75eVdGY42',
-        'pqtpXx4WiOV3gVvhfmCOgiuqXw53',
-        'fudChOtrc2S5S9JVoUXEBVz0ltB2',
-        // iPhone de CeH — uids anónimos generados durante las
-        // reinstalaciones del 27/08/2026 (cada `flutter install` hace un
-        // desinstalar+instalar completo, lo que borra la sesión anónima
-        // guardada en el llavero y genera un uid nuevo). Se guardan
-        // todos por si acaso; cerrar/abrir la app normal SÍ conserva el
-        // uid, solo una reinstalación completa lo cambia.
-        'byNbd1IRAjRreG5dDKBHzKfQmhm1',
-        'ZQA4t7bibeXxWuoSj2QLwVZ5imC3'
-      ];
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    match /users/{userId} {
-      allow read, write: if isHouseholdMember();
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
-    match /users/{userId}/{document=**} {
-      allow read, write: if isHouseholdMember();
+    // Lee el propio documento users/{uid} del solicitante para saber a
+    // qué hogar pertenece, sin necesitar pasarlo como segmento de ruta.
+    function callerHouseholdId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId;
+    }
+
+    function isHouseholdMember(householdId) {
+      return isSignedIn() && householdId == callerHouseholdId();
+    }
+
+    // Añadir el propio uid a members es el único cambio permitido a un
+    // hogar del que todavía no se es miembro — es el paso de "unirse
+    // con código" (ver invites/{code} más abajo), que necesariamente
+    // ocurre antes de que isHouseholdMember() empiece a devolver true
+    // para este usuario.
+    function isJoiningHousehold() {
+      return isSignedIn()
+        && !(request.auth.uid in resource.data.members)
+        && request.resource.data.members.hasOnly(
+             resource.data.members.concat([request.auth.uid])
+           )
+        && request.resource.data.members.hasAll(resource.data.members);
+    }
+
+    // ---------------- users/{uid} ----------------
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ---------------- households/{householdId} ----------------
+    match /households/{householdId} {
+      allow read: if isHouseholdMember(householdId);
+      allow create: if isSignedIn()
+        && request.resource.data.members.hasOnly([request.auth.uid])
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isHouseholdMember(householdId)
+        || isJoiningHousehold();
+
+      match /{subcollection}/{document=**} {
+        allow read, write: if isHouseholdMember(householdId);
+      }
+    }
+
+    // ---------------- invites/{code} ----------------
+    match /invites/{code} {
+      // Solo lectura por ID exacto — nunca se concede `list`, así que la
+      // colección no se puede enumerar aunque cualquier usuario
+      // autenticado pueda resolver un código concreto que ya conozca.
+      allow get: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.householdId == callerHouseholdId()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.usedBy == null
+        && request.resource.data.useCount == 0;
+
+      allow update: if isSignedIn()
+        && resource.data.useCount < resource.data.maxUses
+        && resource.data.expiresAt > request.time
+        && request.resource.data.householdId == resource.data.householdId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.maxUses == resource.data.maxUses;
+
+      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
     match /{document=**} {

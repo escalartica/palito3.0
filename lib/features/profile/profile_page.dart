@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/household_config.dart';
 import '../../core/providers/memory_provider.dart';
 import '../../core/providers/gamer_provider.dart';
 import '../../core/services/gamer_firestore_service.dart';
@@ -184,8 +185,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   Future<void> _loadProfileImages() async {
     final resolved = <int, String?>{};
 
+    // TODO(multi-tenant Fase C): kHouseholdId es un puente temporal — se
+    // sustituirá por ref.watch(currentHouseholdIdProvider) cuando esta
+    // pantalla se reescriba sobre pertenencia real al hogar.
     for (int i = 0; i < 3; i++) {
-      resolved[i] = await StorageImageService.getProfileImageUrl(i);
+      resolved[i] = await StorageImageService.getProfileImageUrl(
+        kHouseholdId,
+        i,
+      );
     }
 
     if (!mounted) return;
@@ -206,6 +213,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
     try {
       final downloadUrl = await StorageImageService.uploadProfileImage(
+        householdId: kHouseholdId,
         profileIndex: index,
         bytes: bytes,
       );
@@ -245,9 +253,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
+  // TODO(multi-tenant Fase C): esta selección por índice fijo (0/1/2) es un
+  // puente temporal mientras GamerStats pasa a indexarse por uid — hasta
+  // que el rework de Profile (basado en householdMembersProvider) esté
+  // hecho, seguimos leyendo las mismas claves 'eme'/'ceh' que gamer_page.dart
+  // sigue escribiendo por ahora.
   GamerPlayerStats _selectStats(GamerStats stats) {
-    if (_selectedProfileIndex == 0) return stats.eme;
-    if (_selectedProfileIndex == 1) return stats.ceh;
+    if (_selectedProfileIndex == 0) return stats.forUid('eme');
+    if (_selectedProfileIndex == 1) return stats.forUid('ceh');
     return stats.team;
   }
 

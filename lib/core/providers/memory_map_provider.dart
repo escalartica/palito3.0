@@ -1,6 +1,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'household_provider.dart';
 import '../services/memory_map_firestore_service.dart';
 import '../models/memory_model.dart';
 
@@ -10,7 +11,9 @@ import '../models/memory_model.dart';
 
 final memoryMapServiceProvider =
     Provider<MemoryMapFirestoreService>((ref) {
-  return MemoryMapFirestoreService();
+  final String? householdId = ref.watch(currentHouseholdIdProvider);
+
+  return MemoryMapFirestoreService(householdId: householdId);
 });
 
 /// ============================================================

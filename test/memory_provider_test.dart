@@ -16,6 +16,8 @@ import 'package:palito_3_0/core/services/memory_map_firestore_service.dart';
 /// como errores del stream — y registra qué se ha guardado/borrado para
 /// poder comprobarlo.
 class _ControllableFirestoreService extends MemoryMapFirestoreService {
+  _ControllableFirestoreService() : super(householdId: 'test-household');
+
   final StreamController<List<MemoryModel>> _controller =
       StreamController<List<MemoryModel>>.broadcast();
 

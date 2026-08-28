@@ -64,8 +64,12 @@ class _MapPageState extends ConsumerState<MapPage>
 
   /// Resuelve y cachea las coordenadas geográficas de los recuerdos
   /// (geocodificación, geocodificación inversa y firma de datos
-  /// procesados).
-  final MemoryGeocodingService _geocodingService = MemoryGeocodingService();
+  /// procesados). Se inicializa en `initState` (no como field initializer)
+  /// para poder reutilizar la misma instancia compartida de
+  /// `MemoryMapFirestoreService` que expone `memoryMapServiceProvider`, en
+  /// vez de crear una segunda instancia con su propio `householdId`
+  /// potencialmente desincronizado.
+  late final MemoryGeocodingService _geocodingService;
 
   /// Controlador de animación de cámara.
   AnimationController? _cameraAnimationController;
@@ -111,6 +115,10 @@ class _MapPageState extends ConsumerState<MapPage>
   @override
   void initState() {
     super.initState();
+
+    _geocodingService = MemoryGeocodingService(
+      firestoreService: ref.read(memoryMapServiceProvider),
+    );
 
     _selectedCategory = widget.initialCategory;
 

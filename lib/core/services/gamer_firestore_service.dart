@@ -3,8 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../config/household_config.dart';
-
 /// ============================================================================
 /// SERVICIO FIRESTORE DE GAMER
 /// ============================================================================
@@ -29,9 +27,8 @@ import '../config/household_config.dart';
 ///    ▼
 /// GamerStats
 ///    │
-///    ├── Eme
-///    ├── CeH
-///    └── Team
+///    ├── players (por uid, cualquier número de miembros)
+///    └── Team (agregado)
 ///
 /// La UI NO debe interpretar directamente los campos de Firestore.
 ///
@@ -39,10 +36,16 @@ import '../config/household_config.dart';
 
 class GamerFirestoreService {
   GamerFirestoreService({
+    required this.householdId,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
   })  : _injectedFirestore = firestore,
         _injectedAuth = auth;
+
+  /// ID del hogar actual del usuario (`households/{householdId}`), resuelto
+  /// por `currentHouseholdIdProvider` a partir de su sesión. Null si el
+  /// usuario ha iniciado sesión pero todavía no pertenece a ningún hogar.
+  final String? householdId;
 
   // Resolución perezosa (ver el mismo patrón y justificación en
   // MemoryMapFirestoreService): no se tocan los singletons de Firebase
@@ -59,7 +62,7 @@ class GamerFirestoreService {
   // CONSTANTES
   // ==========================================================================
 
-  static const String usersCollection = 'users';
+  static const String _householdsCollection = 'households';
 
   static const String gamerStatsCollection = 'gamer_stats';
 
@@ -88,14 +91,19 @@ class GamerFirestoreService {
   // ==========================================================================
 
   // El parámetro `uid` se conserva por compatibilidad de firma con las
-  // llamadas existentes, pero la ruta real siempre apunta a kHouseholdId
-  // (documento compartido por todo el hogar).
-  DocumentReference<Map<String, dynamic>> _mainStatsDocumentForUid(
+  // llamadas existentes, pero la ruta real siempre apunta al hogar actual
+  // (documento compartido por todos sus miembros). Null si el usuario no
+  // pertenece todavía a ningún hogar.
+  DocumentReference<Map<String, dynamic>>? _mainStatsDocumentForUid(
     String uid,
   ) {
+    if (householdId == null) {
+      return null;
+    }
+
     return _firestore
-        .collection(usersCollection)
-        .doc(kHouseholdId)
+        .collection(_householdsCollection)
+        .doc(householdId)
         .collection(gamerStatsCollection)
         .doc(mainStatsDocument);
   }
@@ -215,38 +223,6 @@ class GamerFirestoreService {
         data['comensales'];
 
     return _mapFromDynamic(rawUsers);
-  }
-
-  // ==========================================================================
-  // BUSCAR JUGADOR POR CLAVE
-  // ==========================================================================
-
-  static Map<String, dynamic>? _findPlayerData(
-    Map<String, dynamic> players,
-    List<String> aliases,
-  ) {
-    for (final MapEntry<String, dynamic> entry in players.entries) {
-      final String key = entry.key
-          .toString()
-          .trim()
-          .toLowerCase();
-
-      for (final String alias in aliases) {
-        final String normalizedAlias = alias.trim().toLowerCase();
-
-        if (key == normalizedAlias ||
-            key.contains(normalizedAlias)) {
-          final Map<String, dynamic> playerData =
-              _mapFromDynamic(entry.value);
-
-          if (playerData.isNotEmpty) {
-            return playerData;
-          }
-        }
-      }
-    }
-
-    return null;
   }
 
   // ==========================================================================
@@ -389,9 +365,16 @@ class GamerFirestoreService {
       return Stream.value(null);
     }
 
-    return _mainStatsDocumentForUid(
-      user.uid,
-    ).snapshots().map(
+    final DocumentReference<Map<String, dynamic>>? docRef =
+        _mainStatsDocumentForUid(user.uid);
+
+    if (docRef == null) {
+      return Stream.value(
+        GamerStats.empty(currentUid: user.uid),
+      );
+    }
+
+    return docRef.snapshots().map(
       (
         DocumentSnapshot<Map<String, dynamic>> snapshot,
       ) {
@@ -425,9 +408,19 @@ class GamerFirestoreService {
       return Stream.value(null);
     }
 
-    return _mainStatsDocumentForUid(
-      normalizedUid,
-    ).snapshots().map(
+    final DocumentReference<Map<String, dynamic>>? docRef =
+        _mainStatsDocumentForUid(normalizedUid);
+
+    if (docRef == null) {
+      return Stream.value(
+        GamerPlayerStats.empty(
+          uid: normalizedUid,
+          displayName: 'Usuario',
+        ),
+      );
+    }
+
+    return docRef.snapshots().map(
       (
         DocumentSnapshot<Map<String, dynamic>> snapshot,
       ) {
@@ -449,13 +442,13 @@ class GamerFirestoreService {
   ) {
     final String normalizedUid = _normalizeUid(uid);
 
-    if (normalizedUid.isEmpty) {
+    if (normalizedUid.isEmpty || householdId == null) {
       return Stream.value(null);
     }
 
     return _firestore
-        .collection(usersCollection)
-        .doc(kHouseholdId)
+        .collection(_householdsCollection)
+        .doc(householdId)
         .snapshots()
         .map(
       (
@@ -504,8 +497,17 @@ class GamerFirestoreService {
       return;
     }
 
-    final DocumentReference<Map<String, dynamic>> docRef =
+    final DocumentReference<Map<String, dynamic>>? docRef =
         _mainStatsDocumentForUid(user.uid);
+
+    if (docRef == null) {
+      debugPrint(
+        '⚠️ GamerFirestoreService: '
+        'el usuario no pertenece a ningún hogar todavía.',
+      );
+
+      return;
+    }
 
     try {
       await _firestore.runTransaction(
@@ -735,8 +737,14 @@ class GamerFirestoreService {
       );
     }
 
-    final DocumentReference<Map<String, dynamic>> docRef =
+    final DocumentReference<Map<String, dynamic>>? docRef =
         _mainStatsDocumentForUid(normalizedUid);
+
+    if (docRef == null) {
+      throw StateError(
+        'El usuario no pertenece a ningún hogar todavía.',
+      );
+    }
 
     try {
       await _firestore.runTransaction(
@@ -831,10 +839,19 @@ class GamerFirestoreService {
       return;
     }
 
+    if (householdId == null) {
+      debugPrint(
+        '⚠️ GamerFirestoreService: '
+        'el usuario no pertenece a ningún hogar todavía.',
+      );
+
+      return;
+    }
+
     try {
       await _firestore
-          .collection(usersCollection)
-          .doc(kHouseholdId)
+          .collection(_householdsCollection)
+          .doc(householdId)
           .collection(gameHistoryCollection)
           .add(
         <String, dynamic>{
@@ -925,30 +942,34 @@ class GamerPlayerStats {
 // ============================================================================
 
 class GamerStats {
-  final GamerPlayerStats eme;
-  final GamerPlayerStats ceh;
+  /// Estadísticas de cada miembro del hogar, indexadas por su uid — no por
+  /// un nombre fijo. Soporta cualquier número de miembros.
+  final Map<String, GamerPlayerStats> players;
   final GamerPlayerStats team;
 
   const GamerStats({
-    required this.eme,
-    required this.ceh,
+    required this.players,
     required this.team,
   });
+
+  /// Estadísticas del miembro `uid`, o un valor vacío si todavía no tiene
+  /// ninguna entrada (p. ej. se acaba de unir al hogar).
+  GamerPlayerStats forUid(String uid) {
+    return players[uid] ??
+        GamerPlayerStats.empty(uid: uid);
+  }
 
   factory GamerStats.empty({
     String currentUid = '',
   }) {
     return GamerStats(
-      eme: GamerPlayerStats.empty(
-        uid: currentUid.isNotEmpty
-            ? currentUid
-            : 'eme',
-        displayName: 'Eme',
-      ),
-      ceh: GamerPlayerStats.empty(
-        uid: 'ceh',
-        displayName: 'CeH',
-      ),
+      players: currentUid.isNotEmpty
+          ? <String, GamerPlayerStats>{
+              currentUid: GamerPlayerStats.empty(
+                uid: currentUid,
+              ),
+            }
+          : const <String, GamerPlayerStats>{},
       team: GamerPlayerStats.empty(
         uid: 'team',
         displayName: 'Team',
@@ -964,96 +985,67 @@ class GamerStats {
     Map<String, dynamic> data, {
     required String currentUid,
   }) {
-    final Map<String, dynamic> players =
+    final Map<String, dynamic> rawPlayers =
         GamerFirestoreService._extractPlayersMap(data);
 
-    final Map<String, dynamic>? emeData =
-        GamerFirestoreService._findPlayerData(
-      players,
-      <String>[
-        'eme',
-      ],
-    );
-
-    final Map<String, dynamic>? cehData =
-        GamerFirestoreService._findPlayerData(
-      players,
-      <String>[
-        'ceh',
-        'carmen',
-      ],
-    );
-
-    final bool hasIndividualPlayers =
-        emeData != null ||
-        cehData != null;
-
-    GamerPlayerStats eme =
-        GamerFirestoreService._playerStatsFromMap(
-      emeData,
-      uid: emeData?['uid']?.toString() ?? 'eme',
-      defaultName: 'Eme',
-    );
-
-    GamerPlayerStats ceh =
-        GamerFirestoreService._playerStatsFromMap(
-      cehData,
-      uid: cehData?['uid']?.toString() ?? 'ceh',
-      defaultName: 'CeH',
-    );
+    Map<String, GamerPlayerStats> players =
+        <String, GamerPlayerStats>{
+      for (final MapEntry<String, dynamic> entry
+          in rawPlayers.entries)
+        entry.key: GamerFirestoreService._playerStatsFromMap(
+          GamerFirestoreService._mapFromDynamic(entry.value),
+          uid: entry.key,
+          defaultName: 'Usuario',
+        ),
+    };
 
     // ------------------------------------------------------------------------
     // COMPATIBILIDAD CON ESTRUCTURA LEGACY
     // ------------------------------------------------------------------------
     //
-    // Si no existen jugadores individuales,
-    // los campos globales representan al usuario actual.
-    //
-    // Para conservar la compatibilidad actual de la aplicación,
-    // se asignan al perfil Eme.
+    // Si el documento no tiene un mapa de jugadores individuales (formato
+    // previo a la introducción de cuentas reales), los campos globales
+    // representan al usuario actual.
     //
     // ------------------------------------------------------------------------
 
-    if (!hasIndividualPlayers) {
-      final GamerPlayerStats legacyPlayer =
-          GamerFirestoreService._playerStatsFromMap(
-        data,
-        uid: currentUid,
-        defaultName: 'Eme',
-      );
-
-      eme = legacyPlayer.copyWith(
-        uid: currentUid,
-        displayName: 'Eme',
-      );
+    if (players.isEmpty && currentUid.isNotEmpty) {
+      players = <String, GamerPlayerStats>{
+        currentUid: GamerFirestoreService._playerStatsFromMap(
+          data,
+          uid: currentUid,
+          defaultName: 'Usuario',
+        ),
+      };
     }
 
     // ------------------------------------------------------------------------
-    // TEAM
+    // TEAM — suma de todos los miembros, sea cual sea su número.
     // ------------------------------------------------------------------------
 
     final GamerPlayerStats team = GamerPlayerStats(
       uid: 'team',
       displayName: 'Team',
-      gamerPoints:
-          eme.gamerPoints +
-          ceh.gamerPoints,
-      decisions:
-          eme.decisions +
-          ceh.decisions,
-      streak:
-          eme.streak +
-          ceh.streak,
-      unlockedChallenges:
-          <String>{
-        ...eme.unlockedChallenges,
-        ...ceh.unlockedChallenges,
-      }.toList(),
+      gamerPoints: players.values.fold(
+        0,
+        (int sum, GamerPlayerStats p) => sum + p.gamerPoints,
+      ),
+      decisions: players.values.fold(
+        0,
+        (int sum, GamerPlayerStats p) => sum + p.decisions,
+      ),
+      streak: players.values.fold(
+        0,
+        (int sum, GamerPlayerStats p) => sum + p.streak,
+      ),
+      unlockedChallenges: players.values
+          .expand((GamerPlayerStats p) => p.unlockedChallenges)
+          .toSet()
+          .toList(),
     );
 
     return GamerStats(
-      eme: eme,
-      ceh: ceh,
+      players: players,
       team: team,
     );
   }

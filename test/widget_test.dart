@@ -13,6 +13,8 @@ import 'package:palito_3_0/core/services/memory_map_firestore_service.dart';
 /// corren en un dispositivo con Firebase inicializado).
 class _FakeMemoryMapFirestoreService
     extends MemoryMapFirestoreService {
+  _FakeMemoryMapFirestoreService() : super(householdId: 'test-household');
+
   @override
   Stream<List<MemoryModel>> getMemoryModelsStream() =>
       Stream.value(<MemoryModel>[]);
