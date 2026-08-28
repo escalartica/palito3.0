@@ -2,20 +2,26 @@ PODS:
   - Flutter (1.0.0)
   - geocoding_ios (1.0.5):
     - Flutter
+  - sign_in_with_apple (0.0.1):
+    - Flutter
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
   - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
+  - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
   geocoding_ios:
     :path: ".symlinks/plugins/geocoding_ios/ios"
+  sign_in_with_apple:
+    :path: ".symlinks/plugins/sign_in_with_apple/ios"
 
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   geocoding_ios: 86f1c479822f07a2f79f7094f2b753d1e9e20215
+  sign_in_with_apple: c5dcc141574c8c54d5ac99dd2163c0c72ad22418
 
 PODFILE CHECKSUM: 74a9567a086edd7ec27bf0823c8a42059643c915
 

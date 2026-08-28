@@ -10,21 +10,23 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'package:palito_3_0/firebase_options.dart';
 import 'package:palito_3_0/core/models/memory_model.dart';
+import 'package:palito_3_0/core/providers/auth_provider.dart';
+import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/theme/app_theme.dart';
 import 'package:palito_3_0/core/theme/components/app_dock.dart';
 import 'package:palito_3_0/core/providers/dock_provider.dart';
+import 'package:palito_3_0/features/auth/sign_in_page.dart';
 import 'package:palito_3_0/features/home/home_page.dart';
 import 'package:palito_3_0/features/home/memory_detail_page.dart';
 import 'package:palito_3_0/features/home/memory_form_page.dart';
 import 'package:palito_3_0/features/map/map_page.dart';
 import 'package:palito_3_0/features/gamer/gamer_page.dart';
+import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
+import 'package:palito_3_0/features/onboarding/invite_partner_page.dart';
 import 'package:palito_3_0/features/profile/profile_page.dart';
 
 /// Indica si Firebase se ha inicializado correctamente.
 bool firebaseInitialized = false;
-
-/// Indica si existe un usuario autenticado.
-bool firebaseAuthenticated = false;
 
 Future<void> main() async {
 WidgetsFlutterBinding.ensureInitialized();
@@ -61,16 +63,13 @@ _initializeObservability();
 }
 
 // ============================================================
-// FIREBASE AUTH
-// ============================================================
-
-if (firebaseReady) {
-await _ensureFirebaseAuthentication();
-}
-
-// ============================================================
 // ESTADO FINAL DE FIREBASE
 // ============================================================
+//
+// Ya no hay autenticación anónima silenciosa aquí: con Sign in with
+// Apple, el usuario inicia sesión explícitamente desde SignInPage, y el
+// `redirect` de GoRouter (ver routerProvider) reacciona solo a los
+// cambios de sesión — no hace falta bloquear runApp() para esperarla.
 
 _printFirebaseStatus();
 
@@ -221,211 +220,6 @@ debugPrintStack(stackTrace: stack);
 }
 
 // ================================================================
-// FIREBASE AUTHENTICATION
-// ================================================================
-
-Future<void> _ensureFirebaseAuthentication() async {
-if (!firebaseInitialized) {
-debugPrint(
-'⚠️ No se puede autenticar: Firebase no está inicializado.',
-);
-
-return;
-
-}
-
-final auth = FirebaseAuth.instance;
-
-// ============================================================
-// COMPROBAR USUARIO EXISTENTE
-// ============================================================
-
-final existingUser = auth.currentUser;
-
-if (existingUser != null) {
-firebaseAuthenticated = true;
-
-debugPrint(
-  '🔐 Usuario Firebase ya autenticado.',
-);
-
-// UID y email identifican la sesión — en una build Web de
-// producción quedarían visibles en la consola del navegador para
-// cualquiera que la abra, así que solo se imprimen en debug.
-if (kDebugMode) {
-  debugPrint(
-    '🔐 UID: ${existingUser.uid}',
-  );
-
-  debugPrint(
-    '🔐 Anónimo: ${existingUser.isAnonymous}',
-  );
-
-  debugPrint(
-    '🔐 Email: ${existingUser.email}',
-  );
-}
-
-return;
-
-}
-
-debugPrint(
-'🔐 No existe usuario Firebase.',
-);
-
-// ============================================================
-// AUTENTICACIÓN ANÓNIMA
-// ============================================================
-
-try {
-debugPrint(
-'🔐 Iniciando autenticación anónima...',
-);
-
-final UserCredential credential =
-    await auth.signInAnonymously();
-
-final user = credential.user;
-
-if (user == null) {
-  firebaseAuthenticated = false;
-
-  debugPrint(
-    '❌ Firebase Auth terminó sin devolver usuario.',
-  );
-
-  return;
-}
-
-firebaseAuthenticated = true;
-
-debugPrint(
-  '✅ AUTENTICACIÓN FIREBASE CORRECTA',
-);
-
-if (kDebugMode) {
-  debugPrint(
-    '🔐 UID: ${user.uid}',
-  );
-
-  debugPrint(
-    '🔐 Usuario anónimo: ${user.isAnonymous}',
-  );
-
-  debugPrint(
-    '🔐 Email: ${user.email}',
-  );
-}
-
-} on FirebaseAuthException catch (e, stack) {
-firebaseAuthenticated = false;
-
-debugPrint(
-  '❌ ERROR DE FIREBASE AUTH',
-);
-
-debugPrint(
-  '❌ Código: ${e.code}',
-);
-
-debugPrint(
-  '❌ Mensaje: ${e.message}',
-);
-
-debugPrint(
-  '❌ Plugin: FirebaseAuth',
-);
-
-debugPrint(
-  '❌ Firebase inicializado: $firebaseInitialized',
-);
-
-switch (e.code) {
-  case 'operation-not-allowed':
-    debugPrint(
-      '🚨 La autenticación anónima NO está habilitada '
-      'en Firebase Console.',
-    );
-
-    debugPrint(
-      '🚨 Revisar: '
-      'Firebase Console > Authentication > Sign-in method '
-      '> Anonymous.',
-    );
-    break;
-
-  case 'network-request-failed':
-    debugPrint(
-      '🌐 Firebase Auth no puede comunicarse con los servidores.',
-    );
-
-    debugPrint(
-      '🌐 Comprobar conexión a Internet del iPhone.',
-    );
-    break;
-
-  case 'too-many-requests':
-    debugPrint(
-      '🚨 Firebase ha bloqueado temporalmente solicitudes '
-      'por exceso de intentos.',
-    );
-    break;
-
-  case 'invalid-api-key':
-    debugPrint(
-      '🚨 La API Key de Firebase no es válida.',
-    );
-    break;
-
-  case 'app-not-authorized':
-    debugPrint(
-      '🚨 La aplicación iOS no está autorizada '
-      'para utilizar Firebase Auth.',
-    );
-
-    debugPrint(
-      '🚨 Revisar Bundle ID y restricciones de la API Key.',
-    );
-    break;
-
-  case 'internal-error':
-    debugPrint(
-      '🚨 Firebase Auth devolvió INTERNAL-ERROR.',
-    );
-
-    debugPrint(
-      '🚨 Revisar configuración del proveedor Anonymous, '
-      'GoogleService-Info.plist, Bundle ID y dependencias '
-      'nativas de Firebase.',
-    );
-    break;
-
-  default:
-    debugPrint(
-      '⚠️ Error Firebase Auth no clasificado: ${e.code}',
-    );
-}
-
-debugPrintStack(
-  stackTrace: stack,
-);
-
-} catch (e, stack) {
-firebaseAuthenticated = false;
-
-debugPrint(
-  '❌ ERROR INESPERADO DURANTE FIREBASE AUTH: $e',
-);
-
-debugPrintStack(
-  stackTrace: stack,
-);
-
-}
-}
-
-// ================================================================
 // FIREBASE STATUS
 // ================================================================
 
@@ -523,18 +317,18 @@ debugPrint(
 // APP PRINCIPAL
 // ================================================================
 
-class PalitoDeSaboresApp extends StatelessWidget {
+class PalitoDeSaboresApp extends ConsumerWidget {
 const PalitoDeSaboresApp({
 super.key,
 });
 
 @override
-Widget build(BuildContext context) {
+Widget build(BuildContext context, WidgetRef ref) {
 return MaterialApp.router(
 title: 'Palito de Sabores',
 debugShowCheckedModeBanner: false,
 theme: AppTheme.lightTheme,
-routerConfig: _router,
+routerConfig: ref.watch(routerProvider),
 );
 }
 }
@@ -543,14 +337,38 @@ routerConfig: _router,
 // NAVEGACIÓN
 // ================================================================
 
-final _rootNavigatorKey =
+final routerProvider = Provider<GoRouter>((ref) {
+// Declaradas aquí dentro (no como `final` de nivel superior) para que
+// cada instancia de routerProvider —una sola vez en la app real, pero
+// una nueva por cada ProviderScope en los tests— tenga sus propias
+// GlobalKey. Compartir las mismas claves entre varias instancias de
+// GoRouter (como ocurría antes) confunde a Flutter sobre qué Navigator
+// es cuál — invisible con un solo GoRouter vivo a la vez, pero rompía
+// los tests en cuanto había más de uno en la misma ejecución.
+final rootNavigatorKey =
 GlobalKey<NavigatorState>();
 
-final _shellNavigatorKey =
+final shellNavigatorKey =
 GlobalKey<NavigatorState>();
 
-final _router = GoRouter(
-navigatorKey: _rootNavigatorKey,
+// `ref.watch` aquí (no `.read`) es deliberado: reconstruye por completo
+// el GoRouter —con un `redirect` nuevo que cierra sobre estos valores ya
+// resueltos como variables locales normales— cada vez que cambia la
+// sesión o el hogar. La alternativa (un solo GoRouter con
+// `refreshListenable` y `redirect` leyendo providers con `ref.read` en
+// cada llamada) tiene una condición de carrera real: `ref.listen`
+// puede disparar la notificación de refresco antes de que Riverpod
+// termine de recalcular los providers derivados que ese mismo
+// `redirect` necesita leer, así que `ref.read` devuelve el valor
+// anterior (caducado) justo en el momento decisivo. Reconstruir el
+// GoRouter entero evita el problema de raíz: no hay nada que leer
+// "por fuera" del ciclo de build.
+final String? uid = ref.watch(currentUidProvider);
+final userDocAsync = ref.watch(currentUserDocProvider);
+final String? householdId = ref.watch(currentHouseholdIdProvider);
+
+return GoRouter(
+navigatorKey: rootNavigatorKey,
 initialLocation: '/',
 // El `if` evita tocar FirebaseAnalytics.instance (y por tanto
 // Firebase.app()) cuando Firebase no se ha inicializado — el caso de
@@ -560,14 +378,93 @@ observers: [
 if (firebaseInitialized)
   FirebaseAnalyticsObserver(analytics: analytics),
 ],
+redirect: (context, state) {
+  final String location = state.matchedLocation;
+  final bool onSignIn = location == '/sign-in';
+  final bool onSetup = location == '/household-setup';
+
+  if (uid == null) {
+    return onSignIn ? null : '/sign-in';
+  }
+
+  if (userDocAsync.isLoading) {
+    // Todavía no sabemos si tiene hogar — no redirigir hasta
+    // saberlo, para no rebotar a household-setup y de vuelta.
+    return null;
+  }
+
+  if (householdId == null) {
+    return onSetup ? null : '/household-setup';
+  }
+
+  if (onSignIn || onSetup) {
+    return '/';
+  }
+
+  return null;
+},
 routes: [
+// ============================================================
+// INICIO DE SESIÓN
+// ============================================================
+
+GoRoute(
+  path: '/sign-in',
+  parentNavigatorKey: rootNavigatorKey,
+  pageBuilder: (context, state) {
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: const SignInPage(),
+      direction: 1,
+    );
+  },
+),
+
+// ============================================================
+// CONFIGURACIÓN DE HOGAR
+// ============================================================
+
+GoRoute(
+  path: '/household-setup',
+  parentNavigatorKey: rootNavigatorKey,
+  pageBuilder: (context, state) {
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: const HouseholdSetupPage(),
+      direction: 1,
+    );
+  },
+),
+
+// ============================================================
+// INVITAR A LA PAREJA
+// ============================================================
+
+GoRoute(
+  path: '/invite-partner',
+  parentNavigatorKey: rootNavigatorKey,
+  pageBuilder: (context, state) {
+    final householdId = state.extra as String?;
+
+    return _buildDynamicPage(
+      context: context,
+      state: state,
+      child: InvitePartnerPage(
+        householdId: householdId,
+      ),
+      direction: 1,
+    );
+  },
+),
 // ============================================================
 // DETALLE DE MEMORIA
 // ============================================================
 
 GoRoute(
   path: '/memory-detail',
-  parentNavigatorKey: _rootNavigatorKey,
+  parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
     final memory =
         state.extra as MemoryModel;
@@ -589,7 +486,7 @@ GoRoute(
 
 GoRoute(
   path: '/new-memory',
-  parentNavigatorKey: _rootNavigatorKey,
+  parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
     return _buildDynamicPage(
       context: context,
@@ -606,7 +503,7 @@ GoRoute(
 
 GoRoute(
   path: '/gamer',
-  parentNavigatorKey: _rootNavigatorKey,
+  parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
     return _buildDynamicPage(
       context: context,
@@ -623,7 +520,7 @@ GoRoute(
 
 GoRoute(
   path: '/map',
-  parentNavigatorKey: _rootNavigatorKey,
+  parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
     final initialCategory =
         state.extra as String?;
@@ -645,7 +542,7 @@ GoRoute(
 
 GoRoute(
   path: '/profile',
-  parentNavigatorKey: _rootNavigatorKey,
+  parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
     return _buildDynamicPage(
       context: context,
@@ -661,7 +558,7 @@ GoRoute(
 // ============================================================
 
 ShellRoute(
-  navigatorKey: _shellNavigatorKey,
+  navigatorKey: shellNavigatorKey,
   builder: (
     context,
     state,
@@ -778,6 +675,7 @@ ShellRoute(
 
 ],
 );
+});
 
 // ================================================================
 // TRANSICIÓN DINÁMICA DE PÁGINAS

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/household_service.dart';
 import 'auth_provider.dart';
 
 /// ===========================================================================
@@ -17,6 +18,10 @@ import 'auth_provider.dart';
 /// de modo que sus lecturas/escrituras se redirigen automáticamente al
 /// hogar correcto de cada usuario.
 /// ===========================================================================
+
+final householdServiceProvider = Provider<HouseholdService>((ref) {
+  return HouseholdService();
+});
 
 /// Documento `users/{uid}` del usuario actual — `null` mientras no haya
 /// sesión iniciada, o si el documento todavía no existe (recién creada la

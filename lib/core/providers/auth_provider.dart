@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/auth_service.dart';
+
 /// ===========================================================================
 /// AUTH PROVIDERS
 /// ===========================================================================
@@ -12,6 +14,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// cierre de sesión, eliminación de cuenta), en vez de quedarse con un
 /// valor congelado del momento en que se leyó por primera vez.
 /// ===========================================================================
+
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService();
+});
 
 final authStateChangesProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();

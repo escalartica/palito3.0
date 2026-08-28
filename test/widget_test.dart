@@ -1,11 +1,17 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:palito_3_0/main.dart';
 import 'package:palito_3_0/core/models/memory_model.dart';
+import 'package:palito_3_0/core/providers/auth_provider.dart';
 import 'package:palito_3_0/core/providers/memory_map_provider.dart';
 import 'package:palito_3_0/core/services/memory_map_firestore_service.dart';
+import 'package:palito_3_0/core/providers/household_provider.dart';
+import 'package:palito_3_0/features/auth/sign_in_page.dart';
+import 'package:palito_3_0/features/home/home_page.dart';
+import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
 
 /// Doble de prueba: sobreescribe todos los métodos que
 /// [MemoryNotifier] realmente invoca, así que nunca llega a tocar
@@ -34,17 +40,24 @@ void main() {
   });
 
   testWidgets(
-    'La aplicación Palito de Sabores se construye correctamente',
+    'sin sesión, la app se construye y muestra la pantalla de inicio '
+    'de sesión',
     (WidgetTester tester) async {
       // Construimos la aplicación dentro de ProviderScope, igual que en
       // main(), pero sustituyendo memoryMapServiceProvider (la única
       // dependencia real de Firestore, compartida por memoryProvider y
-      // por el mapa) por un doble de prueba.
+      // por el mapa) por un doble de prueba, y authStateChangesProvider
+      // por "sin sesión" — sin esto, el router leería
+      // FirebaseAuth.instance.authStateChanges() directamente, que no
+      // funciona sin Firebase inicializado.
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             memoryMapServiceProvider.overrideWithValue(
               _FakeMemoryMapFirestoreService(),
+            ),
+            authStateChangesProvider.overrideWith(
+              (ref) => Stream<User?>.value(null),
             ),
           ],
           child: const PalitoDeSaboresApp(),
@@ -55,12 +68,80 @@ void main() {
       // las construcciones iniciales de los widgets.
       await tester.pumpAndSettle();
 
-      // Verificamos que la aplicación se ha construido
-      // correctamente comprobando su título.
+      // Sin sesión, el redirect de GoRouter debe llevar a SignInPage —
+      // no a Home. Comprobamos algo específico de esa pantalla (el
+      // nombre de la app aparece también en Home, así que por sí solo
+      // no distinguiría entre las dos).
       expect(
         find.text('Palito de Sabores'),
         findsOneWidget,
       );
+
+      expect(
+        find.byType(SignInPage),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byType(HomePage),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'con sesión pero sin hogar, muestra la pantalla de configuración '
+    'de hogar',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            memoryMapServiceProvider.overrideWithValue(
+              _FakeMemoryMapFirestoreService(),
+            ),
+            currentUidProvider.overrideWithValue('test-uid'),
+            currentUserDocProvider.overrideWith(
+              (ref) => Stream.value(<String, dynamic>{'householdId': null}),
+            ),
+          ],
+          child: const PalitoDeSaboresApp(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HouseholdSetupPage), findsOneWidget);
+      expect(find.byType(HomePage), findsNothing);
+      expect(find.byType(SignInPage), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'con sesión y hogar, muestra Home',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            memoryMapServiceProvider.overrideWithValue(
+              _FakeMemoryMapFirestoreService(),
+            ),
+            currentUidProvider.overrideWithValue('test-uid'),
+            currentUserDocProvider.overrideWith(
+              (ref) => Stream.value(<String, dynamic>{
+                'householdId': 'test-household',
+                'displayName': 'Test',
+              }),
+            ),
+          ],
+          child: const PalitoDeSaboresApp(),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(SignInPage), findsNothing);
+      expect(find.byType(HouseholdSetupPage), findsNothing);
     },
   );
 }
