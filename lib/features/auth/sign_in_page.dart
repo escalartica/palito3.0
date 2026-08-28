@@ -74,28 +74,28 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               child: SafeArea(
                 bottom: false,
                 child: Center(
-                  child: Container(
-                    width: 104,
-                    height: 104,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: AppColors.textPrimary,
-                        width: 2.5,
-                      ),
-                      boxShadow: const [
+                  // El propio PNG ya es una insignia completa (esquinas
+                  // redondeadas, fondo amarillo, borde) recortada sobre
+                  // transparencia — envolverla en OTRO contenedor con su
+                  // propio fondo blanco/borde/radio la enmarcaba dos
+                  // veces, y el ligero recorte de `BoxFit.contain` (la
+                  // imagen no es perfectamente cuadrada) dejaba asomar
+                  // ese fondo blanco como un borde feo. Solo una sombra,
+                  // sin relleno ni borde propios, para que se note que
+                  // "flota" sin duplicar el marco que ya trae la imagen.
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      boxShadow: [
                         BoxShadow(
-                          color: AppColors.textPrimary,
-                          blurRadius: 0,
-                          offset: Offset(5, 5),
+                          color: Colors.black26,
+                          blurRadius: 18,
+                          offset: Offset(0, 8),
                         ),
                       ],
                     ),
-                    clipBehavior: Clip.antiAlias,
                     child: Image.asset(
                       'assets/images/logo.png',
-                      fit: BoxFit.contain,
+                      width: 116,
                     ),
                   ),
                 ),
