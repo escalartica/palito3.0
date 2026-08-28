@@ -62,12 +62,12 @@ class _SignInPageState extends ConsumerState<SignInPage> {
       body: Column(
         children: [
           // ── Panel superior de marca ──────────────────────────────────
-          // A pantalla completa (incluida la barra de estado) en vez de
-          // dejar el logo flotando sobre fondo plano — le da al login el
-          // mismo peso visual "de marca" que el resto de la app, en vez
-          // de sentirse como una pantalla de sistema genérica.
+          // Proporción más pequeña que el primer intento: un panel de
+          // marca demasiado alto con el logo "flotando" en medio de
+          // mucho espacio vacío se leía como una pantalla a medio hacer,
+          // no como una decisión de diseño.
           Expanded(
-            flex: 5,
+            flex: 3,
             child: Container(
               width: double.infinity,
               color: AppColors.primary,
@@ -75,20 +75,20 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                 bottom: false,
                 child: Center(
                   child: Container(
-                    width: 128,
-                    height: 128,
+                    width: 104,
+                    height: 104,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: AppColors.textPrimary,
-                        width: 3,
+                        width: 2.5,
                       ),
                       boxShadow: const [
                         BoxShadow(
                           color: AppColors.textPrimary,
                           blurRadius: 0,
-                          offset: Offset(6, 6),
+                          offset: Offset(5, 5),
                         ),
                       ],
                     ),
@@ -104,12 +104,13 @@ class _SignInPageState extends ConsumerState<SignInPage> {
           ),
           // ── Contenido ─────────────────────────────────────────────────
           Expanded(
-            flex: 4,
+            flex: 5,
             child: SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+                padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
                       'Palito de Sabores',
@@ -131,10 +132,29 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         height: 1.4,
                       ),
                     ),
+                    const SizedBox(height: 40),
+                    // ── Puntos de valor ──────────────────────────────────
+                    // Rellenan el espacio con contenido con sentido (no
+                    // solo aire) y explican, antes del botón, qué gana el
+                    // usuario al entrar — un patrón habitual en pantallas
+                    // de login "profesionales".
+                    _ValuePoint(
+                      icon: Icons.restaurant_menu_rounded,
+                      text: 'Registra tus platos y experiencias favoritas',
+                    ),
+                    const SizedBox(height: 14),
+                    _ValuePoint(
+                      icon: Icons.group_rounded,
+                      text: 'Comparte tu diario con quien tú invites',
+                    ),
+                    const SizedBox(height: 14),
+                    _ValuePoint(
+                      icon: Icons.map_rounded,
+                      text: 'Ved juntos el mapa de todo lo que habéis probado',
+                    ),
                     const Spacer(),
                     if (_errorMessage != null) ...[
                       Container(
-                        width: double.infinity,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 12,
@@ -159,24 +179,12 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    Container(
-                      width: double.infinity,
+                    // Sin decoración propia (borde/sombra) alrededor del
+                    // botón oficial: además de no ser coherente con las
+                    // guías de Apple para este botón, competía visualmente
+                    // con el propio estado de "pulsado" del widget.
+                    SizedBox(
                       height: 52,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: AppColors.textPrimary,
-                          width: 2.5,
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.textPrimary,
-                            blurRadius: 0,
-                            offset: Offset(4, 4),
-                          ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
                       child: _isSigningIn
                           ? const Center(
                               child: CircularProgressIndicator(
@@ -186,7 +194,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                           : SignInWithAppleButton(
                               onPressed: _handleSignIn,
                               style: SignInWithAppleButtonStyle.black,
-                              borderRadius: BorderRadius.circular(11),
+                              borderRadius: BorderRadius.circular(14),
                             ),
                     ),
                   ],
@@ -196,6 +204,43 @@ class _SignInPageState extends ConsumerState<SignInPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ValuePoint extends StatelessWidget {
+  const _ValuePoint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.textPrimary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
