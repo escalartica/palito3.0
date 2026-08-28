@@ -67,7 +67,7 @@
       "ios": {
         "default": {
           "projectId": "palito-de-sabores",
-          "appId": "1:911590606586:ios:417cf0ae6234d862356b43",
+          "appId": "1:911590606586:ios:ca3f7c60b780aace356b43",
           "uploadDebugSymbols": false,
           "fileOutput": "ios/Runner/GoogleService-Info.plist"
         }

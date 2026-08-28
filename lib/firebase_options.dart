@@ -48,11 +48,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBmXz0Gh2_B4c91xj4Tmpxn5x8Xcp5YQUw',
-    appId: '1:911590606586:ios:417cf0ae6234d862356b43',
+    appId: '1:911590606586:ios:ca3f7c60b780aace356b43',
     messagingSenderId: '911590606586',
     projectId: 'palito-de-sabores',
     storageBucket: 'palito-de-sabores.firebasestorage.app',
-    iosBundleId: 'com.example.palito30',
+    iosBundleId: 'com.palito.sabores',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
