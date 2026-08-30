@@ -1,0 +1,9 @@
+{
+  "name": "palito-migration-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Scripts de administración de un solo uso (Fase E) — no forman parte de la app Flutter.",
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
