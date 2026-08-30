@@ -10,11 +10,11 @@ import '../models/memory_model.dart';
 ///
 /// Fuente principal:
 ///
-/// households/{householdId}/memories/{memoryId}
+/// groups/{groupId}/memories/{memoryId}
 ///
 /// Colección secundaria:
 ///
-/// households/{householdId}/locations/{memoryId}
+/// groups/{groupId}/locations/{memoryId}
 ///
 /// La colección `memories` es la fuente principal de verdad.
 ///
@@ -29,16 +29,16 @@ import '../models/memory_model.dart';
 
 class MemoryMapFirestoreService {
   MemoryMapFirestoreService({
-    required this.householdId,
+    required this.groupId,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
   })  : _injectedFirestore = firestore,
         _injectedAuth = auth;
 
-  /// ID del hogar actual del usuario (`households/{householdId}`), resuelto
-  /// por `currentHouseholdIdProvider` a partir de su sesión. Null si el
-  /// usuario ha iniciado sesión pero todavía no pertenece a ningún hogar.
-  final String? householdId;
+  /// ID del grupo activo del usuario (`groups/{groupId}`), resuelto
+  /// por `activeGroupIdProvider` a partir de su sesión. Null si el
+  /// usuario ha iniciado sesión pero todavía no se conoce ningún grupo.
+  final String? groupId;
 
   // Se resuelven de forma perezosa (getters, no campos finales) para no
   // tocar los singletons de Firebase en el momento de construir el
@@ -57,7 +57,7 @@ class MemoryMapFirestoreService {
   // CONFIGURACIÓN
   // ==========================================================================
 
-  static const String _householdsCollection = 'households';
+  static const String _groupsCollection = 'groups';
   static const String _memoriesCollection = 'memories';
   static const String _locationsCollection = 'locations';
 
@@ -81,32 +81,32 @@ class MemoryMapFirestoreService {
   // REFERENCIAS
   // ==========================================================================
 
-  // Todas las lecturas/escrituras usan householdId como segmento de ruta
+  // Todas las lecturas/escrituras usan groupId como segmento de ruta
   // (no el uid del usuario) para que los recuerdos se compartan entre
-  // todos los miembros del hogar. Requiere tanto sesión iniciada como
-  // pertenencia a un hogar — sin ninguna de las dos, no hay colección
+  // todos los miembros del grupo. Requiere tanto sesión iniciada como
+  // pertenencia a un grupo — sin ninguna de las dos, no hay colección
   // válida a la que apuntar.
   CollectionReference<Map<String, dynamic>>?
       get _userMemoriesCollection {
-    if (_currentUserId == null || householdId == null) {
+    if (_currentUserId == null || groupId == null) {
       return null;
     }
 
     return _firestore
-        .collection(_householdsCollection)
-        .doc(householdId)
+        .collection(_groupsCollection)
+        .doc(groupId)
         .collection(_memoriesCollection);
   }
 
   CollectionReference<Map<String, dynamic>>?
       get _userLocationsCollection {
-    if (_currentUserId == null || householdId == null) {
+    if (_currentUserId == null || groupId == null) {
       return null;
     }
 
     return _firestore
-        .collection(_householdsCollection)
-        .doc(householdId)
+        .collection(_groupsCollection)
+        .doc(groupId)
         .collection(_locationsCollection);
   }
 
@@ -683,7 +683,7 @@ class MemoryMapFirestoreService {
     );
 
     debugPrint(
-      '📁 households/$householdId/$_memoriesCollection',
+      '📁 groups/$groupId/$_memoriesCollection',
     );
 
     return collection.snapshots().map(
@@ -1022,7 +1022,7 @@ class MemoryMapFirestoreService {
       //
       // Lee ambos documentos y escribe el resultado dentro de la misma
       // transacción para evitar una condición de carrera si los 2
-      // dispositivos del hogar editan el mismo recuerdo a la vez (leer
+      // dispositivos del grupo editan el mismo recuerdo a la vez (leer
       // con .get() y escribir después con un batch, como se hacía antes,
       // deja una ventana entre lectura y escritura sin ninguna garantía
       // de atomicidad).
@@ -1502,7 +1502,7 @@ class MemoryMapFirestoreService {
     );
 
     debugPrint(
-      '📁 households/$householdId/$_locationsCollection',
+      '📁 groups/$groupId/$_locationsCollection',
     );
 
     return collection.snapshots().map(

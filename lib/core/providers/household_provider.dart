@@ -5,18 +5,26 @@ import '../services/household_service.dart';
 import 'auth_provider.dart';
 
 /// ===========================================================================
-/// HOUSEHOLD PROVIDERS
+/// GROUP PROVIDERS
 /// ===========================================================================
 ///
-/// Cadena que resuelve "a qué hogar pertenece el usuario actual", en
-/// sustitución de la constante fija `kHouseholdId`:
+/// Cadena que resuelve "a qué grupos pertenece el usuario actual, y cuál está
+/// viendo ahora mismo":
 ///
-/// sesión (uid) -> users/{uid} -> householdId -> households/{householdId}
+/// sesión (uid) -> users/{uid} -> groupIds -> [groups/{groupId}, ...]
+///                              -> personalGroupId (grupo propio, por defecto)
+///
+/// Todo el mundo tiene siempre un grupo personal (su diario privado, creado
+/// en su primer inicio de sesión — ver `AuthService`) y opcionalmente otros
+/// grupos compartidos. El "grupo activo" es qué grupo se está viendo/usando
+/// ahora mismo en Home/Mapa/Gamer/Perfil — estado de la sesión en curso, no
+/// del servidor, así que un usuario puede cambiar de grupo sin que eso
+/// afecte a sus otros dispositivos.
 ///
 /// Cada servicio de datos (memorias, mapa, Gamer) observa
-/// [currentHouseholdIdProvider] en vez de importar un identificador fijo,
-/// de modo que sus lecturas/escrituras se redirigen automáticamente al
-/// hogar correcto de cada usuario.
+/// [activeGroupIdProvider] en vez de importar un identificador fijo, de modo
+/// que sus lecturas/escrituras se redirigen automáticamente al grupo que el
+/// usuario esté viendo.
 /// ===========================================================================
 
 final householdServiceProvider = Provider<HouseholdService>((ref) {
@@ -40,42 +48,73 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>?>((ref) {
       .map((snapshot) => snapshot.data());
 });
 
-/// El `householdId` del usuario actual, o `null` si ha iniciado sesión pero
-/// todavía no pertenece a ningún hogar (o si no ha iniciado sesión).
-final currentHouseholdIdProvider = Provider<String?>((ref) {
+/// Todos los grupos a los que pertenece el usuario actual (empezando por su
+/// grupo personal) — vacío si no ha iniciado sesión o su documento todavía
+/// no existe.
+final userGroupIdsProvider = Provider<List<String>>((ref) {
   final Map<String, dynamic>? userDoc =
       ref.watch(currentUserDocProvider).valueOrNull;
 
-  final dynamic householdId = userDoc?['householdId'];
+  final dynamic groupIds = userDoc?['groupIds'];
 
-  return householdId is String && householdId.isNotEmpty
-      ? householdId
+  if (groupIds is! List) {
+    return const <String>[];
+  }
+
+  return groupIds.whereType<String>().toList();
+});
+
+/// El id del grupo personal del usuario actual — su diario privado. `null`
+/// mientras no se conozca (sin sesión, o documento todavía no escrito).
+final personalGroupIdProvider = Provider<String?>((ref) {
+  final Map<String, dynamic>? userDoc =
+      ref.watch(currentUserDocProvider).valueOrNull;
+
+  final dynamic personalGroupId = userDoc?['personalGroupId'];
+
+  return personalGroupId is String && personalGroupId.isNotEmpty
+      ? personalGroupId
       : null;
 });
 
-/// Documento `households/{householdId}` del hogar actual — `null` si el
-/// usuario no pertenece a ninguno todavía.
-final currentHouseholdDocProvider =
-    StreamProvider<Map<String, dynamic>?>((ref) {
-  final String? householdId = ref.watch(currentHouseholdIdProvider);
+/// Override en memoria del grupo que el usuario ha elegido ver ahora mismo
+/// (p. ej. desde el selector de grupo) — deliberadamente NO persistido: no
+/// hace falta sincronizar "última pestaña vista" entre dispositivos ni entre
+/// reinicios de la app, siempre se puede volver a elegir.
+final activeGroupIdOverrideProvider = StateProvider<String?>((ref) => null);
 
-  if (householdId == null) {
+/// El grupo activo: el que ha elegido explícitamente el usuario en esta
+/// sesión, o su grupo personal por defecto.
+final activeGroupIdProvider = Provider<String?>((ref) {
+  final String? override = ref.watch(activeGroupIdOverrideProvider);
+  if (override != null) return override;
+
+  return ref.watch(personalGroupIdProvider);
+});
+
+/// Documento `groups/{groupId}` del grupo activo — `null` si todavía no se
+/// conoce ninguno.
+final activeGroupDocProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  final String? groupId = ref.watch(activeGroupIdProvider);
+
+  if (groupId == null) {
     return Stream.value(null);
   }
 
   return FirebaseFirestore.instance
-      .collection('households')
-      .doc(householdId)
+      .collection('groups')
+      .doc(groupId)
       .snapshots()
       .map((snapshot) => snapshot.data());
 });
 
-/// La lista de uids miembros del hogar actual (vacía si no hay hogar).
-final householdMembersProvider = Provider<List<String>>((ref) {
-  final Map<String, dynamic>? household =
-      ref.watch(currentHouseholdDocProvider).valueOrNull;
+/// La lista de uids miembros del grupo activo (vacía si no hay grupo activo
+/// todavía).
+final activeGroupMembersProvider = Provider<List<String>>((ref) {
+  final Map<String, dynamic>? group =
+      ref.watch(activeGroupDocProvider).valueOrNull;
 
-  final dynamic members = household?['members'];
+  final dynamic members = group?['members'];
 
   if (members is! List) {
     return const <String>[];

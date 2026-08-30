@@ -27,9 +27,9 @@ import 'package:palito_3_0/core/services/gamer_firestore_service.dart';
 
 final gamerServiceProvider = Provider<GamerFirestoreService>(
   (ref) {
-    final String? householdId = ref.watch(currentHouseholdIdProvider);
+    final String? groupId = ref.watch(activeGroupIdProvider);
 
-    return GamerFirestoreService(householdId: householdId);
+    return GamerFirestoreService(groupId: groupId);
   },
 );
 

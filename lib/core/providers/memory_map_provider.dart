@@ -11,9 +11,9 @@ import '../models/memory_model.dart';
 
 final memoryMapServiceProvider =
     Provider<MemoryMapFirestoreService>((ref) {
-  final String? householdId = ref.watch(currentHouseholdIdProvider);
+  final String? groupId = ref.watch(activeGroupIdProvider);
 
-  return MemoryMapFirestoreService(householdId: householdId);
+  return MemoryMapFirestoreService(groupId: groupId);
 });
 
 /// ============================================================

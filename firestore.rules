@@ -1,29 +1,25 @@
 rules_version = '2';
 
-// Palito de Sabores — reglas para el modelo multi-tenant (households +
-// cuentas reales con Sign in with Apple), en sustitución del modelo
-// anterior de un único hogar fijo (users/{kHouseholdId}) con una
-// whitelist de uids anónimos.
+// Palito de Sabores — reglas para el modelo multi-tenant con grupos
+// múltiples por persona (cuentas reales con Sign in with Apple).
 //
 // Modelo:
-//   users/{uid}              — perfil propio de cada usuario (solo él
-//                               puede leerlo/escribirlo). Guarda
-//                               `householdId`: a qué hogar pertenece.
-//   households/{householdId} — datos compartidos por sus miembros
-//                               (memories, locations, gamer_stats,
-//                               game_history, profileImages).
-//   invites/{code}            — códigos de invitación de un solo uso
-//                               para unirse a un hogar.
-//
-// IMPORTANTE (no desplegar todavía): estas reglas asumen que la app ya
-// resuelve el hogar del usuario a partir de users/{uid}.householdId
-// (ver lib/core/providers/household_provider.dart) en vez del antiguo
-// kHouseholdId fijo. Desplegarlas antes de que la Fase B (Sign in with
-// Apple) y la Fase E (migración de los datos reales) estén completas
-// cortaría el acceso de los dos usuarios actuales, que siguen
-// funcionando hoy con sesión anónima sobre users/palito-hogar/**. Los
-// datos antiguos bajo ese documento no se tocan aquí — quedan como
-// copia de seguridad de solo-Consola hasta la migración.
+//   users/{uid}       — perfil propio de cada usuario (solo él puede
+//                        leerlo/escribirlo). Guarda `groupIds`: todos los
+//                        grupos a los que pertenece (empezando siempre
+//                        por su grupo personal, `personalGroupId`) — es
+//                        una lista de conveniencia para la app (saber qué
+//                        grupos mostrar), NO la fuente de autorización:
+//                        ver la nota en isGroupMember/isMemberOf de abajo.
+//   groups/{groupId}  — datos compartidos por sus miembros (memories,
+//                        locations, gamer_stats, game_history,
+//                        profileImages). Cada usuario tiene siempre al
+//                        menos uno (su diario personal, `isPersonal:
+//                        true`, un solo miembro, nunca invitable). El
+//                        campo `members` de este documento es la fuente
+//                        de verdad de quién pertenece al grupo.
+//   invites/{code}    — códigos de invitación de un solo uso para
+//                        unirse a un grupo (nunca al personal).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -35,22 +31,33 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // Lee el propio documento users/{uid} del solicitante para saber a
-    // qué hogar pertenece, sin necesitar pasarlo como segmento de ruta.
-    function callerHouseholdId() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId;
+    // La autorización se basa SIEMPRE en `members` del propio documento
+    // del grupo (la lista que un creador/miembro puede editar para
+    // expulsar a alguien), nunca en `users/{uid}.groupIds` — ese campo lo
+    // controla cada usuario sobre sí mismo, así que basar el acceso ahí
+    // significaría que alguien expulsado de un grupo (con su entrada
+    // borrada de `members`, pero sin que nadie más pueda tocar su propio
+    // `groupIds`) seguiría teniendo acceso de lectura/escritura mientras
+    // su documento de usuario siguiera mencionando ese grupo.
+    function isMemberOf(members) {
+      return isSignedIn() && request.auth.uid in members;
     }
 
-    function isHouseholdMember(householdId) {
-      return isSignedIn() && householdId == callerHouseholdId();
+    // Versión "por id" de isMemberOf — hace un get() explícito al
+    // documento del grupo, para usar en contextos donde `resource` no es
+    // ya ese documento (subcolecciones, invites/{code}).
+    function isGroupMember(groupId) {
+      return isMemberOf(
+        get(/databases/$(database)/documents/groups/$(groupId)).data.members
+      );
     }
 
     // Añadir el propio uid a members es el único cambio permitido a un
-    // hogar del que todavía no se es miembro — es el paso de "unirse
+    // grupo del que todavía no se es miembro — es el paso de "unirse
     // con código" (ver invites/{code} más abajo), que necesariamente
-    // ocurre antes de que isHouseholdMember() empiece a devolver true
-    // para este usuario.
-    function isJoiningHousehold() {
+    // ocurre antes de que isMemberOf() empiece a devolver true para
+    // este usuario.
+    function isJoiningGroup() {
       return isSignedIn()
         && !(request.auth.uid in resource.data.members)
         && request.resource.data.members.hasOnly(
@@ -64,17 +71,20 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    // ---------------- households/{householdId} ----------------
-    match /households/{householdId} {
-      allow read: if isHouseholdMember(householdId);
+    // ---------------- groups/{groupId} ----------------
+    match /groups/{groupId} {
+      // Usa resource.data.members directamente (ya lo tenemos aquí, sin
+      // necesidad de un get() adicional) — mismo criterio que
+      // isMemberOf/isGroupMember, solo que sin el lookup redundante.
+      allow read: if isMemberOf(resource.data.members);
       allow create: if isSignedIn()
         && request.resource.data.members.hasOnly([request.auth.uid])
         && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isHouseholdMember(householdId)
-        || isJoiningHousehold();
+      allow update: if isMemberOf(resource.data.members)
+        || isJoiningGroup();
 
       match /{subcollection}/{document=**} {
-        allow read, write: if isHouseholdMember(householdId);
+        allow read, write: if isGroupMember(groupId);
       }
     }
 
@@ -86,7 +96,8 @@ service cloud.firestore {
       allow get: if isSignedIn();
 
       allow create: if isSignedIn()
-        && request.resource.data.householdId == callerHouseholdId()
+        && isGroupMember(request.resource.data.groupId)
+        && !get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.isPersonal
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.usedBy == null
         && request.resource.data.useCount == 0;
@@ -94,7 +105,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.useCount < resource.data.maxUses
         && resource.data.expiresAt > request.time
-        && request.resource.data.householdId == resource.data.householdId
+        && request.resource.data.groupId == resource.data.groupId
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.maxUses == resource.data.maxUses;
 

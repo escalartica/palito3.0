@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,7 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/config/household_config.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/household_provider.dart';
 import '../../core/providers/memory_provider.dart';
 import '../../core/providers/gamer_provider.dart';
 import '../../core/services/gamer_firestore_service.dart';
@@ -21,15 +23,26 @@ const _kYellowBg = Color(0xFFFFF3D6);
 const _kRedBg = Color(0xFFFFECE6);
 const _kSlateBg = Color(0xFFE2E8F0);
 
-// ─── Modelo de configuración de perfil ──────────────────────────────────────
+// ─── Modelo de pestaña de perfil ─────────────────────────────────────────────
+//
+// Antes había exactamente 3 pestañas fijas en el código ('Eme', 'CeH',
+// 'Team'), sin relación con ninguna cuenta real. Ahora se construyen en
+// tiempo real a partir de activeGroupMembersProvider — cualquier número de
+// miembros, cada uno con su nombre/foto reales — más una pestaña "Team"
+// sintetizada solo cuando hay más de un miembro (ver _buildMemberTabs).
 class _ProfileConfig {
   const _ProfileConfig({
+    required this.uid,
     required this.name,
     required this.subtitle,
     required this.color,
     required this.bgCard,
     required this.icon,
   });
+
+  /// Null únicamente para la pestaña sintetizada "Team" — no representa a
+  /// ningún usuario real, así que no tiene foto propia que subir.
+  final String? uid;
   final String name;
   final String subtitle;
   final Color color;
@@ -37,29 +50,53 @@ class _ProfileConfig {
   final IconData icon;
 }
 
-const _profiles = [
-  _ProfileConfig(
-    name: 'Eme',
-    subtitle: 'Gestora de igualdad y administradora',
-    color: _kRed,
-    bgCard: _kRedBg,
-    icon: Icons.favorite_rounded,
-  ),
-  _ProfileConfig(
-    name: 'CeH',
-    subtitle: 'Catadora oficial y administradora',
-    color: _kYellow,
-    bgCard: _kYellowBg,
-    icon: Icons.person_rounded,
-  ),
-  _ProfileConfig(
-    name: 'Team',
-    subtitle: 'Bitácora conjunta de Eme & CeH',
-    color: _kDark,
-    bgCard: _kSlateBg,
-    icon: Icons.groups_rounded,
-  ),
+// Paleta que se recorre por posición (no por nombre) para dar a cada
+// miembro un color/icono distintivo sin tener que hardcodear cuántos
+// habrá ni quiénes son.
+const List<(Color, Color, IconData)> _memberPalette = [
+  (_kRed, _kRedBg, Icons.favorite_rounded),
+  (_kYellow, _kYellowBg, Icons.person_rounded),
+  (Colors.deepPurple, Color(0xFFEDE7F6), Icons.emoji_emotions_rounded),
+  (Color(0xFF10B981), Color(0xFFD1FAE5), Icons.eco_rounded),
 ];
+
+List<_ProfileConfig> _buildMemberTabs({
+  required List<String> memberUids,
+  required Map<String, dynamic> memberProfiles,
+}) {
+  final tabs = <_ProfileConfig>[
+    for (int i = 0; i < memberUids.length; i++)
+      () {
+        final uid = memberUids[i];
+        final profile = memberProfiles[uid] as Map<String, dynamic>?;
+        final palette = _memberPalette[i % _memberPalette.length];
+        final name = (profile?['displayName'] as String?)?.trim();
+        return _ProfileConfig(
+          uid: uid,
+          name: name?.isNotEmpty == true ? name! : 'Miembro',
+          subtitle: 'Miembro del grupo',
+          color: palette.$1,
+          bgCard: palette.$2,
+          icon: palette.$3,
+        );
+      }(),
+  ];
+
+  if (memberUids.length > 1) {
+    tabs.add(
+      const _ProfileConfig(
+        uid: null,
+        name: 'Team',
+        subtitle: 'Vista conjunta de todo el grupo',
+        color: _kDark,
+        bgCard: _kSlateBg,
+        icon: Icons.groups_rounded,
+      ),
+    );
+  }
+
+  return tabs;
+}
 
 // ─── Tarjeta "sticker" reutilizable: borde negro grueso + sombra dura sin
 // difuminado — el neobrutalismo de marca, ejecutado con rigor (radios y
@@ -128,7 +165,10 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage>
     with SingleTickerProviderStateMixin {
   int _selectedProfileIndex = 0;
-  final Map<int, String?> _savedImagePaths = {};
+  final Map<String, String?> _savedImagePaths = {};
+  List<String> _lastLoadedMemberUids = const [];
+  bool _isSigningOut = false;
+  bool _isDeletingAccount = false;
 
   // ─── Entrada escalonada ───────────────────────────────────────────────────
   // La pantalla no aparece de golpe: cada bloque tiene su propio intervalo
@@ -151,7 +191,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   @override
   void initState() {
     super.initState();
-    _loadProfileImages();
+    // Las fotos se cargan reactivamente desde build() en cuanto se conoce
+    // la lista real de miembros (ver el ref.listen ahí) — en el primer
+    // frame, activeGroupMembersProvider casi seguro todavía está vacío
+    // mientras se resuelve el stream de Firestore.
     _entryController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -178,20 +221,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
-  // Las fotos de perfil viven en Firebase Storage bajo un nombre fijo por
-  // índice (households/<hogar>/profile_images/profile_<i>.jpg) — así son
-  // las mismas en todos los dispositivos del hogar, en vez de quedarse
-  // atrapadas en el almacenamiento local de un solo móvil.
-  Future<void> _loadProfileImages() async {
-    final resolved = <int, String?>{};
+  // Las fotos de perfil viven en Cloudinary, con su URL guardada en
+  // groups/{groupId}.profileImages, indexado por uid — así son las
+  // mismas en todos los dispositivos del grupo (y las de cada persona
+  // sobreviven aunque cambie el orden de las pestañas).
+  Future<void> _loadProfileImages(String groupId, List<String> uids) async {
+    final resolved = <String, String?>{};
 
-    // TODO(multi-tenant Fase C): kHouseholdId es un puente temporal — se
-    // sustituirá por ref.watch(currentHouseholdIdProvider) cuando esta
-    // pantalla se reescriba sobre pertenencia real al hogar.
-    for (int i = 0; i < 3; i++) {
-      resolved[i] = await StorageImageService.getProfileImageUrl(
-        kHouseholdId,
-        i,
+    for (final uid in uids) {
+      resolved[uid] = await StorageImageService.getProfileImageUrl(
+        groupId,
+        uid,
       );
     }
 
@@ -199,7 +239,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     setState(() => _savedImagePaths.addAll(resolved));
   }
 
-  Future<void> _pickImageForProfile(int index) async {
+  Future<void> _pickImageForProfile(String groupId, String uid) async {
     // Foto de perfil pequeña y circular: no hace falta subirla a
     // resolución de cámara completa.
     final image = await ImagePicker().pickImage(
@@ -213,13 +253,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
     try {
       final downloadUrl = await StorageImageService.uploadProfileImage(
-        householdId: kHouseholdId,
-        profileIndex: index,
+        groupId: groupId,
+        uid: uid,
         bytes: bytes,
       );
 
       if (!mounted) return;
-      setState(() => _savedImagePaths[index] = downloadUrl);
+      setState(() => _savedImagePaths[uid] = downloadUrl);
       HapticFeedback.mediumImpact();
     } catch (e) {
       // Sin esto, un fallo de red al subir la foto quedaba como una
@@ -253,15 +293,117 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
-  // TODO(multi-tenant Fase C): esta selección por índice fijo (0/1/2) es un
-  // puente temporal mientras GamerStats pasa a indexarse por uid — hasta
-  // que el rework de Profile (basado en householdMembersProvider) esté
-  // hecho, seguimos leyendo las mismas claves 'eme'/'ceh' que gamer_page.dart
-  // sigue escribiendo por ahora.
-  GamerPlayerStats _selectStats(GamerStats stats) {
-    if (_selectedProfileIndex == 0) return stats.forUid('eme');
-    if (_selectedProfileIndex == 1) return stats.forUid('ceh');
-    return stats.team;
+  // ─── Cuenta: cerrar sesión / eliminar cuenta ────────────────────────────
+  Future<void> _handleSignOut() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Cerrar sesión?'),
+        content: const Text(
+          'Podrás volver a iniciar sesión con Apple cuando quieras.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cerrar sesión'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isSigningOut = true);
+    // No navegamos manualmente: al cerrar sesión, authStateChangesProvider
+    // emite null y el redirect de GoRouter lleva a /sign-in solo, igual
+    // que ocurre al iniciar sesión (ver routerProvider en main.dart).
+    await ref.read(authServiceProvider).signOut();
+    if (mounted) setState(() => _isSigningOut = false);
+  }
+
+  // Doble confirmación deliberada — es una acción destructiva e
+  // irreversible sobre la cuenta personal (aunque los datos compartidos
+  // del grupo queden archivados, ver AccountDeletionService). El primer
+  // diálogo explica las consecuencias; el segundo es la última oportunidad
+  // de echarse atrás, sin más contexto que distraiga.
+  Future<void> _handleDeleteAccount() async {
+    final bool? firstConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar tu cuenta'),
+        content: const Text(
+          'Se eliminará tu cuenta y saldrás de todos tus grupos '
+          'compartidos. Los recuerdos, fotos y estadísticas que hayas '
+          'compartido NO se borran, por si alguien más los sigue usando '
+          'o vuelves a unirte más adelante. Esta acción no se puede '
+          'deshacer para tu cuenta personal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Continuar',
+              style: GoogleFonts.inter(color: _kRed, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (firstConfirm != true || !mounted) return;
+
+    final bool? secondConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Seguro que quieres eliminarla?'),
+        content: const Text('Esta es tu última oportunidad para cancelar.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'Sí, eliminar mi cuenta',
+              style: GoogleFonts.inter(color: _kRed, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (secondConfirm != true || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await ref.read(accountDeletionServiceProvider).deleteAccount();
+      // Éxito: authStateChangesProvider emite null y el redirect de
+      // GoRouter saca de aquí solo — no hace falta navegar a mano.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo eliminar la cuenta. Comprueba tu conexión e '
+            'inténtalo de nuevo.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// La pestaña "Team" (config.uid == null) muestra el agregado del grupo;
+  /// cualquier otra pestaña muestra las estadísticas propias de ese uid.
+  GamerPlayerStats _selectStats(GamerStats stats, _ProfileConfig config) {
+    if (config.uid == null) return stats.team;
+    return stats.forUid(config.uid!);
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -269,8 +411,45 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   Widget build(BuildContext context) {
     final memories = ref.watch(memoryProvider);
     final gamerStatsAsync = ref.watch(gamerStatsStreamProvider);
-    final config = _profiles[_selectedProfileIndex];
-    final imagePath = _savedImagePaths[_selectedProfileIndex];
+
+    final String? groupId = ref.watch(activeGroupIdProvider);
+    final List<String> memberUids = ref.watch(activeGroupMembersProvider);
+    final Map<String, dynamic> memberProfiles =
+        (ref.watch(activeGroupDocProvider).valueOrNull?['memberProfiles']
+                as Map?)
+            ?.cast<String, dynamic>() ??
+        const {};
+
+    // Carga (o recarga) las fotos de perfil en cuanto se conoce la lista
+    // real de miembros — puede tardar un instante en el primer frame
+    // mientras se resuelve el stream de Firestore, y puede cambiar más
+    // adelante si alguien se une al grupo con esta pantalla ya abierta.
+    if (groupId != null &&
+        memberUids.isNotEmpty &&
+        !listEquals(memberUids, _lastLoadedMemberUids)) {
+      _lastLoadedMemberUids = memberUids;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadProfileImages(groupId, memberUids);
+      });
+    }
+
+    final tabs = _buildMemberTabs(
+      memberUids: memberUids,
+      memberProfiles: memberProfiles,
+    );
+
+    if (tabs.isEmpty) {
+      return const Scaffold(
+        backgroundColor: _kBg,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final int safeIndex = _selectedProfileIndex.clamp(0, tabs.length - 1);
+    final config = tabs[safeIndex];
+    final imagePath = config.uid == null
+        ? null
+        : _savedImagePaths[config.uid];
 
     final total = memories.length;
     final avgRating = total > 0
@@ -300,7 +479,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                 _fadeSlide(
                   _tabBarAnim,
                   _ProfileTabBar(
-                    selectedIndex: _selectedProfileIndex,
+                    tabs: tabs,
+                    selectedIndex: safeIndex,
                     onSelect: (i) {
                       HapticFeedback.selectionClick();
                       setState(() => _selectedProfileIndex = i);
@@ -315,8 +495,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   _ProfileHeader(
                     config: config,
                     imagePath: imagePath,
-                    onTapImage: () =>
-                        _pickImageForProfile(_selectedProfileIndex),
+                    // La pestaña "Team" no representa a ninguna cuenta real,
+                    // así que no tiene foto propia que cambiar.
+                    onTapImage: (groupId == null || config.uid == null)
+                        ? null
+                        : () => _pickImageForProfile(groupId, config.uid!),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -341,7 +524,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                   uid: '',
                                   displayName: config.name,
                                 )
-                              : _selectStats(gamerStats);
+                              : _selectStats(gamerStats, config);
                           return _GamerStatsRow(
                             pointsValue: s.gamerPoints,
                             streakValue: s.streak,
@@ -439,6 +622,61 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     ],
                   ),
                 ),
+                const SizedBox(height: 32),
+
+                // ── Grupos ────────────────────────────────────────────────
+                _fadeSlide(
+                  _saveButtonAnim,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionTitle('Grupos'),
+                      const SizedBox(height: 12),
+                      _AccountActionTile(
+                        icon: Icons.group_add_rounded,
+                        label: 'Compartir con alguien',
+                        color: _kDark,
+                        bgColor: _kYellowBg,
+                        isLoading: false,
+                        onTap: () => context.push('/household-setup'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Cuenta ──────────────────────────────────────────────
+                _fadeSlide(
+                  _saveButtonAnim,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionTitle('Cuenta'),
+                      const SizedBox(height: 12),
+                      _AccountActionTile(
+                        icon: Icons.logout_rounded,
+                        label: 'Cerrar sesión',
+                        color: _kDark,
+                        bgColor: _kSlateBg,
+                        isLoading: _isSigningOut,
+                        onTap: _isSigningOut || _isDeletingAccount
+                            ? null
+                            : _handleSignOut,
+                      ),
+                      const SizedBox(height: 12),
+                      _AccountActionTile(
+                        icon: Icons.delete_forever_rounded,
+                        label: 'Eliminar cuenta',
+                        color: _kRed,
+                        bgColor: _kRedBg,
+                        isLoading: _isDeletingAccount,
+                        onTap: _isSigningOut || _isDeletingAccount
+                            ? null
+                            : _handleDeleteAccount,
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 20),
 
                 // ── Botón guardar ───────────────────────────────────────
@@ -516,7 +754,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
 // ── Selector de pestañas ─────────────────────────────────────────────────────
 class _ProfileTabBar extends StatelessWidget {
-  const _ProfileTabBar({required this.selectedIndex, required this.onSelect});
+  const _ProfileTabBar({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onSelect,
+  });
+  final List<_ProfileConfig> tabs;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
@@ -530,10 +773,10 @@ class _ProfileTabBar extends StatelessWidget {
     ),
     child: Row(
       children: List.generate(
-        _profiles.length,
+        tabs.length,
         (i) => _ProfileTab(
           index: i,
-          label: _profiles[i].name,
+          label: tabs[i].name,
           isSelected: selectedIndex == i,
           onTap: () => onSelect(i),
         ),
@@ -602,7 +845,7 @@ class _ProfileHeader extends StatelessWidget {
   });
   final _ProfileConfig config;
   final String? imagePath;
-  final VoidCallback onTapImage;
+  final VoidCallback? onTapImage;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -611,7 +854,9 @@ class _ProfileHeader extends StatelessWidget {
     child: Row(
       children: [
         Tooltip(
-          message: 'Cambiar foto de perfil',
+          message: onTapImage == null
+              ? config.name
+              : 'Cambiar foto de perfil',
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -652,32 +897,33 @@ class _ProfileHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: _kYellow,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: _kDark, width: 1.5),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: _kDark,
-                          offset: Offset(2, 2),
-                          blurRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      size: 13,
-                      color: _kDark,
+              if (onTapImage != null)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: _kYellow,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _kDark, width: 1.5),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: _kDark,
+                            offset: Offset(2, 2),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 13,
+                        color: _kDark,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -938,6 +1184,72 @@ class _EmptyCategoriesPlaceholder extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ],
+    ),
+  );
+}
+
+// ── Fila de acción de cuenta (cerrar sesión / eliminar cuenta) ────────────────
+class _AccountActionTile extends StatelessWidget {
+  const _AccountActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bgColor,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: _stickerCard(
+      radius: 16,
+      borderWidth: 2,
+      shadowOffset: const Offset(3, 3),
+      color: bgColor,
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: isLoading
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: color,
+                        ),
+                      )
+                    : Icon(icon, size: 22, color: color),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     ),
   );
 }

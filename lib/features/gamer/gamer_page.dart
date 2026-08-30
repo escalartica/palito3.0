@@ -150,6 +150,11 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   ),
                   'points': item['points'] is int ? item['points'] as int : 0,
                   'medals': item['medals'] is int ? item['medals'] as int : 0,
+                  // uid del miembro del grupo al que está vinculada esta
+                  // fila local — ver _toggleLinkedToMe. Null si nadie la
+                  // ha vinculado todavía (bots, invitados, o un jugador
+                  // que aún no ha marcado "Soy yo").
+                  'uid': item['uid']?.toString(),
                 },
               )
               .toList();
@@ -189,6 +194,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
           'colorValue': color.toARGB32(),
           'points': p['points'] is int ? p['points'] as int : 0,
           'medals': p['medals'] is int ? p['medals'] as int : 0,
+          'uid': p['uid'],
         };
       }).toList();
 
@@ -204,29 +210,31 @@ class _GamerPageState extends ConsumerState<GamerPage>
     final service = ref.read(gamerServiceProvider);
     final uid = service.currentUid;
 
-    // Sincronizamos la puntuación de CADA jugador por separado (no la suma
-    // de la mesa), para que Profile lea el mismo número que Zona Gamer
-    // muestra para Eme y para CeH individualmente.
+    // Solo se sincroniza la fila local vinculada explícitamente al uid del
+    // usuario que ha iniciado sesión en este dispositivo (ver
+    // _toggleLinkedToMe) — no todas las filas, y ya no por coincidencia de
+    // nombre. El resto de comensales (bots, invitados, alguien que
+    // todavía no ha marcado "Soy yo") solo existen localmente para la
+    // partida: sus puntos no se pierden, simplemente no se guardan en la
+    // cuenta de nadie hasta que alguien vincule esa fila.
     if (uid != null) {
+      Map<String, dynamic>? myPlayer;
       for (final player in _players) {
-        final name = player['name']?.toString().trim().toLowerCase() ?? '';
-        final String playerKey;
-        if (name == 'eme') {
-          playerKey = 'eme';
-        } else if (name == 'ceh') {
-          playerKey = 'ceh';
-        } else {
-          continue;
+        if (player['uid'] == uid) {
+          myPlayer = player;
+          break;
         }
+      }
 
+      if (myPlayer != null) {
         await service.updatePlayerStats(
-          playerKey: playerKey,
+          playerKey: uid,
           uid: uid,
-          score: player['points'] as int? ?? 0,
+          score: myPlayer['points'] as int? ?? 0,
           decisions: _decisionsCount,
           streak: _decisionsCount,
           unlockedChallenges: _palitoChallenges,
-          displayName: player['name']?.toString() ?? playerKey,
+          displayName: myPlayer['name']?.toString() ?? 'Usuario',
         );
       }
     }
@@ -401,6 +409,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
         'color': Colors.primaries[Random().nextInt(Colors.primaries.length)],
         'points': 0,
         'medals': 0,
+        'uid': null,
       });
       _nameController.clear();
     });
@@ -430,6 +439,37 @@ class _GamerPageState extends ConsumerState<GamerPage>
     _savePersistedData();
     HapticFeedback.mediumImpact();
     _showFeedbackSnackbar('Comensal $removedName eliminado');
+  }
+
+  /// Vincula (o desvincula, si ya lo estaba) la fila [index] de la mesa
+  /// local al uid del usuario que ha iniciado sesión en este dispositivo.
+  /// Solo puede haber una fila vinculada a la vez por dispositivo — vincular
+  /// otra desvincula automáticamente la anterior. Ver el comentario de
+  /// _syncGamerStats: solo la fila vinculada llega a guardarse en la cuenta
+  /// de alguien; el resto son invitados/bots puramente locales de la mesa.
+  void _toggleLinkedToMe(int index) {
+    final uid = ref.read(gamerServiceProvider).currentUid;
+    if (uid == null) return;
+
+    final name = _players[index]['name']?.toString() ?? 'Comensal';
+    final wasLinked = _players[index]['uid'] == uid;
+
+    setState(() {
+      for (final player in _players) {
+        player['uid'] = null;
+      }
+      if (!wasLinked) {
+        _players[index]['uid'] = uid;
+      }
+    });
+
+    _savePersistedData();
+    HapticFeedback.selectionClick();
+    _showFeedbackSnackbar(
+      wasLinked
+          ? 'Ya no vinculas tus puntos a "$name"'
+          : 'Tus puntos ahora se guardan como "$name"',
+    );
   }
 
   // ─── Sesión ──────────────────────────────────────────────────────────────────
@@ -1131,6 +1171,13 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   ),
                 ],
               ),
+              Text(
+                'Toca tu comensal para vincular tus puntos a tu cuenta',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: Colors.grey.shade500,
+                ),
+              ),
               const SizedBox(height: 12),
               SizedBox(
                 height: 94,
@@ -1144,6 +1191,9 @@ class _GamerPageState extends ConsumerState<GamerPage>
                         _selectedWinner != null &&
                         _selectedWinner!['name'] == player['name'];
                     final playerColor = player['color'] as Color;
+                    final myUid = ref.read(gamerServiceProvider).currentUid;
+                    final isLinkedToMe =
+                        myUid != null && player['uid'] == myUid;
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 12),
@@ -1152,6 +1202,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                         borderRadius: BorderRadius.circular(20),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
+                          onTap: () => _toggleLinkedToMe(index),
                           onLongPress: () => _removePlayer(index),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
@@ -1185,16 +1236,41 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: playerColor.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                  child: Icon(
-                                    player['icon'] as IconData,
-                                    color: playerColor,
-                                    size: 18,
-                                  ),
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundColor: playerColor.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      child: Icon(
+                                        player['icon'] as IconData,
+                                        color: playerColor,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    if (isLinkedToMe)
+                                      Positioned(
+                                        right: -2,
+                                        bottom: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: const BoxDecoration(
+                                            color: _kYellow,
+                                            shape: BoxShape.circle,
+                                            border: Border.fromBorderSide(
+                                              BorderSide(color: _kDark, width: 1.5),
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.check_rounded,
+                                            size: 10,
+                                            color: _kDark,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 const SizedBox(height: 6),
                                 Text(

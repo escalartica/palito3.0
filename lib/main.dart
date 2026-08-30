@@ -317,20 +317,70 @@ debugPrint(
 // APP PRINCIPAL
 // ================================================================
 
-class PalitoDeSaboresApp extends ConsumerWidget {
+class PalitoDeSaboresApp extends ConsumerStatefulWidget {
 const PalitoDeSaboresApp({
 super.key,
 });
 
 @override
-Widget build(BuildContext context, WidgetRef ref) {
-return MaterialApp.router(
-title: 'Palito de Sabores',
-debugShowCheckedModeBanner: false,
-theme: AppTheme.lightTheme,
-routerConfig: ref.watch(routerProvider),
-);
+ConsumerState<PalitoDeSaboresApp> createState() => _PalitoDeSaboresAppState();
 }
+
+class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
+  // Evita relanzar la creación del grupo personal más de una vez por
+  // sesión mientras la escritura está en curso (entre el momento en que
+  // se detecta que falta y el momento en que Firestore confirma el
+  // nuevo personalGroupId, currentUserDocProvider puede volver a emitir
+  // por otros motivos).
+  String? _backfillInFlightForUid;
+
+  @override
+  Widget build(BuildContext context) {
+    // Cuentas creadas antes de introducir grupos múltiples (o cualquier
+    // cuenta cuyo documento exista pero sin `personalGroupId` por el
+    // motivo que sea) no pasan por AuthService.signInWithApple() en cada
+    // apertura de la app —solo la primera vez que se pulsa el botón—,
+    // así que ese backfill nunca se dispararía para una sesión ya
+    // persistida. Este listener lo cubre de forma reactiva, sin
+    // depender de que se vuelva a iniciar sesión a mano.
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(currentUserDocProvider, (
+      previous,
+      next,
+    ) {
+      // `hasValue` (a diferencia de `valueOrNull`) distingue "todavía
+      // cargando" de "ya cargado, y el documento no existe" — este
+      // segundo caso es justo el que hay que reparar (una sesión de
+      // Auth persistida cuyo perfil nunca llegó a escribirse).
+      if (!next.hasValue) return;
+
+      final String? uid = ref.read(currentUidProvider);
+      if (uid == null) return;
+      if (_backfillInFlightForUid == uid) return;
+
+      final Map<String, dynamic>? data = next.value;
+      if (data != null && data['personalGroupId'] != null) return;
+
+      _backfillInFlightForUid = uid;
+      final authService = ref.read(authServiceProvider);
+      authService
+          .ensureUserDocument(
+            uid,
+            fallbackDisplayName:
+                authService.currentUser?.email?.split('@').first ?? 'Usuario',
+            existingData: data,
+          )
+          .whenComplete(() {
+        if (_backfillInFlightForUid == uid) _backfillInFlightForUid = null;
+      });
+    });
+
+    return MaterialApp.router(
+      title: 'Palito de Sabores',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      routerConfig: ref.watch(routerProvider),
+    );
+  }
 }
 
 // ================================================================
@@ -354,7 +404,7 @@ GlobalKey<NavigatorState>();
 // `ref.watch` aquí (no `.read`) es deliberado: reconstruye por completo
 // el GoRouter —con un `redirect` nuevo que cierra sobre estos valores ya
 // resueltos como variables locales normales— cada vez que cambia la
-// sesión o el hogar. La alternativa (un solo GoRouter con
+// sesión. La alternativa (un solo GoRouter con
 // `refreshListenable` y `redirect` leyendo providers con `ref.read` en
 // cada llamada) tiene una condición de carrera real: `ref.listen`
 // puede disparar la notificación de refresco antes de que Riverpod
@@ -365,7 +415,6 @@ GlobalKey<NavigatorState>();
 // "por fuera" del ciclo de build.
 final String? uid = ref.watch(currentUidProvider);
 final userDocAsync = ref.watch(currentUserDocProvider);
-final String? householdId = ref.watch(currentHouseholdIdProvider);
 
 return GoRouter(
 navigatorKey: rootNavigatorKey,
@@ -381,23 +430,24 @@ if (firebaseInitialized)
 redirect: (context, state) {
   final String location = state.matchedLocation;
   final bool onSignIn = location == '/sign-in';
-  final bool onSetup = location == '/household-setup';
 
   if (uid == null) {
     return onSignIn ? null : '/sign-in';
   }
 
   if (userDocAsync.isLoading) {
-    // Todavía no sabemos si tiene hogar — no redirigir hasta
-    // saberlo, para no rebotar a household-setup y de vuelta.
+    // Todavía no sabemos si su grupo personal ya se ha terminado de
+    // crear (ver AuthService) — no redirigir hasta saberlo.
     return null;
   }
 
-  if (householdId == null) {
-    return onSetup ? null : '/household-setup';
-  }
-
-  if (onSignIn || onSetup) {
+  // Sin puerta de onboarding: todo el mundo tiene ya su grupo personal
+  // en cuanto su documento de usuario existe, así que iniciar sesión
+  // lleva siempre directo a Home. Compartir con alguien (crear/unirse
+  // a otro grupo) es una acción opcional posterior, no un paso
+  // bloqueante — ver /household-setup más abajo, alcanzable solo desde
+  // Perfil.
+  if (onSignIn) {
     return '/';
   }
 
@@ -422,7 +472,8 @@ GoRoute(
 ),
 
 // ============================================================
-// CONFIGURACIÓN DE HOGAR
+// COMPARTIR CON ALGUIEN (crear/unirse a un grupo) — opcional,
+// alcanzable solo desde Perfil, nunca por redirect.
 // ============================================================
 
 GoRoute(
@@ -439,20 +490,20 @@ GoRoute(
 ),
 
 // ============================================================
-// INVITAR A LA PAREJA
+// INVITAR A ALGUIEN A UN GRUPO
 // ============================================================
 
 GoRoute(
   path: '/invite-partner',
   parentNavigatorKey: rootNavigatorKey,
   pageBuilder: (context, state) {
-    final householdId = state.extra as String?;
+    final groupId = state.extra as String;
 
     return _buildDynamicPage(
       context: context,
       state: state,
       child: InvitePartnerPage(
-        householdId: householdId,
+        groupId: groupId,
       ),
       direction: 1,
     );

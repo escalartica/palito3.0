@@ -11,7 +11,6 @@ import 'package:palito_3_0/core/services/memory_map_firestore_service.dart';
 import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/features/auth/sign_in_page.dart';
 import 'package:palito_3_0/features/home/home_page.dart';
-import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
 
 /// Doble de prueba: sobreescribe todos los métodos que
 /// [MemoryNotifier] realmente invoca, así que nunca llega a tocar
@@ -19,7 +18,7 @@ import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
 /// corren en un dispositivo con Firebase inicializado).
 class _FakeMemoryMapFirestoreService
     extends MemoryMapFirestoreService {
-  _FakeMemoryMapFirestoreService() : super(householdId: 'test-household');
+  _FakeMemoryMapFirestoreService() : super(groupId: 'test-group');
 
   @override
   Stream<List<MemoryModel>> getMemoryModelsStream() =>
@@ -90,35 +89,15 @@ void main() {
   );
 
   testWidgets(
-    'con sesión pero sin hogar, muestra la pantalla de configuración '
-    'de hogar',
+    'con sesión, muestra Home directamente (sin puerta de configuración '
+    'de grupo, aunque solo tenga su grupo personal)',
     (WidgetTester tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            memoryMapServiceProvider.overrideWithValue(
-              _FakeMemoryMapFirestoreService(),
-            ),
-            currentUidProvider.overrideWithValue('test-uid'),
-            currentUserDocProvider.overrideWith(
-              (ref) => Stream.value(<String, dynamic>{'householdId': null}),
-            ),
-          ],
-          child: const PalitoDeSaboresApp(),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      expect(find.byType(HouseholdSetupPage), findsOneWidget);
-      expect(find.byType(HomePage), findsNothing);
-      expect(find.byType(SignInPage), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'con sesión y hogar, muestra Home',
-    (WidgetTester tester) async {
+      // No existe ninguna puerta de onboarding obligatoria: todo el
+      // mundo tiene ya su grupo personal en cuanto su documento de
+      // usuario existe (ver AuthService), así que iniciar sesión lleva
+      // siempre directo a Home. Compartir con alguien (crear/unirse a
+      // otro grupo) es una acción opcional posterior desde Perfil, no
+      // parte de este flujo.
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -128,7 +107,8 @@ void main() {
             currentUidProvider.overrideWithValue('test-uid'),
             currentUserDocProvider.overrideWith(
               (ref) => Stream.value(<String, dynamic>{
-                'householdId': 'test-household',
+                'groupIds': ['personal-group'],
+                'personalGroupId': 'personal-group',
                 'displayName': 'Test',
               }),
             ),
@@ -141,7 +121,6 @@ void main() {
 
       expect(find.byType(HomePage), findsOneWidget);
       expect(find.byType(SignInPage), findsNothing);
-      expect(find.byType(HouseholdSetupPage), findsNothing);
     },
   );
 }

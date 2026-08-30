@@ -8,15 +8,15 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/theme/tokens/app_colors.dart';
 
-/// Muestra un código de invitación recién generado para el hogar actual.
-/// Se llega aquí justo después de crear un hogar (con su id pasado por
-/// `extra`), o más adelante desde Profile para invitar a alguien más
-/// (sin `extra` — resuelve el hogar actual mediante
-/// [currentHouseholdIdProvider]).
+/// Muestra un código de invitación recién generado para el grupo
+/// [groupId]. Se llega aquí justo después de crear un grupo, o desde el
+/// selector de grupo para invitar a alguien más a uno ya existente —
+/// siempre con el grupo explícito, nunca resuelto de forma ambigua (un
+/// usuario puede pertenecer a varios a la vez).
 class InvitePartnerPage extends ConsumerStatefulWidget {
-  const InvitePartnerPage({super.key, this.householdId});
+  const InvitePartnerPage({super.key, required this.groupId});
 
-  final String? householdId;
+  final String groupId;
 
   @override
   ConsumerState<InvitePartnerPage> createState() => _InvitePartnerPageState();
@@ -34,23 +34,24 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
   }
 
   Future<void> _generateCode() async {
-    final String? householdId =
-        widget.householdId ?? ref.read(currentHouseholdIdProvider);
     final String? uid = ref.read(currentUidProvider);
 
-    if (householdId == null || uid == null) {
-      setState(() => _errorMessage = 'No se pudo determinar tu hogar.');
+    if (uid == null) {
+      setState(() => _errorMessage = 'No se pudo determinar tu cuenta.');
       return;
     }
 
     try {
       final String code = await ref.read(householdServiceProvider).createInvite(
-            householdId: householdId,
+            groupId: widget.groupId,
             createdBy: uid,
           );
 
       if (!mounted) return;
       setState(() => _code = code);
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -68,10 +69,6 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Si llegamos aquí justo tras crear el hogar (widget.householdId no
-    // nulo), el redirect de GoRouter ya no nos saca de esta pantalla al
-    // fijarse users/{uid}.householdId — solo pasa con /household-setup —
-    // así que "Continuar" navega explícitamente al inicio.
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -82,7 +79,7 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
             children: [
               const SizedBox(height: 12),
               Text(
-                'Invita a tu pareja',
+                'Invita a alguien',
                 style: GoogleFonts.outfit(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,

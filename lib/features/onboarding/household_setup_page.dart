@@ -7,11 +7,12 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/theme/tokens/app_colors.dart';
 
-/// Se muestra tras iniciar sesión cuando el usuario todavía no pertenece
-/// a ningún hogar (`users/{uid}.householdId == null`) — ver el
-/// `redirect` de `GoRouter` en `main.dart`. Ofrece crear un hogar nuevo
+/// Pantalla para compartir el diario con alguien más: crear un grupo nuevo
 /// (y a continuación compartir su código de invitación) o unirse a uno
-/// existente con un código que ya tenga.
+/// existente con un código que ya tenga. Cada persona tiene siempre su
+/// propio grupo personal (creado automáticamente al iniciar sesión — ver
+/// `AuthService`), así que esta pantalla es opcional y no bloquea nada:
+/// se accede a ella desde Perfil, nunca por un `redirect` obligatorio.
 class HouseholdSetupPage extends ConsumerStatefulWidget {
   const HouseholdSetupPage({super.key});
 
@@ -20,23 +21,31 @@ class HouseholdSetupPage extends ConsumerStatefulWidget {
       _HouseholdSetupPageState();
 }
 
-enum _Mode { choose, joining }
+enum _Mode { choose, naming, joining }
 
 class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
   _Mode _mode = _Mode.choose;
   bool _isBusy = false;
   String? _errorMessage;
   final TextEditingController _codeController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
 
   @override
   void dispose() {
     _codeController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
   Future<void> _createHousehold() async {
     final uid = ref.read(currentUidProvider);
     if (uid == null) return;
+
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Ponle un nombre a este grupo.');
+      return;
+    }
 
     setState(() {
       _isBusy = true;
@@ -47,18 +56,19 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       final userDoc = await ref.read(currentUserDocProvider.future);
       final displayName = (userDoc?['displayName'] as String?)?.trim();
 
-      final householdId = await ref.read(householdServiceProvider).createHousehold(
+      final groupId = await ref.read(householdServiceProvider).createHousehold(
             uid: uid,
             displayName: displayName?.isNotEmpty == true ? displayName! : 'Yo',
+            name: name,
           );
 
       if (!mounted) return;
-      context.go('/invite-partner', extra: householdId);
+      context.push('/invite-partner', extra: groupId);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage =
-            'No se pudo crear el hogar. Comprueba tu conexión e '
+            'No se pudo crear el grupo. Comprueba tu conexión e '
             'inténtalo de nuevo.';
       });
     } finally {
@@ -91,8 +101,11 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
             displayName: displayName?.isNotEmpty == true ? displayName! : 'Yo',
           );
 
-      // No navegamos a mano: al fijarse users/{uid}.householdId, el
-      // `redirect` de GoRouter nos saca solo de esta pantalla.
+      if (!mounted) return;
+      // A diferencia de antes, unirse a un grupo ya no dispara ningún
+      // redirect automático (no hay puerta de onboarding) — hay que
+      // volver explícitamente.
+      context.pop();
     } on StateError catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.message);
@@ -100,7 +113,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       if (!mounted) return;
       setState(() {
         _errorMessage =
-            'No se pudo unir al hogar. Comprueba tu conexión e '
+            'No se pudo unir al grupo. Comprueba tu conexión e '
             'inténtalo de nuevo.';
       });
     } finally {
@@ -108,21 +121,45 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     }
   }
 
+  String get _title => switch (_mode) {
+        _Mode.choose => '¿Con quién vas a compartir?',
+        _Mode.naming => 'Ponle un nombre a tu grupo',
+        _Mode.joining => 'Únete a un grupo',
+      };
+
+  String get _subtitle => switch (_mode) {
+        _Mode.choose =>
+          'Crea un grupo para invitar a quien quieras, o únete a uno si '
+              'ya te han pasado un código. Tu diario personal sigue '
+              'siendo solo tuyo.',
+        _Mode.naming =>
+          'Por ejemplo "Con Marta" o "Amigos del curro" — te ayudará a '
+              'distinguirlo cuando tengas varios.',
+        _Mode.joining => 'Pide el código de invitación a quien quieras unirte.',
+      };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          color: AppColors.textPrimary,
+          onPressed: () => context.pop(),
+        ),
+      ),
       body: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
               Text(
-                _mode == _Mode.choose
-                    ? '¿Con quién vas a compartir?'
-                    : 'Únete a un hogar',
+                _title,
                 style: GoogleFonts.outfit(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -131,12 +168,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                _mode == _Mode.choose
-                    ? 'Crea tu propio hogar para invitar a tu pareja '
-                        'luego, o únete al suyo si ya te ha pasado un '
-                        'código.'
-                    : 'Pide el código de invitación a quien quieras '
-                        'unirte.',
+                _subtitle,
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -156,10 +188,12 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
               ],
               if (_isBusy)
                 const Center(child: CircularProgressIndicator())
-              else if (_mode == _Mode.choose)
-                _buildChoices()
               else
-                _buildJoinForm(),
+                switch (_mode) {
+                  _Mode.choose => _buildChoices(),
+                  _Mode.naming => _buildNamingForm(),
+                  _Mode.joining => _buildJoinForm(),
+                },
             ],
           ),
         ),
@@ -171,17 +205,73 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     return Column(
       children: [
         _ActionCard(
-          icon: Icons.home_rounded,
-          title: 'Crear un hogar nuevo',
-          subtitle: 'Empiezas tú sola; invitas a tu pareja después.',
-          onTap: _createHousehold,
+          icon: Icons.group_add_rounded,
+          title: 'Crear un grupo nuevo',
+          subtitle: 'Le pones nombre e invitas a quien quieras después.',
+          onTap: () => setState(() {
+            _errorMessage = null;
+            _mode = _Mode.naming;
+          }),
         ),
         const SizedBox(height: 14),
         _ActionCard(
           icon: Icons.key_rounded,
           title: 'Unirme con un código',
-          subtitle: 'Alguien ya te ha invitado a su hogar.',
-          onTap: () => setState(() => _mode = _Mode.joining),
+          subtitle: 'Alguien ya te ha invitado a su grupo.',
+          onTap: () => setState(() {
+            _errorMessage = null;
+            _mode = _Mode.joining;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNamingForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          textCapitalization: TextCapitalization.sentences,
+          style: GoogleFonts.outfit(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Nombre del grupo',
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: AppColors.textPrimary, width: 2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: _createHousehold,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: Text(
+            'Crear grupo',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => setState(() {
+            _errorMessage = null;
+            _mode = _Mode.choose;
+          }),
+          child: const Text('Volver'),
         ),
       ],
     );
@@ -231,7 +321,10 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
         ),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: () => setState(() => _mode = _Mode.choose),
+          onPressed: () => setState(() {
+            _errorMessage = null;
+            _mode = _Mode.choose;
+          }),
           child: const Text('Volver'),
         ),
       ],

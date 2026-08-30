@@ -657,7 +657,19 @@ final memoryProvider =
         MemoryNotifier,
         List<MemoryModel>>(
   (ref) {
-    return MemoryNotifier(ref: ref);
+    // `ref.watch` (no `.read`): si el grupo activo cambia — al
+    // resolverse por primera vez tras iniciar sesión, o al cambiar de
+    // grupo con el selector — hay que recrear el notifier entero con un
+    // `MemoryMapFirestoreService` nuevo, apuntando al grupo correcto.
+    // Antes se capturaba una sola vez dentro del propio `MemoryNotifier`
+    // (con `ref.read`), así que quedaba fijado para siempre al grupo que
+    // hubiera activo en el instante exacto en que se creó el notifier —
+    // guardar un recuerdo nunca volvía a apuntar al grupo correcto tras
+    // cambiar de grupo, y si ese instante caía antes de que el grupo
+    // personal terminara de resolverse, se quedaba fijado a `null` para
+    // el resto de la sesión.
+    final service = ref.watch(memoryMapServiceProvider);
+    return MemoryNotifier(ref: ref, firestoreService: service);
   },
 );
 

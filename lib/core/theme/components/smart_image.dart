@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 /// Todas las fotos de la app viven en Firebase Storage (URLs `https://`),
 /// nunca en el almacenamiento local del dispositivo — así son visibles en
-/// todos los móviles del hogar y en la PWA, que no tiene acceso al disco
+/// todos los móviles del grupo y en la PWA, que no tiene acceso al disco
 /// del teléfono. Este widget es deliberadamente simple: no usa `dart:io`,
 /// lo que lo hace compatible con Flutter Web.
 ///

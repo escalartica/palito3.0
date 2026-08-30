@@ -8,7 +8,7 @@ import '../config/cloudinary_config.dart';
 
 /// Sube fotos a Cloudinary (gratis, sin tarjeta) en vez de al almacenamiento
 /// local del dispositivo, para que sean visibles en todos los móviles del
-/// hogar y en la PWA. Usa siempre bytes (Uint8List), nunca rutas de
+/// grupo y en la PWA. Usa siempre bytes (Uint8List), nunca rutas de
 /// archivo — es lo único verdaderamente multiplataforma (funciona igual en
 /// iOS, Android y Flutter Web, donde no existe `dart:io`).
 class StorageImageService {
@@ -59,27 +59,23 @@ class StorageImageService {
     return _uploadToCloudinary(bytes, fileName);
   }
 
-  /// Sube la foto de perfil de un comensal (índice 0, 1 o 2), guarda su
-  /// URL en Firestore (households/{householdId}, campo profileImages) para
-  /// que sea la misma en todos los dispositivos, y la devuelve.
-  ///
-  /// NOTA (multi-tenant Fase C): sigue indexado por `profileIndex` (0/1/2)
-  /// en vez de por uid porque profile_page.dart todavía usa esas pestañas
-  /// fijas — pasa a indexarse por uid cuando esa pantalla se reescriba
-  /// sobre pertenencia real al hogar.
+  /// Sube la foto de perfil de un miembro del grupo, guarda su URL en
+  /// Firestore (groups/{groupId}, campo profileImages, indexado
+  /// por uid) para que sea la misma en todos los dispositivos del grupo,
+  /// y la devuelve.
   static Future<String> uploadProfileImage({
-    required String householdId,
-    required int profileIndex,
+    required String groupId,
+    required String uid,
     required Uint8List bytes,
   }) async {
-    final url = await _uploadToCloudinary(bytes, 'profile_$profileIndex.jpg');
+    final url = await _uploadToCloudinary(bytes, 'profile_$uid.jpg');
 
     await FirebaseFirestore.instance
-        .collection('households')
-        .doc(householdId)
+        .collection('groups')
+        .doc(groupId)
         .set(
           {
-            'profileImages': {'$profileIndex': url},
+            'profileImages': {uid: url},
           },
           SetOptions(merge: true),
         );
@@ -87,15 +83,15 @@ class StorageImageService {
     return url;
   }
 
-  /// Devuelve la URL de la foto de perfil de [profileIndex] si existe, o
-  /// `null` si ese comensal todavía no tiene foto.
+  /// Devuelve la URL de la foto de perfil de [uid] si existe, o `null` si
+  /// ese miembro todavía no tiene foto.
   static Future<String?> getProfileImageUrl(
-    String householdId,
-    int profileIndex,
+    String groupId,
+    String uid,
   ) async {
     final doc = await FirebaseFirestore.instance
-        .collection('households')
-        .doc(householdId)
+        .collection('groups')
+        .doc(groupId)
         .get();
 
     final data = doc.data();
@@ -104,7 +100,7 @@ class StorageImageService {
     final profileImages = data['profileImages'];
     if (profileImages is! Map) return null;
 
-    final url = profileImages['$profileIndex'];
+    final url = profileImages[uid];
     return url is String && url.isNotEmpty ? url : null;
   }
 }

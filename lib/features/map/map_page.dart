@@ -67,7 +67,7 @@ class _MapPageState extends ConsumerState<MapPage>
   /// procesados). Se inicializa en `initState` (no como field initializer)
   /// para poder reutilizar la misma instancia compartida de
   /// `MemoryMapFirestoreService` que expone `memoryMapServiceProvider`, en
-  /// vez de crear una segunda instancia con su propio `householdId`
+  /// vez de crear una segunda instancia con su propio `groupId`
   /// potencialmente desincronizado.
   late final MemoryGeocodingService _geocodingService;
 

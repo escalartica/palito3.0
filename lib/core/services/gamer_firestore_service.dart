@@ -36,16 +36,16 @@ import 'package:flutter/foundation.dart';
 
 class GamerFirestoreService {
   GamerFirestoreService({
-    required this.householdId,
+    required this.groupId,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
   })  : _injectedFirestore = firestore,
         _injectedAuth = auth;
 
-  /// ID del hogar actual del usuario (`households/{householdId}`), resuelto
-  /// por `currentHouseholdIdProvider` a partir de su sesión. Null si el
-  /// usuario ha iniciado sesión pero todavía no pertenece a ningún hogar.
-  final String? householdId;
+  /// ID del grupo activo del usuario (`groups/{groupId}`), resuelto
+  /// por `activeGroupIdProvider` a partir de su sesión. Null si el
+  /// usuario ha iniciado sesión pero todavía no se conoce ningún grupo.
+  final String? groupId;
 
   // Resolución perezosa (ver el mismo patrón y justificación en
   // MemoryMapFirestoreService): no se tocan los singletons de Firebase
@@ -62,7 +62,7 @@ class GamerFirestoreService {
   // CONSTANTES
   // ==========================================================================
 
-  static const String _householdsCollection = 'households';
+  static const String _groupsCollection = 'groups';
 
   static const String gamerStatsCollection = 'gamer_stats';
 
@@ -91,19 +91,19 @@ class GamerFirestoreService {
   // ==========================================================================
 
   // El parámetro `uid` se conserva por compatibilidad de firma con las
-  // llamadas existentes, pero la ruta real siempre apunta al hogar actual
+  // llamadas existentes, pero la ruta real siempre apunta al grupo actual
   // (documento compartido por todos sus miembros). Null si el usuario no
-  // pertenece todavía a ningún hogar.
+  // pertenece todavía a ningún grupo.
   DocumentReference<Map<String, dynamic>>? _mainStatsDocumentForUid(
     String uid,
   ) {
-    if (householdId == null) {
+    if (groupId == null) {
       return null;
     }
 
     return _firestore
-        .collection(_householdsCollection)
-        .doc(householdId)
+        .collection(_groupsCollection)
+        .doc(groupId)
         .collection(gamerStatsCollection)
         .doc(mainStatsDocument);
   }
@@ -442,13 +442,13 @@ class GamerFirestoreService {
   ) {
     final String normalizedUid = _normalizeUid(uid);
 
-    if (normalizedUid.isEmpty || householdId == null) {
+    if (normalizedUid.isEmpty || groupId == null) {
       return Stream.value(null);
     }
 
     return _firestore
-        .collection(_householdsCollection)
-        .doc(householdId)
+        .collection(_groupsCollection)
+        .doc(groupId)
         .snapshots()
         .map(
       (
@@ -503,7 +503,7 @@ class GamerFirestoreService {
     if (docRef == null) {
       debugPrint(
         '⚠️ GamerFirestoreService: '
-        'el usuario no pertenece a ningún hogar todavía.',
+        'el usuario no pertenece a ningún grupo todavía.',
       );
 
       return;
@@ -742,7 +742,7 @@ class GamerFirestoreService {
 
     if (docRef == null) {
       throw StateError(
-        'El usuario no pertenece a ningún hogar todavía.',
+        'El usuario no pertenece a ningún grupo todavía.',
       );
     }
 
@@ -839,10 +839,10 @@ class GamerFirestoreService {
       return;
     }
 
-    if (householdId == null) {
+    if (groupId == null) {
       debugPrint(
         '⚠️ GamerFirestoreService: '
-        'el usuario no pertenece a ningún hogar todavía.',
+        'el usuario no pertenece a ningún grupo todavía.',
       );
 
       return;
@@ -850,8 +850,8 @@ class GamerFirestoreService {
 
     try {
       await _firestore
-          .collection(_householdsCollection)
-          .doc(householdId)
+          .collection(_groupsCollection)
+          .doc(groupId)
           .collection(gameHistoryCollection)
           .add(
         <String, dynamic>{
@@ -942,7 +942,7 @@ class GamerPlayerStats {
 // ============================================================================
 
 class GamerStats {
-  /// Estadísticas de cada miembro del hogar, indexadas por su uid — no por
+  /// Estadísticas de cada miembro del grupo, indexadas por su uid — no por
   /// un nombre fijo. Soporta cualquier número de miembros.
   final Map<String, GamerPlayerStats> players;
   final GamerPlayerStats team;
@@ -953,7 +953,7 @@ class GamerStats {
   });
 
   /// Estadísticas del miembro `uid`, o un valor vacío si todavía no tiene
-  /// ninguna entrada (p. ej. se acaba de unir al hogar).
+  /// ninguna entrada (p. ej. se acaba de unir al grupo).
   GamerPlayerStats forUid(String uid) {
     return players[uid] ??
         GamerPlayerStats.empty(uid: uid);

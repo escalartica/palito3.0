@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/data/categories.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/constrained_fab_location.dart';
+import '../../../core/theme/components/group_switcher.dart';
 import '../../../core/theme/components/home_widgets.dart';
 import '../../../core/theme/components/memory_card.dart';
 import '../../../core/theme/tokens/app_colors.dart';
@@ -352,6 +353,8 @@ class _HomePageState extends ConsumerState<HomePage>
                                         -0.8,
                                   ),
                                 ),
+                                const SizedBox(height: 6),
+                                const GroupSwitcher(),
                               ],
                             ),
                           ),
