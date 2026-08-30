@@ -75,11 +75,16 @@
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Necesitamos acceso a la galería para que puedas seleccionar fotos de tus platos.</string>
 
-    <!-- Permiso de Ubicación: solo "when in use" — la app nunca lee la
-         ubicación en segundo plano, así que no se declara
-         NSLocationAlwaysUsageDescription (Apple penaliza en la revisión
-         de App Store los permisos declarados que no se usan). -->
+    <!-- Permiso de Ubicación: la app solo pide "when in use" en tiempo de
+         ejecución, nunca en segundo plano. NSLocationAlwaysAndWhenInUseUsageDescription
+         se declara igualmente (con el mismo texto) porque el plugin
+         `geolocator` enlaza en el binario el código de autorización
+         "always" aunque la app nunca lo invoque — sin esta clave, Apple
+         rechaza la build en revisión por "Missing purpose string"
+         (aviso real de Transporter al subir la build 5). -->
     <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
 </dict>
 </plist>

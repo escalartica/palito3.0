@@ -2,7 +2,7 @@ name: palito_3_0
 description: "Aplicación para guardar y explorar recuerdos gastronómicos."
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 1.1.0+7
 
 environment:
   sdk: ^3.12.2

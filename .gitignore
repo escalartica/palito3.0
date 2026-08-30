@@ -56,3 +56,10 @@ skills-lock.json
 android/key.properties
 *.jks
 *.keystore
+
+# Scripts de administración (Fase E) — credenciales y dependencias, nunca al repo
+scripts/node_modules/
+scripts/*.json
+!scripts/package.json
+scripts/*serviceAccount*
+scripts/*service-account*
