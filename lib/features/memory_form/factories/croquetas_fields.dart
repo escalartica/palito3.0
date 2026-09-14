@@ -263,8 +263,13 @@ class CroquetasFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
+              // El ancho real y el tamaño de letra del sistema deciden
+              // cuántas columnas caben: con el umbral fijo de caracteres que
+              // había antes, "Decepcionante" se partía en "Decepcionant"/"e".
               final int columns = NeoChip.columnsFor(
                 options.map((o) => o['label'] as String).toList(),
+                maxWidth: constraints.maxWidth,
+                textScaler: MediaQuery.textScalerOf(context),
               );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -408,10 +413,7 @@ class CroquetasFields implements DynamicFieldGenerator {
 // temporales en el mapa de datos que se persiste.
 
 class _VariedadesBuilder extends StatefulWidget {
-  const _VariedadesBuilder({
-    required this.variedades,
-    required this.onChanged,
-  });
+  const _VariedadesBuilder({required this.variedades, required this.onChanged});
 
   final List<Map<String, dynamic>> variedades;
   final ValueChanged<List<Map<String, dynamic>>> onChanged;
@@ -579,8 +581,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                       label: label,
                       icon: option['icon'] as IconData,
                       selected: selected,
-                      onTap: () =>
-                          setState(() => _saborEnEdicion = label),
+                      onTap: () => setState(() => _saborEnEdicion = label),
                     );
                   }).toList(),
                 ),
@@ -621,8 +622,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                       label: label,
                       icon: option['icon'] as IconData,
                       selected: selected,
-                      onTap: () =>
-                          setState(() => _valoracionEnEdicion = label),
+                      onTap: () => setState(() => _valoracionEnEdicion = label),
                     );
                   }).toList(),
                 ),
@@ -649,8 +649,9 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                             size: 16,
                             color: puedeConfirmar
                                 ? Colors.white
-                                : const Color(0xFF0F172A)
-                                      .withValues(alpha: 0.4),
+                                : const Color(
+                                    0xFF0F172A,
+                                  ).withValues(alpha: 0.4),
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -660,8 +661,9 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                               fontWeight: FontWeight.w700,
                               color: puedeConfirmar
                                   ? Colors.white
-                                  : const Color(0xFF0F172A)
-                                        .withValues(alpha: 0.4),
+                                  : const Color(
+                                      0xFF0F172A,
+                                    ).withValues(alpha: 0.4),
                             ),
                           ),
                         ],

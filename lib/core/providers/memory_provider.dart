@@ -23,8 +23,7 @@ import 'memory_map_provider.dart';
 ///
 /// ===========================================================================
 
-class MemoryNotifier
-    extends StateNotifier<List<MemoryModel>> {
+class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   /// [firestoreService] es inyectable para poder sustituirlo por un doble
   /// de prueba en tests (evita depender de un backend de Firebase real).
   /// En producción siempre se usa el mismo [MemoryMapFirestoreService]
@@ -34,9 +33,9 @@ class MemoryNotifier
   MemoryNotifier({
     required Ref ref,
     MemoryMapFirestoreService? firestoreService,
-  })  : _firestoreService =
-            firestoreService ?? ref.read(memoryMapServiceProvider),
-        super(<MemoryModel>[]) {
+  }) : _firestoreService =
+           firestoreService ?? ref.read(memoryMapServiceProvider),
+       super(<MemoryModel>[]) {
     // Se registra primero, de forma síncrona, para no perder ninguna
     // emisión del stream compartido con el mapa mientras se cargan las
     // memorias locales.
@@ -48,8 +47,7 @@ class MemoryNotifier
   // SERVICIO FIRESTORE
   // ==========================================================================
 
-  final MemoryMapFirestoreService
-      _firestoreService;
+  final MemoryMapFirestoreService _firestoreService;
 
   // ==========================================================================
   // ESTADO INTERNO
@@ -69,26 +67,24 @@ class MemoryNotifier
 
   Future<void> _initialize() async {
     try {
-      debugPrint(
+      _log(
         '🧠 MemoryNotifier: '
         'iniciando inicialización...',
       );
 
       await _loadLocalMemories();
 
-      debugPrint(
+      _log(
         '🧠 MemoryNotifier: '
         'inicialización completada.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error durante la inicialización: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
     }
   }
 
@@ -101,7 +97,7 @@ class MemoryNotifier
       final List<MemoryModel> localMemories =
           await StorageService.loadMemories();
 
-      debugPrint(
+      _log(
         '💾 MemoryNotifier: '
         'memorias locales cargadas: '
         '${localMemories.length}',
@@ -112,7 +108,7 @@ class MemoryNotifier
       }
 
       if (localMemories.isEmpty) {
-        debugPrint(
+        _log(
           '💾 MemoryNotifier: '
           'no existen memorias locales.',
         );
@@ -120,29 +116,25 @@ class MemoryNotifier
         return;
       }
 
-      final List<MemoryModel>
-          normalizedMemories =
-          _normalizeMemories(
+      final List<MemoryModel> normalizedMemories = _normalizeMemories(
         localMemories,
       );
 
       state = normalizedMemories;
 
-      debugPrint(
+      _log(
         '🧠 MemoryNotifier: '
         'estado inicial cargado desde '
         'SharedPreferences: '
         '${state.length} memorias.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error cargando memorias locales: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
     }
   }
 
@@ -152,7 +144,7 @@ class MemoryNotifier
 
   void _listenToFirestore(Ref ref) {
     try {
-      debugPrint(
+      _log(
         '🔥 MemoryNotifier: '
         'iniciando escucha de Firestore '
         '(stream compartido con el mapa)...',
@@ -162,117 +154,95 @@ class MemoryNotifier
       // suscripción a Firestore: así solo hay un listener en tiempo real
       // sobre la colección de memorias, compartido con el mapa, en vez
       // de uno por cada consumidor.
-      ref.listen<AsyncValue<List<MemoryModel>>>(
-        memoryModelsStreamProvider,
-        (previous, next) {
-          next.when(
-            data: (
-              List<MemoryModel>
-                  firestoreMemories,
-            ) async {
-              if (_isDisposed) {
-                return;
-              }
+      ref.listen<AsyncValue<List<MemoryModel>>>(memoryModelsStreamProvider, (
+        previous,
+        next,
+      ) {
+        next.when(
+          data: (List<MemoryModel> firestoreMemories) async {
+            if (_isDisposed) {
+              return;
+            }
 
-              debugPrint(
-                '🔥 MemoryNotifier: '
-                'memorias recibidas de Firestore: '
-                '${firestoreMemories.length}',
+            _log(
+              '🔥 MemoryNotifier: '
+              'memorias recibidas de Firestore: '
+              '${firestoreMemories.length}',
+            );
+
+            _hasReceivedFirestoreData = true;
+
+            // Si veníamos de un error (p. ej. tras recuperar la
+            // conexión), lo limpiamos: los datos ya están llegando.
+            _hasStreamError = false;
+            _isPermissionDenied = false;
+
+            final List<MemoryModel> normalizedMemories = _normalizeMemories(
+              firestoreMemories,
+            );
+
+            if (!_isDisposed) {
+              state = normalizedMemories;
+            }
+
+            _log(
+              '🧠 MemoryNotifier: '
+              'estado actualizado desde Firestore: '
+              '${normalizedMemories.length} memorias.',
+            );
+
+            try {
+              await StorageService.saveMemories(normalizedMemories);
+
+              _log(
+                '💾 MemoryNotifier: '
+                'caché local sincronizada '
+                'con Firestore.',
+              );
+            } catch (e, stack) {
+              _log(
+                '⚠️ MemoryNotifier: '
+                'no se pudo actualizar la caché local: '
+                '$e',
               );
 
-              _hasReceivedFirestoreData =
-                  true;
+              _logStack(stackTrace: stack);
+            }
+          },
+          error: (Object error, StackTrace stack) {
+            _log(
+              '❌ MemoryNotifier: '
+              'error escuchando Firestore: '
+              '$error',
+            );
 
-              // Si veníamos de un error (p. ej. tras recuperar la
-              // conexión), lo limpiamos: los datos ya están llegando.
-              _hasStreamError = false;
-              _isPermissionDenied = false;
+            _logStack(stackTrace: stack);
 
-              final List<MemoryModel>
-                  normalizedMemories =
-                  _normalizeMemories(
-                firestoreMemories,
-              );
+            _hasStreamError = true;
+            _isPermissionDenied =
+                error is FirebaseException && error.code == 'permission-denied';
 
-              if (!_isDisposed) {
-                state = normalizedMemories;
-              }
-
-              debugPrint(
-                '🧠 MemoryNotifier: '
-                'estado actualizado desde Firestore: '
-                '${normalizedMemories.length} memorias.',
-              );
-
-              try {
-                await StorageService
-                    .saveMemories(
-                  normalizedMemories,
-                );
-
-                debugPrint(
-                  '💾 MemoryNotifier: '
-                  'caché local sincronizada '
-                  'con Firestore.',
-                );
-              } catch (e, stack) {
-                debugPrint(
-                  '⚠️ MemoryNotifier: '
-                  'no se pudo actualizar la caché local: '
-                  '$e',
-                );
-
-                debugPrintStack(
-                  stackTrace: stack,
-                );
-              }
-            },
-            error: (
-              Object error,
-              StackTrace stack,
-            ) {
-              debugPrint(
-                '❌ MemoryNotifier: '
-                'error escuchando Firestore: '
-                '$error',
-              );
-
-              debugPrintStack(
-                stackTrace: stack,
-              );
-
-              _hasStreamError = true;
-              _isPermissionDenied =
-                  error is FirebaseException &&
-                  error.code == 'permission-denied';
-
-              // Reasignamos el estado (misma lista, nueva referencia)
-              // solo para notificar a quien esté escuchando
-              // memoryProvider de que hay algo nuevo que mostrar — sin
-              // esto, un widget que solo mira `state` nunca se
-              // reconstruiría al llegar un error, porque `state` en sí
-              // no cambia de contenido.
-              if (!_isDisposed) {
-                state = List<MemoryModel>.from(
-                  state,
-                );
-              }
-            },
-            loading: () {},
-          );
-        },
-        fireImmediately: true,
-      );
+            // Reasignamos el estado (misma lista, nueva referencia)
+            // solo para notificar a quien esté escuchando
+            // memoryProvider de que hay algo nuevo que mostrar — sin
+            // esto, un widget que solo mira `state` nunca se
+            // reconstruiría al llegar un error, porque `state` en sí
+            // no cambia de contenido.
+            if (!_isDisposed) {
+              state = List<MemoryModel>.from(state);
+            }
+          },
+          loading: () {},
+        );
+      }, fireImmediately: true);
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'no se pudo iniciar el stream de Firestore: '
         '$e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
     }
   }
 
@@ -280,74 +250,60 @@ class MemoryNotifier
   // AÑADIR MEMORIA
   // ==========================================================================
 
-  Future<void> addMemory(
-    MemoryModel newMemory,
-  ) async {
+  Future<void> addMemory(MemoryModel newMemory) async {
     try {
-      final String normalizedId =
-          newMemory.id.trim();
+      final String normalizedId = newMemory.id.trim();
 
       if (normalizedId.isEmpty) {
-        throw ArgumentError(
-          'No se puede añadir una memoria sin ID.',
-        );
+        throw ArgumentError('No se puede añadir una memoria sin ID.');
       }
 
-      debugPrint(
+      _log(
         '➕ MemoryNotifier: '
         'añadiendo memoria $normalizedId...',
       );
 
-      final List<MemoryModel>
-          updatedMemories =
-          List<MemoryModel>.from(
-        state,
-      );
+      // Estado optimista CON marcha atrás. Antes se actualizaba la lista y,
+      // si la escritura fallaba, no se revertía: el usuario veía a la vez
+      // "No se pudo guardar el recuerdo" y el recuerdo en la lista y en el
+      // mapa. Al reiniciar la app desaparecía.
+      final List<MemoryModel> previousState = List<MemoryModel>.from(state);
 
-      final int existingIndex =
-          updatedMemories.indexWhere(
-        (MemoryModel memory) =>
-            memory.id.trim() ==
-            normalizedId,
+      final List<MemoryModel> updatedMemories = List<MemoryModel>.from(state);
+
+      final int existingIndex = updatedMemories.indexWhere(
+        (MemoryModel memory) => memory.id.trim() == normalizedId,
       );
 
       if (existingIndex >= 0) {
-        updatedMemories[
-                existingIndex] =
-            newMemory;
+        updatedMemories[existingIndex] = newMemory;
       } else {
-        updatedMemories.add(
-          newMemory,
-        );
+        updatedMemories.add(newMemory);
       }
 
-      state = _normalizeMemories(
-        updatedMemories,
-      );
+      state = _normalizeMemories(updatedMemories);
 
-      await StorageService.saveMemory(
-        newMemory,
-      );
+      try {
+        await StorageService.saveMemory(newMemory);
 
-      await _firestoreService
-          .saveMemoryModel(
-        newMemory,
-      );
+        await _firestoreService.saveMemoryModel(newMemory);
+      } catch (_) {
+        state = _normalizeMemories(previousState);
+        rethrow;
+      }
 
-      debugPrint(
+      _log(
         '✅ MemoryNotifier: '
         'memoria añadida correctamente: '
         '$normalizedId',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error añadiendo memoria: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -357,67 +313,45 @@ class MemoryNotifier
   // ACTUALIZAR MEMORIA
   // ==========================================================================
 
-  Future<void> updateMemory(
-    MemoryModel updatedMemory,
-  ) async {
+  Future<void> updateMemory(MemoryModel updatedMemory) async {
     try {
-      final String normalizedId =
-          updatedMemory.id.trim();
+      final String normalizedId = updatedMemory.id.trim();
 
       if (normalizedId.isEmpty) {
-        throw ArgumentError(
-          'No se puede actualizar una memoria sin ID.',
-        );
+        throw ArgumentError('No se puede actualizar una memoria sin ID.');
       }
 
-      debugPrint(
+      _log(
         '✏️ MemoryNotifier: '
         'actualizando memoria '
         '$normalizedId...',
       );
 
-      final List<MemoryModel>
-          updatedMemories =
-          state
-              .map(
-                (
-                  MemoryModel memory,
-                ) =>
-                    memory.id.trim() ==
-                            normalizedId
-                        ? updatedMemory
-                        : memory,
-              )
-              .toList();
+      final List<MemoryModel> updatedMemories = state
+          .map(
+            (MemoryModel memory) =>
+                memory.id.trim() == normalizedId ? updatedMemory : memory,
+          )
+          .toList();
 
-      state = _normalizeMemories(
-        updatedMemories,
-      );
+      state = _normalizeMemories(updatedMemories);
 
-      await StorageService
-          .updateMemory(
-        updatedMemory,
-      );
+      await StorageService.updateMemory(updatedMemory);
 
-      await _firestoreService
-          .saveMemoryModel(
-        updatedMemory,
-      );
+      await _firestoreService.saveMemoryModel(updatedMemory);
 
-      debugPrint(
+      _log(
         '✅ MemoryNotifier: '
         'memoria actualizada correctamente: '
         '$normalizedId',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error actualizando memoria: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -427,58 +361,39 @@ class MemoryNotifier
   // ELIMINAR MEMORIA
   // ==========================================================================
 
-  Future<void> removeMemory(
-    String id,
-  ) async {
+  Future<void> removeMemory(String id) async {
     try {
-      final String normalizedId =
-          id.trim();
+      final String normalizedId = id.trim();
 
       if (normalizedId.isEmpty) {
-        throw ArgumentError(
-          'No se puede eliminar una memoria sin ID.',
-        );
+        throw ArgumentError('No se puede eliminar una memoria sin ID.');
       }
 
-      debugPrint(
+      _log(
         '🗑️ MemoryNotifier: '
         'eliminando memoria $normalizedId...',
       );
 
       state = state
-          .where(
-            (
-              MemoryModel memory,
-            ) =>
-                memory.id.trim() !=
-                normalizedId,
-          )
+          .where((MemoryModel memory) => memory.id.trim() != normalizedId)
           .toList();
 
-      await StorageService
-          .deleteMemory(
-        normalizedId,
-      );
+      await StorageService.deleteMemory(normalizedId);
 
-      await _firestoreService
-          .deleteMemory(
-        normalizedId,
-      );
+      await _firestoreService.deleteMemory(normalizedId);
 
-      debugPrint(
+      _log(
         '✅ MemoryNotifier: '
         'memoria eliminada correctamente: '
         '$normalizedId',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error eliminando memoria: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -488,20 +403,15 @@ class MemoryNotifier
   // BUSCAR MEMORIA POR ID
   // ==========================================================================
 
-  MemoryModel? getMemoryById(
-    String id,
-  ) {
-    final String normalizedId =
-        id.trim();
+  MemoryModel? getMemoryById(String id) {
+    final String normalizedId = id.trim();
 
     if (normalizedId.isEmpty) {
       return null;
     }
 
-    for (final MemoryModel memory
-        in state) {
-      if (memory.id.trim() ==
-          normalizedId) {
+    for (final MemoryModel memory in state) {
+      if (memory.id.trim() == normalizedId) {
         return memory;
       }
     }
@@ -525,27 +435,23 @@ class MemoryNotifier
   // LIMPIAR MEMORIAS LOCALES
   // ==========================================================================
 
-  Future<void>
-      clearLocalMemories() async {
+  Future<void> clearLocalMemories() async {
     try {
       state = <MemoryModel>[];
 
-      await StorageService
-          .clearMemories();
+      await StorageService.clearMemories();
 
-      debugPrint(
+      _log(
         '🧹 MemoryNotifier: '
         'memorias locales eliminadas.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ MemoryNotifier: '
         'error limpiando memorias locales: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -555,34 +461,22 @@ class MemoryNotifier
   // NORMALIZAR MEMORIAS
   // ==========================================================================
 
-  List<MemoryModel>
-      _normalizeMemories(
-    List<MemoryModel> memories,
-  ) {
-    final Map<String, MemoryModel>
-        uniqueMemories =
-        <String, MemoryModel>{};
+  List<MemoryModel> _normalizeMemories(List<MemoryModel> memories) {
+    final Map<String, MemoryModel> uniqueMemories = <String, MemoryModel>{};
 
-    for (final MemoryModel memory
-        in memories) {
-      final String id =
-          memory.id.trim();
+    for (final MemoryModel memory in memories) {
+      final String id = memory.id.trim();
 
       if (id.isEmpty) {
         continue;
       }
 
-      uniqueMemories[id] =
-          memory;
+      uniqueMemories[id] = memory;
     }
 
-    final List<MemoryModel>
-        normalizedMemories =
-        uniqueMemories.values.toList();
+    final List<MemoryModel> normalizedMemories = uniqueMemories.values.toList();
 
-    normalizedMemories.sort(
-      _compareMemoriesByDateDescending,
-    );
+    normalizedMemories.sort(_compareMemoriesByDateDescending);
 
     return normalizedMemories;
   }
@@ -591,17 +485,11 @@ class MemoryNotifier
   // COMPARAR FECHAS
   // ==========================================================================
 
-  static int
-      _compareMemoriesByDateDescending(
-    MemoryModel a,
-    MemoryModel b,
-  ) {
+  static int _compareMemoriesByDateDescending(MemoryModel a, MemoryModel b) {
     final DateTime dateA = a.date;
     final DateTime dateB = b.date;
 
-    return dateB.compareTo(
-      dateA,
-    );
+    return dateB.compareTo(dateA);
   }
 
   // ==========================================================================
@@ -639,7 +527,7 @@ class MemoryNotifier
     // No hay que cancelar ninguna suscripción manual: el ref.listen de
     // memoryModelsStreamProvider se limpia solo cuando Riverpod destruye
     // este provider.
-    debugPrint(
+    _log(
       '🧠 MemoryNotifier: '
       'notifier eliminado.',
     );
@@ -652,10 +540,7 @@ class MemoryNotifier
 // PROVIDER PRINCIPAL
 // ============================================================================
 
-final memoryProvider =
-    StateNotifierProvider<
-        MemoryNotifier,
-        List<MemoryModel>>(
+final memoryProvider = StateNotifierProvider<MemoryNotifier, List<MemoryModel>>(
   (ref) {
     // `ref.watch` (no `.read`): si el grupo activo cambia — al
     // resolverse por primera vez tras iniciar sesión, o al cambiar de
@@ -677,7 +562,21 @@ final memoryProvider =
 // CATEGORÍA SELECCIONADA
 // ============================================================================
 
-final selectedCategoryProvider =
-    StateProvider<String>(
-  (ref) => 'Todos',
-);
+final selectedCategoryProvider = StateProvider<String>((ref) => 'Todos');
+
+// ===========================================================================
+// LOGS
+// ===========================================================================
+//
+// `debugPrint` NO se desactiva en una build de release: sigue escribiendo al
+// log del sistema (Console.app en iOS, logcat en Android), donde lo puede leer
+// cualquiera con el dispositivo delante o un informe de diagnóstico. Este
+// archivo estaba volcando ahí identificadores de usuario, de grupo y datos de
+// ubicación. Con este envoltorio, en release no se escribe nada.
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
+void _logStack({StackTrace? stackTrace}) {
+  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+}

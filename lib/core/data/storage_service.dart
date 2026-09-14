@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -63,12 +62,9 @@ class StorageService {
   /// El MemoryModel debe encargarse de convertir DateTime a String
   /// ISO-8601 y de convertir los campos anidados a estructuras compatibles
   /// con JSON.
-  static Future<void> saveMemories(
-    List<MemoryModel> memories,
-  ) async {
+  static Future<void> saveMemories(List<MemoryModel> memories) async {
     try {
-      final SharedPreferences prefs =
-          await SharedPreferences.getInstance();
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
 
       // ----------------------------------------------------------------------
       // CREAR COPIA
@@ -76,18 +72,13 @@ class StorageService {
       //
       // No modificamos la lista original recibida.
       //
-      final List<MemoryModel> sortedMemories =
-          List<MemoryModel>.from(
-        memories,
-      );
+      final List<MemoryModel> sortedMemories = List<MemoryModel>.from(memories);
 
       // ----------------------------------------------------------------------
       // ORDENAR MÁS RECIENTE → MÁS ANTIGUA
       // ----------------------------------------------------------------------
 
-      sortedMemories.sort(
-        _compareMemoriesByDateDescending,
-      );
+      sortedMemories.sort(_compareMemoriesByDateDescending);
 
       // ----------------------------------------------------------------------
       // CONVERTIR MODELOS A MAPS JSON-SAFE
@@ -103,75 +94,56 @@ class StorageService {
       //
       // De esta forma jsonEncode() no recibe ningún DateTime directamente.
       //
-      final List<Map<String, dynamic>> memoryMaps =
-          sortedMemories
-              .map(
-                (MemoryModel memory) {
-                  final Map<String, dynamic> json =
-                      memory.toJson();
+      final List<Map<String, dynamic>> memoryMaps = sortedMemories.map((
+        MemoryModel memory,
+      ) {
+        final Map<String, dynamic> json = memory.toJson();
 
-                  // Protección adicional:
-                  //
-                  // Aunque MemoryModel.toJson() debería ser JSON-safe,
-                  // normalizamos recursivamente cualquier valor que pudiera
-                  // contener accidentalmente un DateTime dentro de
-                  // specificFields u otra estructura anidada.
-                  final dynamic normalized =
-                      _makeJsonEncodable(
-                    json,
-                  );
+        // Protección adicional:
+        //
+        // Aunque MemoryModel.toJson() debería ser JSON-safe,
+        // normalizamos recursivamente cualquier valor que pudiera
+        // contener accidentalmente un DateTime dentro de
+        // specificFields u otra estructura anidada.
+        final dynamic normalized = _makeJsonEncodable(json);
 
-                  if (normalized
-                      is! Map<String, dynamic>) {
-                    throw const FormatException(
-                      'MemoryModel.toJson() '
-                      'no devolvió un Map<String, dynamic> válido.',
-                    );
-                  }
+        if (normalized is! Map<String, dynamic>) {
+          throw const FormatException(
+            'MemoryModel.toJson() '
+            'no devolvió un Map<String, dynamic> válido.',
+          );
+        }
 
-                  return normalized;
-                },
-              )
-              .toList();
+        return normalized;
+      }).toList();
 
       // ----------------------------------------------------------------------
       // CONVERTIR A JSON
       // ----------------------------------------------------------------------
 
-      final String encodedData =
-          jsonEncode(
-        memoryMaps,
-      );
+      final String encodedData = jsonEncode(memoryMaps);
 
       // ----------------------------------------------------------------------
       // GUARDAR EN SHAREDPREFERENCES
       // ----------------------------------------------------------------------
 
-      final bool saved =
-          await prefs.setString(
-        _key,
-        encodedData,
-      );
+      final bool saved = await prefs.setString(_key, encodedData);
 
       if (!saved) {
-        throw Exception(
-          'SharedPreferences no pudo guardar memories_data.',
-        );
+        throw Exception('SharedPreferences no pudo guardar memories_data.');
       }
 
-      debugPrint(
+      _log(
         '💾 StorageService: '
         '${sortedMemories.length} memorias guardadas localmente.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ StorageService: '
         'error guardando memorias: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -202,21 +174,16 @@ class StorageService {
   ///     MÁS ANTIGUA
   static Future<List<MemoryModel>> loadMemories() async {
     try {
-      final SharedPreferences prefs =
-          await SharedPreferences.getInstance();
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
 
       // ----------------------------------------------------------------------
       // OBTENER JSON
       // ----------------------------------------------------------------------
 
-      final String? encodedData =
-          prefs.getString(
-        _key,
-      );
+      final String? encodedData = prefs.getString(_key);
 
-      if (encodedData == null ||
-          encodedData.trim().isEmpty) {
-        debugPrint(
+      if (encodedData == null || encodedData.trim().isEmpty) {
+        _log(
           '💾 StorageService: '
           'no hay memorias almacenadas localmente.',
         );
@@ -228,13 +195,10 @@ class StorageService {
       // DECODIFICAR JSON
       // ----------------------------------------------------------------------
 
-      final dynamic decodedData =
-          jsonDecode(
-        encodedData,
-      );
+      final dynamic decodedData = jsonDecode(encodedData);
 
       if (decodedData is! List) {
-        debugPrint(
+        _log(
           '⚠️ StorageService: '
           'los datos almacenados no tienen formato de lista.',
         );
@@ -246,13 +210,12 @@ class StorageService {
       // CONVERTIR CADA MEMORIA
       // ----------------------------------------------------------------------
 
-      final List<MemoryModel> memories =
-          <MemoryModel>[];
+      final List<MemoryModel> memories = <MemoryModel>[];
 
       for (final dynamic item in decodedData) {
         try {
           if (item is! Map) {
-            debugPrint(
+            _log(
               '⚠️ StorageService: '
               'se encontró un elemento inválido '
               'en memories_data.',
@@ -261,22 +224,18 @@ class StorageService {
             continue;
           }
 
-          final Map<String, dynamic> memoryMap =
-              Map<String, dynamic>.from(
+          final Map<String, dynamic> memoryMap = Map<String, dynamic>.from(
             item,
           );
 
-          final MemoryModel memory =
-              MemoryModel.fromMap(
-            memoryMap,
-          );
+          final MemoryModel memory = MemoryModel.fromMap(memoryMap);
 
           // ---------------------------------------------------------------
           // VALIDAR ID
           // ---------------------------------------------------------------
 
           if (memory.id.trim().isEmpty) {
-            debugPrint(
+            _log(
               '⚠️ StorageService: '
               'se ignoró una memoria sin ID.',
             );
@@ -284,18 +243,14 @@ class StorageService {
             continue;
           }
 
-          memories.add(
-            memory,
-          );
+          memories.add(memory);
         } catch (e, stack) {
-          debugPrint(
+          _log(
             '❌ StorageService: '
             'error procesando una memoria almacenada: $e',
           );
 
-          debugPrintStack(
-            stackTrace: stack,
-          );
+          _logStack(stackTrace: stack);
         }
       }
 
@@ -303,11 +258,9 @@ class StorageService {
       // ORDENAR MÁS RECIENTE → MÁS ANTIGUA
       // ----------------------------------------------------------------------
 
-      memories.sort(
-        _compareMemoriesByDateDescending,
-      );
+      memories.sort(_compareMemoriesByDateDescending);
 
-      debugPrint(
+      _log(
         '💾 StorageService: '
         '${memories.length} memorias cargadas '
         'desde almacenamiento local.',
@@ -315,14 +268,12 @@ class StorageService {
 
       return memories;
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ StorageService: '
         'error cargando memorias: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       return <MemoryModel>[];
     }
@@ -345,17 +296,12 @@ class StorageService {
   /// La lista completa se guarda posteriormente ordenada de:
   ///
   ///     más reciente → más antigua
-  static Future<void> saveMemory(
-    MemoryModel memory,
-  ) async {
+  static Future<void> saveMemory(MemoryModel memory) async {
     try {
-      final List<MemoryModel> memories =
-          await loadMemories();
+      final List<MemoryModel> memories = await loadMemories();
 
-      final int existingIndex =
-          memories.indexWhere(
-        (MemoryModel item) =>
-            item.id == memory.id,
+      final int existingIndex = memories.indexWhere(
+        (MemoryModel item) => item.id == memory.id,
       );
 
       if (existingIndex >= 0) {
@@ -363,10 +309,9 @@ class StorageService {
         // ACTUALIZAR
         // ---------------------------------------------------------------
 
-        memories[existingIndex] =
-            memory;
+        memories[existingIndex] = memory;
 
-        debugPrint(
+        _log(
           '💾 StorageService: '
           'memoria actualizada localmente: ${memory.id}',
         );
@@ -375,11 +320,9 @@ class StorageService {
         // AÑADIR
         // ---------------------------------------------------------------
 
-        memories.add(
-          memory,
-        );
+        memories.add(memory);
 
-        debugPrint(
+        _log(
           '💾 StorageService: '
           'nueva memoria guardada localmente: ${memory.id}',
         );
@@ -389,18 +332,14 @@ class StorageService {
       // GUARDAR LISTA COMPLETA
       // --------------------------------------------------------------------
 
-      await saveMemories(
-        memories,
-      );
+      await saveMemories(memories);
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ StorageService: '
         'error guardando memoria ${memory.id}: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -413,15 +352,12 @@ class StorageService {
   /// Elimina una memoria del almacenamiento local.
   ///
   /// Si no existe, no genera error.
-  static Future<void> deleteMemory(
-    String memoryId,
-  ) async {
+  static Future<void> deleteMemory(String memoryId) async {
     try {
-      final String normalizedId =
-          memoryId.trim();
+      final String normalizedId = memoryId.trim();
 
       if (normalizedId.isEmpty) {
-        debugPrint(
+        _log(
           '⚠️ StorageService: '
           'no se puede eliminar una memoria sin ID.',
         );
@@ -429,20 +365,14 @@ class StorageService {
         return;
       }
 
-      final List<MemoryModel> memories =
-          await loadMemories();
+      final List<MemoryModel> memories = await loadMemories();
 
-      final int originalLength =
-          memories.length;
+      final int originalLength = memories.length;
 
-      memories.removeWhere(
-        (MemoryModel memory) =>
-            memory.id == normalizedId,
-      );
+      memories.removeWhere((MemoryModel memory) => memory.id == normalizedId);
 
-      if (memories.length ==
-          originalLength) {
-        debugPrint(
+      if (memories.length == originalLength) {
+        _log(
           '⚠️ StorageService: '
           'no se encontró la memoria local $normalizedId.',
         );
@@ -450,23 +380,19 @@ class StorageService {
         return;
       }
 
-      await saveMemories(
-        memories,
-      );
+      await saveMemories(memories);
 
-      debugPrint(
+      _log(
         '🗑️ StorageService: '
         'memoria eliminada localmente: $normalizedId',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ StorageService: '
         'error eliminando memoria $memoryId: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -481,12 +407,8 @@ class StorageService {
   /// Es un alias explícito de saveMemory().
   ///
   /// Si la memoria no existe, se añadirá.
-  static Future<void> updateMemory(
-    MemoryModel memory,
-  ) async {
-    await saveMemory(
-      memory,
-    );
+  static Future<void> updateMemory(MemoryModel memory) async {
+    await saveMemory(memory);
   }
 
   // ==========================================================================
@@ -502,26 +424,21 @@ class StorageService {
   /// NO elimina memorias de Firestore.
   static Future<void> clearMemories() async {
     try {
-      final SharedPreferences prefs =
-          await SharedPreferences.getInstance();
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      await prefs.remove(
-        _key,
-      );
+      await prefs.remove(_key);
 
-      debugPrint(
+      _log(
         '🧹 StorageService: '
         'todas las memorias locales han sido eliminadas.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ StorageService: '
         'error limpiando memorias locales: $e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -534,12 +451,11 @@ class StorageService {
   /// Comprueba si existen memorias guardadas localmente.
   static Future<bool> hasMemories() async {
     try {
-      final List<MemoryModel> memories =
-          await loadMemories();
+      final List<MemoryModel> memories = await loadMemories();
 
       return memories.isNotEmpty;
     } catch (e) {
-      debugPrint(
+      _log(
         '⚠️ StorageService: '
         'error comprobando memorias locales: $e',
       );
@@ -571,9 +487,7 @@ class StorageService {
   /// DateTime escondido dentro de specificFields provoque:
   ///
   ///     Converting object to an encodable object failed
-  static dynamic _makeJsonEncodable(
-    dynamic value,
-  ) {
+  static dynamic _makeJsonEncodable(dynamic value) {
     // ------------------------------------------------------------------------
     // NULL
     // ------------------------------------------------------------------------
@@ -586,9 +500,7 @@ class StorageService {
     // TIPOS JSON NATIVOS
     // ------------------------------------------------------------------------
 
-    if (value is String ||
-        value is num ||
-        value is bool) {
+    if (value is String || value is num || value is bool) {
       return value;
     }
 
@@ -605,20 +517,11 @@ class StorageService {
     // ------------------------------------------------------------------------
 
     if (value is Map) {
-      final Map<String, dynamic> result =
-          <String, dynamic>{};
+      final Map<String, dynamic> result = <String, dynamic>{};
 
-      value.forEach(
-        (
-          dynamic key,
-          dynamic nestedValue,
-        ) {
-          result[key.toString()] =
-              _makeJsonEncodable(
-            nestedValue,
-          );
-        },
-      );
+      value.forEach((dynamic key, dynamic nestedValue) {
+        result[key.toString()] = _makeJsonEncodable(nestedValue);
+      });
 
       return result;
     }
@@ -628,14 +531,7 @@ class StorageService {
     // ------------------------------------------------------------------------
 
     if (value is Iterable) {
-      return value
-          .map(
-            (dynamic item) =>
-                _makeJsonEncodable(
-              item,
-            ),
-          )
-          .toList();
+      return value.map((dynamic item) => _makeJsonEncodable(item)).toList();
     }
 
     // ------------------------------------------------------------------------
@@ -657,13 +553,24 @@ class StorageService {
   ///     MÁS RECIENTE → MÁS ANTIGUA
   ///
   /// MemoryModel.date es DateTime, por lo que podemos comparar directamente.
-  static int _compareMemoriesByDateDescending(
-    MemoryModel a,
-    MemoryModel b,
-  ) {
-    return b.date.compareTo(
-      a.date,
-    );
+  static int _compareMemoriesByDateDescending(MemoryModel a, MemoryModel b) {
+    return b.date.compareTo(a.date);
   }
 }
 
+// ===========================================================================
+// LOGS
+// ===========================================================================
+//
+// `debugPrint` NO se desactiva en una build de release: sigue escribiendo al
+// log del sistema (Console.app en iOS, logcat en Android), donde lo puede leer
+// cualquiera con el dispositivo delante o un informe de diagnóstico. Este
+// archivo estaba volcando ahí identificadores de usuario, de grupo y datos de
+// ubicación. Con este envoltorio, en release no se escribe nada.
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
+void _logStack({StackTrace? stackTrace}) {
+  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+}

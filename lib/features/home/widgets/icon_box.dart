@@ -7,11 +7,7 @@ class IconBox extends StatelessWidget {
   final IconData icon;
   final Color backgroundColor;
 
-  const IconBox({
-    super.key,
-    required this.icon,
-    required this.backgroundColor,
-  });
+  const IconBox({super.key, required this.icon, required this.backgroundColor});
 
   @override
   Widget build(BuildContext context) {

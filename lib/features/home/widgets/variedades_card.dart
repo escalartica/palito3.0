@@ -43,8 +43,7 @@ class VariedadesCard extends StatelessWidget {
           ...List.generate(variedades.length, (index) {
             final variedad = variedades[index];
             final String sabor = variedad['sabor']?.toString() ?? '';
-            final String valoracion =
-                variedad['valoracion']?.toString() ?? '';
+            final String valoracion = variedad['valoracion']?.toString() ?? '';
 
             return Padding(
               padding: EdgeInsets.only(
@@ -106,12 +105,7 @@ class VariedadesCard extends StatelessWidget {
   // un vistazo rápido de qué variedades funcionaron y cuáles no sin tener
   // que leer cada etiqueta.
   Color _colorForValoracion(String valoracion) {
-    const positivas = {
-      'Buenas',
-      'Muy buenas',
-      'Emocionantes',
-      'Religiosas',
-    };
+    const positivas = {'Buenas', 'Muy buenas', 'Emocionantes', 'Religiosas'};
     const negativas = {'Mediocres', 'Basura'};
 
     if (positivas.contains(valoracion)) {

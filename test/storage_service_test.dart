@@ -9,11 +9,7 @@ MemoryModel _sampleMemory(String id) {
     id: id,
     title: 'Croquetas de Casa Paco',
     restaurantName: 'Casa Paco',
-    location: const LocationData(
-      address: 'Madrid',
-      lat: 40.4168,
-      lng: -3.7038,
-    ),
+    location: const LocationData(address: 'Madrid', lat: 40.4168, lng: -3.7038),
     wouldReturn: true,
     rating: 4.5,
     imageUrls: const ['https://example.com/a.jpg'],
@@ -28,11 +24,14 @@ void main() {
   });
 
   group('StorageService', () {
-    test('loadMemories devuelve una lista vacía si no hay nada guardado', () async {
-      final memories = await StorageService.loadMemories();
+    test(
+      'loadMemories devuelve una lista vacía si no hay nada guardado',
+      () async {
+        final memories = await StorageService.loadMemories();
 
-      expect(memories, isEmpty);
-    });
+        expect(memories, isEmpty);
+      },
+    );
 
     test('saveMemory añade y loadMemories recupera lo guardado', () async {
       await StorageService.saveMemory(_sampleMemory('m1'));
@@ -44,23 +43,26 @@ void main() {
       expect(memories.first.title, 'Croquetas de Casa Paco');
     });
 
-    test(
-      'guardar más de 5 recuerdos no borra ninguno de los anteriores '
-      '(no existe límite de almacenamiento)',
-      () async {
-        for (var i = 0; i < 8; i++) {
-          await StorageService.saveMemory(_sampleMemory('m$i'));
-        }
+    test('guardar más de 5 recuerdos no borra ninguno de los anteriores '
+        '(no existe límite de almacenamiento)', () async {
+      for (var i = 0; i < 8; i++) {
+        await StorageService.saveMemory(_sampleMemory('m$i'));
+      }
 
-        final memories = await StorageService.loadMemories();
+      final memories = await StorageService.loadMemories();
 
-        expect(memories, hasLength(8));
-        expect(
-          memories.map((m) => m.id).toSet(),
-          {'m0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7'},
-        );
-      },
-    );
+      expect(memories, hasLength(8));
+      expect(memories.map((m) => m.id).toSet(), {
+        'm0',
+        'm1',
+        'm2',
+        'm3',
+        'm4',
+        'm5',
+        'm6',
+        'm7',
+      });
+    });
 
     test('saveMemory con el mismo ID actualiza en vez de duplicar', () async {
       await StorageService.saveMemory(_sampleMemory('m1'));

@@ -21,10 +21,7 @@ class LocationSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionTitle(
-          icon: Icons.location_on_rounded,
-          title: 'Ubicación',
-        ),
+        const SectionTitle(icon: Icons.location_on_rounded, title: 'Ubicación'),
 
         const SizedBox(height: 12),
 

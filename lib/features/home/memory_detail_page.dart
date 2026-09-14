@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/providers/memory_provider.dart';
-import '../../../core/providers/dock_provider.dart';
 import 'memory_form_page.dart';
 import '../../core/theme/components/smart_image.dart';
 import 'widgets/animated_card.dart';
@@ -36,11 +35,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   void initState() {
     super.initState();
 
-    Future.microtask(() {
-      if (mounted) {
-        ref.read(dockVisibleProvider.notifier).state = false;
-      }
-    });
+    // Antes se apagaba aquí `dockVisibleProvider` y NO se volvía a encender
+    // en dispose(): al volver de un recuerdo, Inicio se quedaba sin barra de
+    // navegación hasta que el usuario hacía scroll hacia arriba — y si la
+    // lista era corta y no había scroll posible, hasta reiniciar la app.
+    // Esta pantalla se pinta fuera del shell, así que el dock no se ve aquí
+    // de todas formas: no hay nada que apagar.
 
     _animationController = AnimationController(
       vsync: this,
@@ -126,40 +126,40 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          HeroHeader(
-            memory: currentMemory,
-            firstImageUrl: firstImageUrl,
-            onBack: () => Navigator.pop(context),
-            onEdit: () => _openEditPage(context, currentMemory),
-            onImageTap: firstImageUrl != null
-                ? () => _openFullScreenImage(context, firstImageUrl)
-                : null,
-          ),
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              HeroHeader(
+                memory: currentMemory,
+                firstImageUrl: firstImageUrl,
+                onBack: () => Navigator.pop(context),
+                onEdit: () => _openEditPage(context, currentMemory),
+                onImageTap: firstImageUrl != null
+                    ? () => _openFullScreenImage(context, firstImageUrl)
+                    : null,
+              ),
 
-          SliverToBoxAdapter(
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Transform.translate(
-                  offset: const Offset(0, -28),
-                  child: _buildMainContent(
-                    context,
-                    currentMemory,
-                    description.toString(),
-                    showRestaurantSubtitle,
-                    extraFields,
-                    otroSabor,
-                    variedades,
+              SliverToBoxAdapter(
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Transform.translate(
+                      offset: const Offset(0, -28),
+                      child: _buildMainContent(
+                        context,
+                        currentMemory,
+                        description.toString(),
+                        showRestaurantSubtitle,
+                        extraFields,
+                        otroSabor,
+                        variedades,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -235,18 +235,9 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     );
   }
 
-  Widget _buildDragHandle() {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 5,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F172A).withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-    );
-  }
+  // Esta vista no es un bottom sheet y no se puede arrastrar: el asa
+  // invitaba a un gesto que no existe.
+  Widget _buildDragHandle() => const SizedBox(height: 4);
 
   Widget _buildTopSummary(MemoryModel memory) {
     return Row(
@@ -576,9 +567,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
+                  // El formulario solo ofrece "Sí" y "No"; quien pulsaba
+                  // "No" leía aquí "No tengo claro si volvería", que no es
+                  // lo que había contestado.
                   wouldReturn
                       ? '¡Sí volvería a este lugar sin duda!'
-                      : 'No tengo claro si volvería',
+                      : 'No volvería',
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,

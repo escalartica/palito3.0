@@ -82,7 +82,10 @@ class ProModal extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Estadísticas globales en tiempo real y rendimiento analítico de la sesión en Palito.',
-              style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
             ),
             const SizedBox(height: 20),
             Container(

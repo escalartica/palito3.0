@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -39,8 +38,8 @@ class GamerFirestoreService {
     required this.groupId,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-  })  : _injectedFirestore = firestore,
-        _injectedAuth = auth;
+  }) : _injectedFirestore = firestore,
+       _injectedAuth = auth;
 
   /// ID del grupo activo del usuario (`groups/{groupId}`), resuelto
   /// por `activeGroupIdProvider` a partir de su sesión. Null si el
@@ -120,10 +119,7 @@ class GamerFirestoreService {
   // CONVERSIÓN SEGURA A INT
   // ==========================================================================
 
-  static int _parseInt(
-    dynamic value, {
-    int fallback = 0,
-  }) {
+  static int _parseInt(dynamic value, {int fallback = 0}) {
     if (value == null) {
       return fallback;
     }
@@ -137,10 +133,7 @@ class GamerFirestoreService {
     }
 
     if (value is String) {
-      final String cleanValue = value.replaceAll(
-        RegExp(r'[^0-9-]'),
-        '',
-      );
+      final String cleanValue = value.replaceAll(RegExp(r'[^0-9-]'), '');
 
       if (cleanValue.isEmpty) {
         return fallback;
@@ -156,17 +149,11 @@ class GamerFirestoreService {
   // CONVERSIÓN SEGURA A LISTA DE STRINGS
   // ==========================================================================
 
-  static List<String> _parseStringList(
-    dynamic value,
-  ) {
+  static List<String> _parseStringList(dynamic value) {
     if (value is Iterable) {
       return value
-          .map(
-            (dynamic item) => item.toString().trim(),
-          )
-          .where(
-            (String item) => item.isNotEmpty,
-          )
+          .map((dynamic item) => item.toString().trim())
+          .where((String item) => item.isNotEmpty)
           .toList();
     }
 
@@ -177,9 +164,7 @@ class GamerFirestoreService {
   // NORMALIZAR MAPA
   // ==========================================================================
 
-  static Map<String, dynamic> _mapFromDynamic(
-    dynamic value,
-  ) {
+  static Map<String, dynamic> _mapFromDynamic(dynamic value) {
     if (value is Map<String, dynamic>) {
       return Map<String, dynamic>.from(value);
     }
@@ -187,14 +172,7 @@ class GamerFirestoreService {
     if (value is Map) {
       return Map<String, dynamic>.from(
         value.map(
-          (
-            dynamic key,
-            dynamic value,
-          ) =>
-              MapEntry(
-            key.toString(),
-            value,
-          ),
+          (dynamic key, dynamic value) => MapEntry(key.toString(), value),
         ),
       );
     }
@@ -214,13 +192,9 @@ class GamerFirestoreService {
   //
   // ==========================================================================
 
-  static Map<String, dynamic> _extractPlayersMap(
-    Map<String, dynamic> data,
-  ) {
+  static Map<String, dynamic> _extractPlayersMap(Map<String, dynamic> data) {
     final dynamic rawUsers =
-        data['users'] ??
-        data['players'] ??
-        data['comensales'];
+        data['users'] ?? data['players'] ?? data['comensales'];
 
     return _mapFromDynamic(rawUsers);
   }
@@ -240,14 +214,11 @@ class GamerFirestoreService {
     }
 
     for (final MapEntry<String, dynamic> entry in players.entries) {
-      final Map<String, dynamic> playerData =
-          _mapFromDynamic(entry.value);
+      final Map<String, dynamic> playerData = _mapFromDynamic(entry.value);
 
-      final String storedUid =
-          playerData['uid']?.toString().trim() ?? '';
+      final String storedUid = playerData['uid']?.toString().trim() ?? '';
 
-      if (storedUid == normalizedUid ||
-          entry.key.trim() == normalizedUid) {
+      if (storedUid == normalizedUid || entry.key.trim() == normalizedUid) {
         return playerData;
       }
     }
@@ -265,18 +236,15 @@ class GamerFirestoreService {
     required String defaultName,
   }) {
     if (data == null || data.isEmpty) {
-      return GamerPlayerStats.empty(
-        uid: uid,
-        displayName: defaultName,
-      );
+      return GamerPlayerStats.empty(uid: uid, displayName: defaultName);
     }
 
     final String displayName =
         data['displayName']?.toString().trim().isNotEmpty == true
-            ? data['displayName'].toString().trim()
-            : data['name']?.toString().trim().isNotEmpty == true
-                ? data['name'].toString().trim()
-                : defaultName;
+        ? data['displayName'].toString().trim()
+        : data['name']?.toString().trim().isNotEmpty == true
+        ? data['name'].toString().trim()
+        : defaultName;
 
     return GamerPlayerStats(
       uid: uid,
@@ -289,18 +257,13 @@ class GamerFirestoreService {
             data['points'],
       ),
       decisions: _parseInt(
-        data['decisions'] ??
-            data['totalDecisions'] ??
-            data['total_decisions'],
+        data['decisions'] ?? data['totalDecisions'] ?? data['total_decisions'],
       ),
       streak: _parseInt(
-        data['streak'] ??
-            data['decisions_streak'] ??
-            data['currentStreak'],
+        data['streak'] ?? data['decisions_streak'] ?? data['currentStreak'],
       ),
       unlockedChallenges: _parseStringList(
-        data['unlocked_challenges'] ??
-            data['unlockedChallenges'],
+        data['unlocked_challenges'] ?? data['unlockedChallenges'],
       ),
     );
   }
@@ -315,20 +278,14 @@ class GamerFirestoreService {
     required String defaultName,
   }) {
     if (!snapshot.exists) {
-      return GamerPlayerStats.empty(
-        uid: uid,
-        displayName: defaultName,
-      );
+      return GamerPlayerStats.empty(uid: uid, displayName: defaultName);
     }
 
-    final Map<String, dynamic> data =
-        snapshot.data() ?? <String, dynamic>{};
+    final Map<String, dynamic> data = snapshot.data() ?? <String, dynamic>{};
 
-    final Map<String, dynamic> players =
-        _extractPlayersMap(data);
+    final Map<String, dynamic> players = _extractPlayersMap(data);
 
-    final Map<String, dynamic>? playerData =
-        _findPlayerByUid(players, uid);
+    final Map<String, dynamic>? playerData = _findPlayerByUid(players, uid);
 
     if (playerData != null) {
       return _playerStatsFromMap(
@@ -338,11 +295,7 @@ class GamerFirestoreService {
       );
     }
 
-    return _playerStatsFromMap(
-      data,
-      uid: uid,
-      defaultName: defaultName,
-    );
+    return _playerStatsFromMap(data, uid: uid, defaultName: defaultName);
   }
 
   // ==========================================================================
@@ -369,39 +322,27 @@ class GamerFirestoreService {
         _mainStatsDocumentForUid(user.uid);
 
     if (docRef == null) {
-      return Stream.value(
-        GamerStats.empty(currentUid: user.uid),
-      );
+      return Stream.value(GamerStats.empty(currentUid: user.uid));
     }
 
-    return docRef.snapshots().map(
-      (
-        DocumentSnapshot<Map<String, dynamic>> snapshot,
-      ) {
-        if (!snapshot.exists) {
-          return GamerStats.empty(
-            currentUid: user.uid,
-          );
-        }
+    return docRef.snapshots().map((
+      DocumentSnapshot<Map<String, dynamic>> snapshot,
+    ) {
+      if (!snapshot.exists) {
+        return GamerStats.empty(currentUid: user.uid);
+      }
 
-        final Map<String, dynamic> data =
-            snapshot.data() ?? <String, dynamic>{};
+      final Map<String, dynamic> data = snapshot.data() ?? <String, dynamic>{};
 
-        return GamerStats.fromMainStats(
-          data,
-          currentUid: user.uid,
-        );
-      },
-    );
+      return GamerStats.fromMainStats(data, currentUid: user.uid);
+    });
   }
 
   // ==========================================================================
   // STREAM DE ESTADÍSTICAS GAMER DE UN UID
   // ==========================================================================
 
-  Stream<GamerPlayerStats?> getUserGamerStatsStream(
-    String uid,
-  ) {
+  Stream<GamerPlayerStats?> getUserGamerStatsStream(String uid) {
     final String normalizedUid = _normalizeUid(uid);
 
     if (normalizedUid.isEmpty) {
@@ -413,33 +354,26 @@ class GamerFirestoreService {
 
     if (docRef == null) {
       return Stream.value(
-        GamerPlayerStats.empty(
-          uid: normalizedUid,
-          displayName: 'Usuario',
-        ),
+        GamerPlayerStats.empty(uid: normalizedUid, displayName: 'Usuario'),
       );
     }
 
-    return docRef.snapshots().map(
-      (
-        DocumentSnapshot<Map<String, dynamic>> snapshot,
-      ) {
-        return _readPlayerFromDocument(
-          snapshot,
-          uid: normalizedUid,
-          defaultName: 'Usuario',
-        );
-      },
-    );
+    return docRef.snapshots().map((
+      DocumentSnapshot<Map<String, dynamic>> snapshot,
+    ) {
+      return _readPlayerFromDocument(
+        snapshot,
+        uid: normalizedUid,
+        defaultName: 'Usuario',
+      );
+    });
   }
 
   // ==========================================================================
   // STREAM DEL PERFIL FIRESTORE
   // ==========================================================================
 
-  Stream<Map<String, dynamic>?> getUserProfileStream(
-    String uid,
-  ) {
+  Stream<Map<String, dynamic>?> getUserProfileStream(String uid) {
     final String normalizedUid = _normalizeUid(uid);
 
     if (normalizedUid.isEmpty || groupId == null) {
@@ -450,17 +384,13 @@ class GamerFirestoreService {
         .collection(_groupsCollection)
         .doc(groupId)
         .snapshots()
-        .map(
-      (
-        DocumentSnapshot<Map<String, dynamic>> snapshot,
-      ) {
-        if (!snapshot.exists) {
-          return null;
-        }
+        .map((DocumentSnapshot<Map<String, dynamic>> snapshot) {
+          if (!snapshot.exists) {
+            return null;
+          }
 
-        return snapshot.data();
-      },
-    );
+          return snapshot.data();
+        });
   }
 
   // ==========================================================================
@@ -489,7 +419,7 @@ class GamerFirestoreService {
     final User? user = _auth.currentUser;
 
     if (user == null) {
-      debugPrint(
+      _log(
         '⚠️ GamerFirestoreService: '
         'no existe usuario autenticado.',
       );
@@ -501,7 +431,7 @@ class GamerFirestoreService {
         _mainStatsDocumentForUid(user.uid);
 
     if (docRef == null) {
-      debugPrint(
+      _log(
         '⚠️ GamerFirestoreService: '
         'el usuario no pertenece a ningún grupo todavía.',
       );
@@ -510,140 +440,108 @@ class GamerFirestoreService {
     }
 
     try {
-      await _firestore.runTransaction(
-        (
-          Transaction transaction,
-        ) async {
-          final DocumentSnapshot<Map<String, dynamic>> snapshot =
-              await transaction.get(docRef);
+      await _firestore.runTransaction((Transaction transaction) async {
+        final DocumentSnapshot<Map<String, dynamic>> snapshot =
+            await transaction.get(docRef);
 
-          final Map<String, dynamic> currentData =
-              snapshot.data() ?? <String, dynamic>{};
+        final Map<String, dynamic> currentData =
+            snapshot.data() ?? <String, dynamic>{};
 
-          final Map<String, dynamic> players =
-              _extractPlayersMap(currentData);
+        final Map<String, dynamic> players = _extractPlayersMap(currentData);
 
-          final bool hasIndividualPlayers =
-              players.isNotEmpty;
+        final bool hasIndividualPlayers = players.isNotEmpty;
 
-          final int resolvedDecisions =
-              decisions ??
-              _parseInt(
-                currentData['decisions'],
-                fallback: 0,
-              );
+        final int resolvedDecisions =
+            decisions ?? _parseInt(currentData['decisions'], fallback: 0);
 
-          final String resolvedDisplayName =
-              displayName?.trim().isNotEmpty == true
-                  ? displayName!.trim()
-                  : user.displayName?.trim().isNotEmpty == true
-                      ? user.displayName!.trim()
-                      : 'Usuario';
+        final String resolvedDisplayName =
+            displayName?.trim().isNotEmpty == true
+            ? displayName!.trim()
+            : user.displayName?.trim().isNotEmpty == true
+            ? user.displayName!.trim()
+            : 'Usuario';
 
-          final Map<String, dynamic> legacyData =
-              <String, dynamic>{
-            'total_score': score,
-            'gamerPoints': score,
-            'decisions_streak': streak,
-            'streak': streak,
-            'decisions': resolvedDecisions,
-            'unlocked_challenges': unlockedChallenges,
-            'displayName': resolvedDisplayName,
-            'last_updated': FieldValue.serverTimestamp(),
-          };
+        final Map<String, dynamic> legacyData = <String, dynamic>{
+          'total_score': score,
+          'gamerPoints': score,
+          'decisions_streak': streak,
+          'streak': streak,
+          'decisions': resolvedDecisions,
+          'unlocked_challenges': unlockedChallenges,
+          'displayName': resolvedDisplayName,
+          'last_updated': FieldValue.serverTimestamp(),
+        };
 
-          // ------------------------------------------------------------------
-          // ESTRUCTURA LEGACY
-          // ------------------------------------------------------------------
+        // ------------------------------------------------------------------
+        // ESTRUCTURA LEGACY
+        // ------------------------------------------------------------------
 
-          if (!hasIndividualPlayers) {
-            transaction.set(
-              docRef,
-              legacyData,
-              SetOptions(
-                merge: true,
-              ),
-            );
+        if (!hasIndividualPlayers) {
+          transaction.set(docRef, legacyData, SetOptions(merge: true));
 
-            return;
+          return;
+        }
+
+        // ------------------------------------------------------------------
+        // ESTRUCTURA CON JUGADORES INDIVIDUALES
+        // ------------------------------------------------------------------
+
+        final Map<String, dynamic> updatedPlayers = Map<String, dynamic>.from(
+          players,
+        );
+
+        String? playerKey;
+
+        for (final MapEntry<String, dynamic> entry in updatedPlayers.entries) {
+          final String key = entry.key.toString().trim().toLowerCase();
+
+          final Map<String, dynamic> playerData = _mapFromDynamic(entry.value);
+
+          final String storedUid = playerData['uid']?.toString().trim() ?? '';
+
+          if (storedUid == user.uid || key == user.uid.toLowerCase()) {
+            playerKey = entry.key;
+            break;
           }
+        }
 
-          // ------------------------------------------------------------------
-          // ESTRUCTURA CON JUGADORES INDIVIDUALES
-          // ------------------------------------------------------------------
+        // Si no encontramos el UID, intentamos localizar el jugador
+        // correspondiente al usuario actual por nombre.
+        playerKey ??= _findPlayerKeyByCurrentUser(updatedPlayers, user);
 
-          final Map<String, dynamic> updatedPlayers =
-              Map<String, dynamic>.from(players);
+        // Como último recurso, utilizamos el UID como clave.
+        playerKey ??= user.uid;
 
-          String? playerKey;
+        final Map<String, dynamic> existingPlayer = _mapFromDynamic(
+          updatedPlayers[playerKey],
+        );
 
-          for (final MapEntry<String, dynamic> entry
-              in updatedPlayers.entries) {
-            final String key =
-                entry.key.toString().trim().toLowerCase();
+        final Map<String, dynamic> updatedPlayer = <String, dynamic>{
+          ...existingPlayer,
+          'uid': user.uid,
+          'displayName':
+              displayName ??
+              existingPlayer['displayName'] ??
+              user.displayName ??
+              'Usuario',
+          'gamerPoints': score,
+          'decisions': resolvedDecisions,
+          'streak': streak,
+          'unlocked_challenges': unlockedChallenges,
+          'last_updated': FieldValue.serverTimestamp(),
+        };
 
-            final Map<String, dynamic> playerData =
-                _mapFromDynamic(entry.value);
+        updatedPlayers[playerKey] = updatedPlayer;
 
-            final String storedUid =
-                playerData['uid']?.toString().trim() ?? '';
+        transaction.set(docRef, <String, dynamic>{
+          ...legacyData,
+          'users': updatedPlayers,
+          'players': updatedPlayers,
+          'last_updated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
 
-            if (storedUid == user.uid ||
-                key == user.uid.toLowerCase()) {
-              playerKey = entry.key;
-              break;
-            }
-          }
-
-          // Si no encontramos el UID, intentamos localizar el jugador
-          // correspondiente al usuario actual por nombre.
-          playerKey ??= _findPlayerKeyByCurrentUser(
-            updatedPlayers,
-            user,
-          );
-
-          // Como último recurso, utilizamos el UID como clave.
-          playerKey ??= user.uid;
-
-          final Map<String, dynamic> existingPlayer =
-              _mapFromDynamic(
-            updatedPlayers[playerKey],
-          );
-
-          final Map<String, dynamic> updatedPlayer =
-              <String, dynamic>{
-            ...existingPlayer,
-            'uid': user.uid,
-            'displayName':
-                displayName ??
-                existingPlayer['displayName'] ??
-                user.displayName ??
-                'Usuario',
-            'gamerPoints': score,
-            'decisions': resolvedDecisions,
-            'streak': streak,
-            'unlocked_challenges': unlockedChallenges,
-            'last_updated': FieldValue.serverTimestamp(),
-          };
-
-          updatedPlayers[playerKey] = updatedPlayer;
-
-          transaction.set(
-            docRef,
-            <String, dynamic>{
-              ...legacyData,
-              'users': updatedPlayers,
-              'players': updatedPlayers,
-              'last_updated': FieldValue.serverTimestamp(),
-            },
-            SetOptions(
-              merge: true,
-            ),
-          );
-        },
-      );
-
-      debugPrint(
+      _log(
         '✅ GamerFirestoreService: '
         'estadísticas Gamer actualizadas. '
         'uid=${user.uid}, '
@@ -651,15 +549,13 @@ class GamerFirestoreService {
         'streak=$streak',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ GamerFirestoreService: '
         'error al actualizar estadísticas Gamer: '
         '$e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -681,16 +577,14 @@ class GamerFirestoreService {
     }
 
     for (final MapEntry<String, dynamic> entry in players.entries) {
-      final Map<String, dynamic> playerData =
-          _mapFromDynamic(entry.value);
+      final Map<String, dynamic> playerData = _mapFromDynamic(entry.value);
 
       final String storedName =
           playerData['displayName']?.toString().trim().toLowerCase() ??
           playerData['name']?.toString().trim().toLowerCase() ??
           '';
 
-      if (storedName.isNotEmpty &&
-          storedName == currentDisplayName) {
+      if (storedName.isNotEmpty && storedName == currentDisplayName) {
         return entry.key;
       }
     }
@@ -726,94 +620,72 @@ class GamerFirestoreService {
     final String normalizedUid = uid.trim();
 
     if (normalizedPlayerKey.isEmpty) {
-      throw ArgumentError(
-        'playerKey no puede estar vacío.',
-      );
+      throw ArgumentError('playerKey no puede estar vacío.');
     }
 
     if (normalizedUid.isEmpty) {
-      throw ArgumentError(
-        'uid no puede estar vacío.',
-      );
+      throw ArgumentError('uid no puede estar vacío.');
     }
 
     final DocumentReference<Map<String, dynamic>>? docRef =
         _mainStatsDocumentForUid(normalizedUid);
 
     if (docRef == null) {
-      throw StateError(
-        'El usuario no pertenece a ningún grupo todavía.',
-      );
+      throw StateError('El usuario no pertenece a ningún grupo todavía.');
     }
 
     try {
-      await _firestore.runTransaction(
-        (
-          Transaction transaction,
-        ) async {
-          final DocumentSnapshot<Map<String, dynamic>> snapshot =
-              await transaction.get(docRef);
+      await _firestore.runTransaction((Transaction transaction) async {
+        final DocumentSnapshot<Map<String, dynamic>> snapshot =
+            await transaction.get(docRef);
 
-          final Map<String, dynamic> currentData =
-              snapshot.data() ?? <String, dynamic>{};
+        final Map<String, dynamic> currentData =
+            snapshot.data() ?? <String, dynamic>{};
 
-          final Map<String, dynamic> players =
-              _extractPlayersMap(currentData);
+        final Map<String, dynamic> players = _extractPlayersMap(currentData);
 
-          final Map<String, dynamic> updatedPlayers =
-              Map<String, dynamic>.from(players);
+        final Map<String, dynamic> updatedPlayers = Map<String, dynamic>.from(
+          players,
+        );
 
-          final Map<String, dynamic> previousPlayer =
-              _mapFromDynamic(
-            updatedPlayers[normalizedPlayerKey],
-          );
+        final Map<String, dynamic> previousPlayer = _mapFromDynamic(
+          updatedPlayers[normalizedPlayerKey],
+        );
 
-          final Map<String, dynamic> updatedPlayer =
-              <String, dynamic>{
-            ...previousPlayer,
-            'uid': normalizedUid,
-            'displayName':
-                displayName ??
-                previousPlayer['displayName'] ??
-                'Usuario',
-            'gamerPoints': score,
-            'decisions': decisions,
-            'streak': streak,
-            'unlocked_challenges': unlockedChallenges,
-            'last_updated': FieldValue.serverTimestamp(),
-          };
+        final Map<String, dynamic> updatedPlayer = <String, dynamic>{
+          ...previousPlayer,
+          'uid': normalizedUid,
+          'displayName':
+              displayName ?? previousPlayer['displayName'] ?? 'Usuario',
+          'gamerPoints': score,
+          'decisions': decisions,
+          'streak': streak,
+          'unlocked_challenges': unlockedChallenges,
+          'last_updated': FieldValue.serverTimestamp(),
+        };
 
-          updatedPlayers[normalizedPlayerKey] = updatedPlayer;
+        updatedPlayers[normalizedPlayerKey] = updatedPlayer;
 
-          transaction.set(
-            docRef,
-            <String, dynamic>{
-              'users': updatedPlayers,
-              'players': updatedPlayers,
-              'last_updated': FieldValue.serverTimestamp(),
-            },
-            SetOptions(
-              merge: true,
-            ),
-          );
-        },
-      );
+        transaction.set(docRef, <String, dynamic>{
+          'users': updatedPlayers,
+          'players': updatedPlayers,
+          'last_updated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
 
-      debugPrint(
+      _log(
         '✅ GamerFirestoreService: '
         'jugador actualizado: '
         '$normalizedPlayerKey',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ GamerFirestoreService: '
         'error actualizando jugador: '
         '$e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -831,7 +703,7 @@ class GamerFirestoreService {
     final User? user = _auth.currentUser;
 
     if (user == null) {
-      debugPrint(
+      _log(
         '⚠️ GamerFirestoreService: '
         'no hay usuario autenticado.',
       );
@@ -840,7 +712,7 @@ class GamerFirestoreService {
     }
 
     if (groupId == null) {
-      debugPrint(
+      _log(
         '⚠️ GamerFirestoreService: '
         'el usuario no pertenece a ningún grupo todavía.',
       );
@@ -853,29 +725,25 @@ class GamerFirestoreService {
           .collection(_groupsCollection)
           .doc(groupId)
           .collection(gameHistoryCollection)
-          .add(
-        <String, dynamic>{
-          'winner_name': winnerName,
-          'event_detail': eventDetail,
-          'points_awarded': pointsAwarded,
-          'timestamp': FieldValue.serverTimestamp(),
-        },
-      );
+          .add(<String, dynamic>{
+            'winner_name': winnerName,
+            'event_detail': eventDetail,
+            'points_awarded': pointsAwarded,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
 
-      debugPrint(
+      _log(
         '✅ GamerFirestoreService: '
         'evento Gamer registrado.',
       );
     } catch (e, stack) {
-      debugPrint(
+      _log(
         '❌ GamerFirestoreService: '
         'error al registrar evento de juego: '
         '$e',
       );
 
-      debugPrintStack(
-        stackTrace: stack,
-      );
+      _logStack(stackTrace: stack);
 
       rethrow;
     }
@@ -931,8 +799,7 @@ class GamerPlayerStats {
       gamerPoints: gamerPoints ?? this.gamerPoints,
       decisions: decisions ?? this.decisions,
       streak: streak ?? this.streak,
-      unlockedChallenges:
-          unlockedChallenges ?? this.unlockedChallenges,
+      unlockedChallenges: unlockedChallenges ?? this.unlockedChallenges,
     );
   }
 }
@@ -947,33 +814,22 @@ class GamerStats {
   final Map<String, GamerPlayerStats> players;
   final GamerPlayerStats team;
 
-  const GamerStats({
-    required this.players,
-    required this.team,
-  });
+  const GamerStats({required this.players, required this.team});
 
   /// Estadísticas del miembro `uid`, o un valor vacío si todavía no tiene
   /// ninguna entrada (p. ej. se acaba de unir al grupo).
   GamerPlayerStats forUid(String uid) {
-    return players[uid] ??
-        GamerPlayerStats.empty(uid: uid);
+    return players[uid] ?? GamerPlayerStats.empty(uid: uid);
   }
 
-  factory GamerStats.empty({
-    String currentUid = '',
-  }) {
+  factory GamerStats.empty({String currentUid = ''}) {
     return GamerStats(
       players: currentUid.isNotEmpty
           ? <String, GamerPlayerStats>{
-              currentUid: GamerPlayerStats.empty(
-                uid: currentUid,
-              ),
+              currentUid: GamerPlayerStats.empty(uid: currentUid),
             }
           : const <String, GamerPlayerStats>{},
-      team: GamerPlayerStats.empty(
-        uid: 'team',
-        displayName: 'Team',
-      ),
+      team: GamerPlayerStats.empty(uid: 'team', displayName: 'Team'),
     );
   }
 
@@ -988,10 +844,8 @@ class GamerStats {
     final Map<String, dynamic> rawPlayers =
         GamerFirestoreService._extractPlayersMap(data);
 
-    Map<String, GamerPlayerStats> players =
-        <String, GamerPlayerStats>{
-      for (final MapEntry<String, dynamic> entry
-          in rawPlayers.entries)
+    Map<String, GamerPlayerStats> players = <String, GamerPlayerStats>{
+      for (final MapEntry<String, dynamic> entry in rawPlayers.entries)
         entry.key: GamerFirestoreService._playerStatsFromMap(
           GamerFirestoreService._mapFromDynamic(entry.value),
           uid: entry.key,
@@ -1044,10 +898,23 @@ class GamerStats {
           .toList(),
     );
 
-    return GamerStats(
-      players: players,
-      team: team,
-    );
+    return GamerStats(players: players, team: team);
   }
 }
 
+// ===========================================================================
+// LOGS
+// ===========================================================================
+//
+// `debugPrint` NO se desactiva en una build de release: sigue escribiendo al
+// log del sistema (Console.app en iOS, logcat en Android), donde lo puede leer
+// cualquiera con el dispositivo delante o un informe de diagnóstico. Este
+// archivo estaba volcando ahí identificadores de usuario, de grupo y datos de
+// ubicación. Con este envoltorio, en release no se escribe nada.
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
+void _logStack({StackTrace? stackTrace}) {
+  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+}

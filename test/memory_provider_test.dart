@@ -76,28 +76,27 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     fakeService = _ControllableFirestoreService();
     container = ProviderContainer(
-      overrides: [
-        memoryMapServiceProvider.overrideWithValue(fakeService),
-      ],
+      overrides: [memoryMapServiceProvider.overrideWithValue(fakeService)],
     );
     addTearDown(container.dispose);
     addTearDown(fakeService.close);
   });
 
   group('MemoryNotifier — CRUD', () {
-    test('addMemory añade la memoria, la persiste y actualiza el estado',
-        () async {
-      final notifier = container.read(memoryProvider.notifier);
-      final memory = _memory(id: 'm1');
-
-      await notifier.addMemory(memory);
-
-      expect(container.read(memoryProvider), [memory]);
-      expect(fakeService.savedMemories, [memory]);
-    });
-
     test(
-        'addMemory con un ID ya existente actualiza en vez de duplicar '
+      'addMemory añade la memoria, la persiste y actualiza el estado',
+      () async {
+        final notifier = container.read(memoryProvider.notifier);
+        final memory = _memory(id: 'm1');
+
+        await notifier.addMemory(memory);
+
+        expect(container.read(memoryProvider), [memory]);
+        expect(fakeService.savedMemories, [memory]);
+      },
+    );
+
+    test('addMemory con un ID ya existente actualiza en vez de duplicar '
         '(deduplicación por ID)', () async {
       final notifier = container.read(memoryProvider.notifier);
 
@@ -120,30 +119,26 @@ void main() {
 
       final state = container.read(memoryProvider);
 
-      expect(
-        state.firstWhere((m) => m.id == 'm1').title,
-        'Uno editado',
-      );
-      expect(
-        state.firstWhere((m) => m.id == 'm2').title,
-        'Dos',
-      );
+      expect(state.firstWhere((m) => m.id == 'm1').title, 'Uno editado');
+      expect(state.firstWhere((m) => m.id == 'm2').title, 'Dos');
     });
 
-    test('removeMemory elimina solo la memoria indicada, local y remota',
-        () async {
-      final notifier = container.read(memoryProvider.notifier);
+    test(
+      'removeMemory elimina solo la memoria indicada, local y remota',
+      () async {
+        final notifier = container.read(memoryProvider.notifier);
 
-      await notifier.addMemory(_memory(id: 'm1'));
-      await notifier.addMemory(_memory(id: 'm2'));
+        await notifier.addMemory(_memory(id: 'm1'));
+        await notifier.addMemory(_memory(id: 'm2'));
 
-      await notifier.removeMemory('m1');
+        await notifier.removeMemory('m1');
 
-      final state = container.read(memoryProvider);
+        final state = container.read(memoryProvider);
 
-      expect(state.map((m) => m.id), ['m2']);
-      expect(fakeService.deletedIds, ['m1']);
-    });
+        expect(state.map((m) => m.id), ['m2']);
+        expect(fakeService.deletedIds, ['m1']);
+      },
+    );
 
     test('el estado se ordena siempre por fecha descendente', () async {
       final notifier = container.read(memoryProvider.notifier);
@@ -169,12 +164,8 @@ void main() {
       expect(notifier.getMemoryById('m1'), isNull);
       expect(notifier.latestMemory, isNull);
 
-      await notifier.addMemory(
-        _memory(id: 'm1', date: DateTime(2020, 1, 1)),
-      );
-      await notifier.addMemory(
-        _memory(id: 'm2', date: DateTime(2026, 1, 1)),
-      );
+      await notifier.addMemory(_memory(id: 'm1', date: DateTime(2020, 1, 1)));
+      await notifier.addMemory(_memory(id: 'm2', date: DateTime(2026, 1, 1)));
 
       expect(notifier.getMemoryById('m1')?.id, 'm1');
       expect(notifier.latestMemory?.id, 'm2');
@@ -182,8 +173,7 @@ void main() {
   });
 
   group('MemoryNotifier — sincronización con Firestore', () {
-    test(
-        'una emisión del stream compartido con el mapa actualiza el estado '
+    test('una emisión del stream compartido con el mapa actualiza el estado '
         'y marca hasReceivedFirestoreData', () async {
       final notifier = container.read(memoryProvider.notifier);
 
@@ -193,14 +183,10 @@ void main() {
       await _flushMicrotasks();
 
       expect(notifier.hasReceivedFirestoreData, isTrue);
-      expect(
-        container.read(memoryProvider).map((m) => m.id),
-        ['remoto'],
-      );
+      expect(container.read(memoryProvider).map((m) => m.id), ['remoto']);
     });
 
-    test(
-        'un error del stream activa hasStreamError, y se limpia solo en '
+    test('un error del stream activa hasStreamError, y se limpia solo en '
         'cuanto vuelven a llegar datos', () async {
       final notifier = container.read(memoryProvider.notifier);
 
@@ -215,14 +201,10 @@ void main() {
       await _flushMicrotasks();
 
       expect(notifier.hasStreamError, isFalse);
-      expect(
-        container.read(memoryProvider).map((m) => m.id),
-        ['recuperado'],
-      );
+      expect(container.read(memoryProvider).map((m) => m.id), ['recuperado']);
     });
 
-    test(
-        'un error de permission-denied activa isPermissionDenied; un '
+    test('un error de permission-denied activa isPermissionDenied; un '
         'error genérico no', () async {
       final notifier = container.read(memoryProvider.notifier);
 
@@ -235,10 +217,7 @@ void main() {
       expect(notifier.isPermissionDenied, isFalse);
 
       fakeService.emitError(
-        FirebaseException(
-          plugin: 'cloud_firestore',
-          code: 'permission-denied',
-        ),
+        FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
       );
       await _flushMicrotasks();
 
@@ -250,13 +229,9 @@ void main() {
       expect(notifier.isPermissionDenied, isFalse);
     });
 
-    test(
-        'memoryProvider y el StreamProvider del mapa comparten la misma '
+    test('memoryProvider y el StreamProvider del mapa comparten la misma '
         'instancia de servicio (sin listener duplicado)', () {
-      expect(
-        container.read(memoryMapServiceProvider),
-        same(fakeService),
-      );
+      expect(container.read(memoryMapServiceProvider), same(fakeService));
     });
   });
 }

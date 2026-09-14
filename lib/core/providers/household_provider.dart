@@ -52,8 +52,9 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>?>((ref) {
 /// grupo personal) — vacío si no ha iniciado sesión o su documento todavía
 /// no existe.
 final userGroupIdsProvider = Provider<List<String>>((ref) {
-  final Map<String, dynamic>? userDoc =
-      ref.watch(currentUserDocProvider).valueOrNull;
+  final Map<String, dynamic>? userDoc = ref
+      .watch(currentUserDocProvider)
+      .valueOrNull;
 
   final dynamic groupIds = userDoc?['groupIds'];
 
@@ -64,11 +65,97 @@ final userGroupIdsProvider = Provider<List<String>>((ref) {
   return groupIds.whereType<String>().toList();
 });
 
+/// El nombre que el usuario ha elegido, o `null` si todavía no tiene ninguno.
+///
+/// Nunca se deriva del correo: si Apple no dio el nombre (solo lo da en la
+/// PRIMERA autorización de cada Apple ID), este provider devuelve `null` y la
+/// app se lo pide. Antes se usaba el prefijo del email, que con "Ocultar mi
+/// correo" producía nombres como `gdvcgp2gdt` imposibles de corregir.
+final currentDisplayNameProvider = Provider<String?>((ref) {
+  final Map<String, dynamic>? userDoc = ref
+      .watch(currentUserDocProvider)
+      .valueOrNull;
+
+  final dynamic name = userDoc?['displayName'];
+
+  return name is String && name.trim().isNotEmpty ? name.trim() : null;
+});
+
+/// `true` cuando ya sabemos quién es el usuario pero todavía no tenemos su
+/// nombre — lo que dispara la pantalla "¿Cómo te llamas?".
+final needsDisplayNameProvider = Provider<bool>((ref) {
+  final AsyncValue<Map<String, dynamic>?> userDoc = ref.watch(
+    currentUserDocProvider,
+  );
+
+  if (ref.watch(currentUidProvider) == null) return false;
+  if (!userDoc.hasValue) return false;
+  if (userDoc.value == null) return false;
+
+  return ref.watch(currentDisplayNameProvider) == null;
+});
+
+/// Fotos de perfil del grupo activo, indexadas por uid. Se leen del documento
+/// del grupo que ya estamos observando, en vez de hacer una lectura completa
+/// por cada miembro como hacía `ProfilePage._loadProfileImages`.
+final activeGroupProfileImagesProvider = Provider<Map<String, String>>((ref) {
+  final Map<String, dynamic>? group = ref
+      .watch(activeGroupDocProvider)
+      .valueOrNull;
+
+  final dynamic images = group?['profileImages'];
+
+  if (images is! Map) return const <String, String>{};
+
+  final Map<String, String> result = <String, String>{};
+  images.forEach((dynamic key, dynamic value) {
+    if (key is String && value is String && value.isNotEmpty) {
+      result[key] = value;
+    }
+  });
+
+  return result;
+});
+
+/// Nombres de los miembros del grupo activo, indexados por uid.
+final activeGroupMemberNamesProvider = Provider<Map<String, String>>((ref) {
+  final Map<String, dynamic>? group = ref
+      .watch(activeGroupDocProvider)
+      .valueOrNull;
+
+  final dynamic profiles = group?['memberProfiles'];
+
+  if (profiles is! Map) return const <String, String>{};
+
+  final Map<String, String> result = <String, String>{};
+  profiles.forEach((dynamic key, dynamic value) {
+    if (key is! String || value is! Map) return;
+    final dynamic name = value['displayName'];
+    if (name is String && name.trim().isNotEmpty) {
+      result[key] = name.trim();
+    }
+  });
+
+  return result;
+});
+
+/// Quién creó el grupo activo — quien puede expulsar a otros miembros.
+final activeGroupCreatedByProvider = Provider<String?>((ref) {
+  final Map<String, dynamic>? group = ref
+      .watch(activeGroupDocProvider)
+      .valueOrNull;
+
+  final dynamic createdBy = group?['createdBy'];
+
+  return createdBy is String && createdBy.isNotEmpty ? createdBy : null;
+});
+
 /// El id del grupo personal del usuario actual — su diario privado. `null`
 /// mientras no se conozca (sin sesión, o documento todavía no escrito).
 final personalGroupIdProvider = Provider<String?>((ref) {
-  final Map<String, dynamic>? userDoc =
-      ref.watch(currentUserDocProvider).valueOrNull;
+  final Map<String, dynamic>? userDoc = ref
+      .watch(currentUserDocProvider)
+      .valueOrNull;
 
   final dynamic personalGroupId = userDoc?['personalGroupId'];
 
@@ -111,8 +198,9 @@ final activeGroupDocProvider = StreamProvider<Map<String, dynamic>?>((ref) {
 /// La lista de uids miembros del grupo activo (vacía si no hay grupo activo
 /// todavía).
 final activeGroupMembersProvider = Provider<List<String>>((ref) {
-  final Map<String, dynamic>? group =
-      ref.watch(activeGroupDocProvider).valueOrNull;
+  final Map<String, dynamic>? group = ref
+      .watch(activeGroupDocProvider)
+      .valueOrNull;
 
   final dynamic members = group?['members'];
 

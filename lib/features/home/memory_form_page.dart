@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -164,9 +165,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         _existingImagePath = m.imageUrls.first;
       }
 
-      debugPrint('✏️ EDITANDO MEMORIA: ${m.id}');
+      _log('✏️ EDITANDO MEMORIA: ${m.id}');
 
-      debugPrint(
+      _log(
         '📍 Coordenadas originales: '
         '${m.location.lat}, ${m.location.lng}',
       );
@@ -282,7 +283,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           }
         }
       } catch (e) {
-        debugPrint('⚠️ No se pudo resolver dirección GPS: $e');
+        _log('⚠️ No se pudo resolver dirección GPS: $e');
       }
 
       if (!mounted) return;
@@ -297,7 +298,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         _locationController.text = gpsAddress;
       });
 
-      debugPrint(
+      _log(
         '📍 GPS OBTENIDO: '
         'address=$gpsAddress, '
         'lat=$lat, '
@@ -308,9 +309,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         const SnackBar(content: Text("Ubicación GPS obtenida correctamente.")),
       );
     } catch (e, stack) {
-      debugPrint('❌ Error obteniendo ubicación GPS: $e');
+      _log('❌ Error obteniendo ubicación GPS: $e');
 
-      debugPrintStack(stackTrace: stack);
+      _logStack(stackTrace: stack);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -343,7 +344,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           _currentLocation = null;
         });
 
-        debugPrint(
+        _log(
           '📍 Coordenadas GPS '
           'invalidadas porque cambió '
           'la dirección.',
@@ -407,16 +408,40 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Future<void> _pickMedia(ImageSource source) async {
     final picker = ImagePicker();
 
-    final XFile? pickedFile = await picker.pickImage(
-      source: source,
-      imageQuality: 80,
-      // Limita la resolución de subida: una foto de cámara moderna (10+
-      // MP) no aporta nada extra en ninguna pantalla de la app, y el
-      // preset "unsigned" de Cloudinary no tiene límite de tamaño propio
-      // configurado — cuanto más grande el original, más rápido se
-      // agota la cuota gratuita mensual.
-      maxWidth: 1600,
-    );
+    final XFile? pickedFile;
+
+    try {
+      pickedFile = await picker.pickImage(
+        source: source,
+        imageQuality: 80,
+        // Limita la resolución de subida: una foto de cámara moderna (10+
+        // MP) no aporta nada extra en ninguna pantalla de la app, y el
+        // preset "unsigned" de Cloudinary no tiene límite de tamaño propio
+        // configurado — cuanto más grande el original, más rápido se
+        // agota la cuota gratuita mensual.
+        maxWidth: 1600,
+      );
+    } on PlatformException catch (e) {
+      // `pickImage` lanza PlatformException cuando el usuario deniega el
+      // acceso a la cámara o a Fotos. Sin capturarla, el selector se cerraba
+      // y no pasaba nada: ni foto, ni mensaje, ni pista.
+      if (!mounted) return;
+      _showMessage(
+        e.code.contains('denied')
+            ? 'Palito no tiene permiso para usar '
+                  '${source == ImageSource.camera ? 'la cámara' : 'tus fotos'}. '
+                  'Puedes dárselo desde Ajustes.'
+            : 'No se pudo abrir '
+                  '${source == ImageSource.camera ? 'la cámara' : 'la galería'}.',
+      );
+      return;
+    } catch (e, st) {
+      _log('Error eligiendo foto: $e');
+      _logStack(stackTrace: st);
+      if (!mounted) return;
+      _showMessage('No se pudo elegir la foto.');
+      return;
+    }
 
     if (pickedFile != null && mounted) {
       final bytes = await pickedFile.readAsBytes();
@@ -442,164 +467,229 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Widget build(BuildContext context) {
     final generator = DynamicFieldFactory.getGenerator(_selectedCategory);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
-      appBar: AppBar(
-        title: Text(
-          _isEditing ? "Editar Recuerdo" : "Nuevo Recuerdo",
-          style: GoogleFonts.outfit(
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
-            fontSize: 22,
+    return PopScope(
+      // Sin esto, el botón atrás y el gesto de deslizar descartaban el
+      // formulario entero sin preguntar: restaurante, ubicación, puntuación,
+      // todos los chips y —lo peor— la foto ya hecha, que solo vivía en
+      // memoria. En un restaurante, esa foto ya no se puede repetir.
+      canPop: !_hasUnsavedChanges && !_isSaving,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+        if (_isSaving) return;
+        final bool discard = await _confirmDiscard();
+        if (discard && mounted) context.pop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFDFBF7),
+        appBar: AppBar(
+          title: Text(
+            _isEditing ? "Editar Recuerdo" : "Nuevo Recuerdo",
+            style: GoogleFonts.outfit(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+              fontSize: 22,
+            ),
+          ),
+          backgroundColor: const Color(0xFFFDFBF7),
+          elevation: 0,
+          centerTitle: true,
+          leading: _buildAnimatedIconButton(
+            icon: Icons.arrow_back,
+            tooltip: 'Volver',
+            // Mientras se guarda, salir destruía el widget con la subida en
+            // curso y el guardado se perdía a medio camino.
+            onTap: _isSaving
+                ? null
+                : () async {
+                    if (!_hasUnsavedChanges) {
+                      context.pop();
+                      return;
+                    }
+                    if (await _confirmDiscard() && mounted) context.pop();
+                  },
           ),
         ),
-        backgroundColor: const Color(0xFFFDFBF7),
-        elevation: 0,
-        centerTitle: true,
-        leading: _buildAnimatedIconButton(
-          icon: Icons.arrow_back,
-          tooltip: 'Volver',
-          onTap: () => context.pop(),
-        ),
-      ),
-      body: FadeTransition(
-        opacity: _pageFadeAnimation,
-        child: SlideTransition(
-          position: _pageSlideAnimation,
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                  40,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _buildAnimatedSection(
-                      index: 0,
-                      child: CategorySection(
-                        selectedCategory: _selectedCategory,
-                        onCategoryChanged: (val) {
-                          setState(() {
-                            _selectedCategory = val;
-                            _dynamicData.clear();
-                          });
+        body: FadeTransition(
+          opacity: _pageFadeAnimation,
+          child: SlideTransition(
+            position: _pageSlideAnimation,
+            child: CustomScrollView(
+              // Arrastrar la lista cierra el teclado: en un formulario de ocho
+              // secciones había que cerrarlo a mano entre campo y campo.
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    40,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildAnimatedSection(
+                        index: 0,
+                        child: CategorySection(
+                          selectedCategory: _selectedCategory,
+                          onCategoryChanged: (val) async {
+                            if (val == _selectedCategory) return;
+
+                            // Cambiar de categoría borra todos los chips ya
+                            // rellenados. Antes ocurría sin avisar: un toque
+                            // por error en el desplegable y se perdían seis
+                            // grupos de respuestas.
+                            if (_dynamicData.isNotEmpty ||
+                                _otroSaborController.text.trim().isNotEmpty) {
+                              final bool? ok = await showDialog<bool>(
+                                context: context,
+                                builder: (BuildContext d) => AlertDialog(
+                                  title: const Text('¿Cambiar de categoría?'),
+                                  content: const Text(
+                                    'Se borrarán las respuestas que ya has '
+                                    'marcado para esta categoría.',
+                                  ),
+                                  actions: <Widget>[
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(d, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(d, true),
+                                      child: const Text('Cambiar'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (ok != true || !mounted) return;
+                            }
+
+                            setState(() {
+                              _selectedCategory = val;
+                              _dynamicData.clear();
+                              // `_dynamicData.clear()` no tocaba este campo, así
+                              // que el "otro sabor" escrito en Croquetas se
+                              // colaba dentro de un recuerdo de otra categoría.
+                              _otroSaborController.clear();
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      _buildAnimatedSection(
+                        index: 1,
+                        child: KeyedSubtree(
+                          key: _restaurantSectionKey,
+                          child: _buildRestaurantSection(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      _buildAnimatedSection(
+                        index: 2,
+                        child: LocationSection(
+                          key: _locationSectionKey,
+                          controller: _locationController,
+                          isGettingLocation: _isGettingLocation,
+                          gpsAnimationController: _gpsAnimationController,
+                          onGpsTap: _getCurrentLocation,
+                          onAddressChanged: _handleLocationTextChanged,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      _buildAnimatedSection(
+                        index: 3,
+                        child: PhotoSection(
+                          onTap: _showImageSourceDialog,
+                          photoAnimationController: _photoAnimationController,
+                          tempMediaFile: _tempMediaFile,
+                          tempMediaBytes: _tempMediaBytes,
+                          existingImagePath: _existingImagePath,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 450),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.03),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          );
                         },
+                        child: generator != null
+                            ? KeyedSubtree(
+                                key: ValueKey(_selectedCategory),
+                                child: Column(
+                                  children: generator.buildFields(
+                                    _dynamicData,
+                                    (key, value) {
+                                      setState(() {
+                                        _dynamicData[key] = value;
+                                      });
+                                    },
+                                    _otroSaborController,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                    ),
-                    const SizedBox(height: 20),
 
-                    _buildAnimatedSection(
-                      index: 1,
-                      child: KeyedSubtree(
-                        key: _restaurantSectionKey,
-                        child: _buildRestaurantSection(),
+                      const SizedBox(height: 8),
+
+                      _buildAnimatedSection(
+                        index: 4,
+                        child: RatingSection(
+                          key: _ratingSectionKey,
+                          rating: _rating,
+                          ratingAnimationController: _ratingAnimationController,
+                          onChanged: (v) {
+                            setState(() {
+                              _rating = v;
+                              _hasInteractedWithRating = true;
+                            });
+
+                            _ratingAnimationController.forward(from: 0);
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                    _buildAnimatedSection(
-                      index: 2,
-                      child: LocationSection(
-                        key: _locationSectionKey,
-                        controller: _locationController,
-                        isGettingLocation: _isGettingLocation,
-                        gpsAnimationController: _gpsAnimationController,
-                        onGpsTap: _getCurrentLocation,
-                        onAddressChanged: _handleLocationTextChanged,
+                      _buildAnimatedSection(
+                        index: 5,
+                        child: KeyedSubtree(
+                          key: _wouldReturnSectionKey,
+                          child: _buildReturnSection(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                    _buildAnimatedSection(
-                      index: 3,
-                      child: PhotoSection(
-                        onTap: _showImageSourceDialog,
-                        photoAnimationController: _photoAnimationController,
-                        tempMediaFile: _tempMediaFile,
-                        tempMediaBytes: _tempMediaBytes,
-                        existingImagePath: _existingImagePath,
+                      _buildAnimatedSection(
+                        index: 6,
+                        child: _buildDescriptionSection(),
                       ),
-                    ),
-                    const SizedBox(height: 8),
+                      const SizedBox(height: 32),
 
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.03),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: generator != null
-                          ? KeyedSubtree(
-                              key: ValueKey(_selectedCategory),
-                              child: Column(
-                                children: generator.buildFields(_dynamicData, (
-                                  key,
-                                  value,
-                                ) {
-                                  setState(() {
-                                    _dynamicData[key] = value;
-                                  });
-                                }, _otroSaborController),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    _buildAnimatedSection(
-                      index: 4,
-                      child: RatingSection(
-                        key: _ratingSectionKey,
-                        rating: _rating,
-                        ratingAnimationController: _ratingAnimationController,
-                        onChanged: (v) {
-                          setState(() {
-                            _rating = v;
-                            _hasInteractedWithRating = true;
-                          });
-
-                          _ratingAnimationController.forward(from: 0);
-                        },
+                      _buildAnimatedSection(
+                        index: 7,
+                        child: _buildSaveButton(),
                       ),
-                    ),
-                    const SizedBox(height: 20),
 
-                    _buildAnimatedSection(
-                      index: 5,
-                      child: KeyedSubtree(
-                        key: _wouldReturnSectionKey,
-                        child: _buildReturnSection(),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    _buildAnimatedSection(
-                      index: 6,
-                      child: _buildDescriptionSection(),
-                    ),
-                    const SizedBox(height: 32),
-
-                    _buildAnimatedSection(index: 7, child: _buildSaveButton()),
-
-                    const SizedBox(height: 40),
-                  ]),
+                      const SizedBox(height: 40),
+                    ]),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -703,11 +793,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 18,
-              color: const Color(0xFF0F172A),
-            ),
+            Icon(icon, size: 18, color: const Color(0xFF0F172A)),
             const SizedBox(width: 6),
             Text(
               label,
@@ -951,16 +1037,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "Recuerdo guardado, pero ${warnings.join(' y ')}.",
-            ),
+            content: Text("Recuerdo guardado, pero ${warnings.join(' y ')}."),
           ),
         );
       }
     } catch (e, stack) {
-      debugPrint('❌ Error guardando recuerdo: $e');
+      _log('❌ Error guardando recuerdo: $e');
 
-      debugPrintStack(stackTrace: stack);
+      _logStack(stackTrace: stack);
 
       if (mounted) {
         // El detalle técnico ($e) ya queda en el log de arriba; al
@@ -1000,6 +1084,53 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     if (mounted) {
       context.pop();
     }
+  }
+
+  // ============================================================
+  // DESCARTAR
+  // ============================================================
+
+  /// ¿Hay algo que se perdería al salir?
+  bool get _hasUnsavedChanges {
+    if (_isEditing) return false;
+    return _tempMediaBytes != null ||
+        _restaurantController.text.trim().isNotEmpty ||
+        _locationController.text.trim().isNotEmpty ||
+        _descController.text.trim().isNotEmpty ||
+        _dynamicData.isNotEmpty ||
+        _rating > 0;
+  }
+
+  Future<bool> _confirmDiscard() async {
+    final bool? discard = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('¿Descartar este recuerdo?'),
+        content: const Text(
+          'Se perderá lo que has escrito y la foto que hayas hecho.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Seguir editando'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+
+    return discard == true;
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
   }
 
   // ============================================================
@@ -1061,10 +1192,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF6D6),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF0F172A),
-                    width: 2,
-                  ),
+                  border: Border.all(color: const Color(0xFF0F172A), width: 2),
                 ),
                 child: const Icon(
                   Icons.star_border_rounded,
@@ -1120,4 +1248,21 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
     return confirmed ?? false;
   }
+}
+
+// ===========================================================================
+// LOGS
+// ===========================================================================
+//
+// `debugPrint` NO se desactiva en una build de release: sigue escribiendo al
+// log del sistema (Console.app en iOS, logcat en Android), donde lo puede leer
+// cualquiera con el dispositivo delante o un informe de diagnóstico. Este
+// archivo estaba volcando ahí identificadores de usuario, de grupo y datos de
+// ubicación. Con este envoltorio, en release no se escribe nada.
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
+void _logStack({StackTrace? stackTrace}) {
+  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
 }

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/categories.dart';
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/components/app_dock.dart';
 import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/theme/components/group_switcher.dart';
 import '../../../core/theme/components/home_widgets.dart';
@@ -30,9 +30,7 @@ const Color colorAccentCoral = AppColors.accent;
 // ===========================================================================
 
 class HomePage extends ConsumerStatefulWidget {
-  const HomePage({
-    super.key,
-  });
+  const HomePage({super.key});
 
   @override
   ConsumerState<HomePage> createState() => _HomePageState();
@@ -86,9 +84,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(
-        milliseconds: 1100,
-      ),
+      duration: const Duration(milliseconds: 1100),
     );
 
     // =========================================================================
@@ -97,11 +93,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _headerAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(
-        0.00,
-        0.30,
-        curve: Curves.easeOutCubic,
-      ),
+      curve: const Interval(0.00, 0.30, curve: Curves.easeOutCubic),
     );
 
     // =========================================================================
@@ -110,11 +102,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _heroAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(
-        0.12,
-        0.48,
-        curve: Curves.easeOutCubic,
-      ),
+      curve: const Interval(0.12, 0.48, curve: Curves.easeOutCubic),
     );
 
     // =========================================================================
@@ -123,11 +111,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _sectionAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(
-        0.32,
-        0.58,
-        curve: Curves.easeOutCubic,
-      ),
+      curve: const Interval(0.32, 0.58, curve: Curves.easeOutCubic),
     );
 
     // =========================================================================
@@ -136,11 +120,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _filtersAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(
-        0.42,
-        0.70,
-        curve: Curves.easeOutCubic,
-      ),
+      curve: const Interval(0.42, 0.70, curve: Curves.easeOutCubic),
     );
 
     // =========================================================================
@@ -149,11 +129,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
     _fabAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: const Interval(
-        0.65,
-        1.00,
-        curve: Curves.easeOutBack,
-      ),
+      curve: const Interval(0.65, 1.00, curve: Curves.easeOutBack),
     );
 
     // =========================================================================
@@ -175,9 +151,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   Widget build(BuildContext context) {
-    final memories = ref.watch(
-      memoryProvider,
-    );
+    final memories = ref.watch(memoryProvider);
 
     // Evita el "flash" del estado vacío ("No hay experiencias guardadas")
     // durante el primer arranque, mientras la caché local / Firestore
@@ -192,15 +166,13 @@ class _HomePageState extends ConsumerState<HomePage>
     // recibido), esto evita que la pantalla se quede en "Cargando..."
     // para siempre sin que el usuario sepa que algo va mal.
     final bool hasStreamError =
-        memories.isEmpty &&
-        ref.read(memoryProvider.notifier).hasStreamError;
+        memories.isEmpty && ref.read(memoryProvider.notifier).hasStreamError;
 
-    final bool isPermissionDenied =
-        ref.read(memoryProvider.notifier).isPermissionDenied;
+    final bool isPermissionDenied = ref
+        .read(memoryProvider.notifier)
+        .isPermissionDenied;
 
-    final selectedCategory = ref.watch(
-      selectedCategoryProvider,
-    );
+    final selectedCategory = ref.watch(selectedCategoryProvider);
 
     // =========================================================================
     // FILTRADO POR CATEGORÍA
@@ -209,39 +181,27 @@ class _HomePageState extends ConsumerState<HomePage>
     final filteredMemories = selectedCategory == "Todos"
         ? List.of(memories)
         : memories
-            .where(
-              (memory) =>
-                  memory.category == selectedCategory,
-            )
-            .toList();
+              .where((memory) => memory.category == selectedCategory)
+              .toList();
 
     // =========================================================================
     // ORDENACIÓN POR PUNTUACIÓN
     // =========================================================================
 
-    filteredMemories.sort(
-      (a, b) {
-        final int ratingComparison =
-            _sortRatingAscending
-                ? a.rating.compareTo(
-                    b.rating,
-                  )
-                : b.rating.compareTo(
-                    a.rating,
-                  );
+    filteredMemories.sort((a, b) {
+      final int ratingComparison = _sortRatingAscending
+          ? a.rating.compareTo(b.rating)
+          : b.rating.compareTo(a.rating);
 
-        if (ratingComparison != 0) {
-          return ratingComparison;
-        }
+      if (ratingComparison != 0) {
+        return ratingComparison;
+      }
 
-        // La más reciente aparece primero
-        // en caso de empate.
+      // La más reciente aparece primero
+      // en caso de empate.
 
-        return b.date.compareTo(
-          a.date,
-        );
-      },
-    );
+      return b.date.compareTo(a.date);
+    });
 
     // =========================================================================
     // RECUERDO DESTACADO (PORTADA)
@@ -273,278 +233,199 @@ class _HomePageState extends ConsumerState<HomePage>
       // seguro: el FAB ya no vive dentro de este Stack (ver
       // floatingActionButton más abajo), así que no depende de cómo este
       // Stack calcule su tamaño.
-
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: Stack(
-        children: [
-          // =====================================================================
-          // CONTENIDO PRINCIPAL
-          // =====================================================================
+            children: [
+              // =====================================================================
+              // CONTENIDO PRINCIPAL
+              // =====================================================================
+              NotificationListener<UserScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.direction == ScrollDirection.reverse) {
+                    ref.read(dockVisibleProvider.notifier).state = false;
+                  } else if (notification.direction ==
+                      ScrollDirection.forward) {
+                    ref.read(dockVisibleProvider.notifier).state = true;
+                  }
 
-          NotificationListener<UserScrollNotification>(
-            onNotification: (
-              notification,
-            ) {
-              if (notification.direction ==
-                  ScrollDirection.reverse) {
-                ref
-                    .read(
-                      dockVisibleProvider.notifier,
-                    )
-                    .state = false;
-              } else if (notification.direction ==
-                  ScrollDirection.forward) {
-                ref
-                    .read(
-                      dockVisibleProvider.notifier,
-                    )
-                    .state = true;
-              }
+                  return true;
+                },
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // =================================================================
+                    // CABECERA ANIMADA
+                    // =================================================================
+                    _buildSlideFadeTransition(
+                      animation: _headerAnimation,
+                      beginOffset: const Offset(0, -0.12),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Palito de Sabores",
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorTextMain,
+                                        letterSpacing: -0.8,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const GroupSwitcher(),
+                                  ],
+                                ),
+                              ),
 
-              return true;
-            },
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                // =================================================================
-                // CABECERA ANIMADA
-                // =================================================================
-
-                _buildSlideFadeTransition(
-                  animation: _headerAnimation,
-                  beginOffset: const Offset(
-                    0,
-                    -0.12,
-                  ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(
-                        20,
-                        16,
-                        20,
-                        12,
+                              // =====================================================
+                              // LOGOTIPO
+                              // =====================================================
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(22),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(0),
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    width: 64,
+                                    height: 64,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment
-                                .spaceBetween,
-                        crossAxisAlignment:
-                            CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
+                    ),
+
+                    // =================================================================
+                    // HERO ANIMADO
+                    // =================================================================
+                    _buildSlideFadeTransition(
+                      animation: _heroAnimation,
+                      beginOffset: const Offset(0, 0.10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: SizedBox(
+                          // `sizeOf` no reconstruye al abrir el teclado, y el
+                          // clamp evita que en un iPhone SE quede una tarjeta
+                          // aplastada o, en una tablet, desproporcionada.
+                          height: (MediaQuery.sizeOf(context).height * 0.34)
+                              .clamp(190.0, 300.0)
+                              .toDouble(),
+                          child: HomeHero(memory: heroMemory),
+                        ),
+                      ),
+                    ),
+
+                    // =================================================================
+                    // CABECERA DE SECCIÓN
+                    // =================================================================
+                    _buildSlideFadeTransition(
+                      animation: _sectionAnimation,
+                      beginOffset: const Offset(0, 0.08),
+                      child: _buildSectionHeader("Últimos Registros"),
+                    ),
+
+                    // =================================================================
+                    // FILTROS
+                    // =================================================================
+                    _buildSlideFadeTransition(
+                      animation: _filtersAnimation,
+                      beginOffset: const Offset(0, 0.08),
+                      child: SizedBox(
+                        // 48 px: objetivo táctil mínimo. Con 38 los filtros eran
+                        // casi imposibles de acertar.
+                        height: 48,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          // El último chip quedaba cortado a ras del borde
+                          // derecho sin ninguna pista de que había más: con el
+                          // relleno final, el corte se ve como lo que es.
+                          padding: const EdgeInsets.only(left: 16, right: 32),
+                          children: [
+                            _buildFilterChip("Todos", selectedCategory, ref),
+                            ...gastronomicCategories.map(
+                              (cat) => _buildFilterChip(
+                                cat.name,
+                                selectedCategory,
+                                ref,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // =================================================================
+                    // LISTADO DE MEMORIAS
+                    // =================================================================
+                    filteredMemories.isEmpty
+                        ? (hasStreamError
+                              ? _buildErrorState(isPermissionDenied)
+                              : (hasLoaded
+                                    ? _buildEmptyState()
+                                    : _buildLoadingState()))
+                        : Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Palito de Sabores",
-                                  style:
-                                      GoogleFonts.outfit(
-                                    fontSize: 28,
-                                    fontWeight:
-                                        FontWeight.bold,
-                                    color:
-                                        colorTextMain,
-                                    letterSpacing:
-                                        -0.8,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                const GroupSwitcher(),
-                              ],
+                              children: filteredMemories.asMap().entries.map((
+                                entry,
+                              ) {
+                                final index = entry.key;
+
+                                final memory = entry.value;
+
+                                return _buildAnimatedMemoryCard(
+                                  memory: memory,
+                                  index: index,
+                                );
+                              }).toList(),
                             ),
                           ),
 
-                          // =====================================================
-                          // LOGOTIPO
-                          // =====================================================
+                    // =================================================================
+                    // ESPACIO PARA DOCK + FAB
+                    // =================================================================
 
-                          Container(
-                            decoration:
-                                BoxDecoration(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                22,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black
-                                      .withValues(
-                                    alpha: 0.10,
-                                  ),
-                                  blurRadius: 16,
-                                  offset:
-                                      const Offset(
-                                    0,
-                                    6,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius:
-                                  BorderRadius.circular(
-                                0,
-                              ),
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // =================================================================
-                // HERO ANIMADO
-                // =================================================================
-
-                _buildSlideFadeTransition(
-                  animation: _heroAnimation,
-                  beginOffset: const Offset(
-                    0,
-                    0.10,
-                  ),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
-                      horizontal: 16,
-                    ),
-                    child: SizedBox(
+                    // Hueco para que la última tarjeta no quede debajo del dock
+                    // ni del FAB. Antes era un 300 fijo sin relación con nada.
+                    SizedBox(
                       height:
-                          MediaQuery.of(context)
-                                  .size
-                                  .height *
-                              0.34,
-                      child: HomeHero(
-                        memory: heroMemory,
-                      ),
+                          AppDock.height +
+                          96 +
+                          MediaQuery.viewPaddingOf(context).bottom,
                     ),
-                  ),
+                  ],
                 ),
-
-                // =================================================================
-                // CABECERA DE SECCIÓN
-                // =================================================================
-
-                _buildSlideFadeTransition(
-                  animation: _sectionAnimation,
-                  beginOffset: const Offset(
-                    0,
-                    0.08,
-                  ),
-                  child: _buildSectionHeader(
-                    "Últimos Registros",
-                  ),
-                ),
-
-                // =================================================================
-                // FILTROS
-                // =================================================================
-
-                _buildSlideFadeTransition(
-                  animation: _filtersAnimation,
-                  beginOffset: const Offset(
-                    0,
-                    0.08,
-                  ),
-                  child: SizedBox(
-                    height: 38,
-                    child: ListView(
-                      scrollDirection:
-                          Axis.horizontal,
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 16,
-                      ),
-                      children: [
-                        _buildFilterChip(
-                          "Todos",
-                          selectedCategory,
-                          ref,
-                        ),
-                        ...gastronomicCategories.map(
-                          (
-                            cat,
-                          ) =>
-                              _buildFilterChip(
-                            cat.name,
-                            selectedCategory,
-                            ref,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
-                // =================================================================
-                // LISTADO DE MEMORIAS
-                // =================================================================
-
-                filteredMemories.isEmpty
-                    ? (hasStreamError
-                          ? _buildErrorState(
-                              isPermissionDenied,
-                            )
-                          : (hasLoaded
-                                ? _buildEmptyState()
-                                : _buildLoadingState()))
-                    : Padding(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
-                        child: Column(
-                          children:
-                              filteredMemories
-                                  .asMap()
-                                  .entries
-                                  .map(
-                            (
-                              entry,
-                            ) {
-                              final index =
-                                  entry.key;
-
-                              final memory =
-                                  entry.value;
-
-                              return _buildAnimatedMemoryCard(
-                                memory: memory,
-                                index: index,
-                              );
-                            },
-                          ).toList(),
-                        ),
-                      ),
-
-                // =================================================================
-                // ESPACIO PARA DOCK + FAB
-                // =================================================================
-
-                const SizedBox(
-                  height: 300,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-
-        ],
-      ),
         ),
       ),
 
@@ -558,53 +439,51 @@ class _HomePageState extends ConsumerState<HomePage>
       // Positioned(bottom: 125) aquí se recortaba fuera de la pantalla
       // en cuanto el body se envolvía en un ancho máximo para la PWA de
       // escritorio; ver UX-3 en TECHNICAL_AUDIT.md).
-      floatingActionButtonLocation:
-          const ConstrainedEndFloatLocation(),
+      floatingActionButtonLocation: const ConstrainedEndFloatLocation(),
+      // El hueco inferior se deriva del alto real del dock (AppDock.height)
+      // más el área segura, en vez de un 109 mágico que no cuadraba con los
+      // dos márgenes de 24 que el dock tenía sumados sin saberlo.
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(
-          bottom: 109,
+        padding: EdgeInsets.only(
+          bottom:
+              AppDock.height + 20 + MediaQuery.viewPaddingOf(context).bottom,
         ),
-        child: ScaleTransition(
-          scale: _fabAnimation,
-          child: FadeTransition(
-            opacity: _fabAnimation,
-            child: Container(
-              decoration:
-                  BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: colorTextMain,
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: colorTextMain,
-                    blurRadius: 0,
-                    offset:
-                        const Offset(
-                      3,
-                      3,
+        child: AnimatedSlide(
+          // El FAB no se escondía al hacer scroll aunque el dock sí: se
+          // quedaba solo, flotando sobre la lista.
+          offset: ref.watch(dockVisibleProvider)
+              ? Offset.zero
+              : const Offset(0, 2),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          child: ScaleTransition(
+            scale: _fabAnimation,
+            child: FadeTransition(
+              opacity: _fabAnimation,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colorTextMain, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorTextMain,
+                      blurRadius: 0,
+                      offset: const Offset(3, 3),
                     ),
-                  ),
-                ],
-              ),
-              child:
-                  FloatingActionButton(
-                backgroundColor:
-                    colorAccentCoral,
-                elevation: 0,
-                onPressed: () =>
-                    context.push(
-                  '/new-memory',
+                  ],
                 ),
-                shape:
-                    const CircleBorder(),
-                child:
-                    const Icon(
-                  Icons.add_rounded,
-                  color:
-                      Colors.white,
-                  size: 32,
+                child: FloatingActionButton(
+                  backgroundColor: colorAccentCoral,
+                  elevation: 0,
+                  // Sin tooltip, VoiceOver anunciaba solo "botón".
+                  tooltip: 'Añadir un recuerdo nuevo',
+                  onPressed: () => context.push('/new-memory'),
+                  shape: const CircleBorder(),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
                 ),
               ),
             ),
@@ -626,27 +505,18 @@ class _HomePageState extends ConsumerState<HomePage>
     return AnimatedBuilder(
       animation: animation,
       child: child,
-      builder: (
-        context,
-        child,
-      ) {
-        final curvedValue =
-            animation.value;
+      builder: (context, child) {
+        final curvedValue = animation.value;
 
         final offset = Offset(
-          beginOffset.dx *
-              (1 - curvedValue),
-          beginOffset.dy *
-              (1 - curvedValue),
+          beginOffset.dx * (1 - curvedValue),
+          beginOffset.dy * (1 - curvedValue),
         );
 
         return Opacity(
           opacity: curvedValue,
           child: Transform.translate(
-            offset: Offset(
-              offset.dx * 60,
-              offset.dy * 60,
-            ),
+            offset: Offset(offset.dx * 60, offset.dy * 60),
             child: child,
           ),
         );
@@ -666,9 +536,7 @@ class _HomePageState extends ConsumerState<HomePage>
   // scroll por la lista (un gesto ligeramente diagonal). Por eso el borrado
   // real solo ocurre si el usuario confirma explícitamente en este diálogo.
 
-  Future<bool> _confirmDeleteMemory(
-    dynamic memory,
-  ) async {
+  Future<bool> _confirmDeleteMemory(dynamic memory) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       barrierColor: colorTextMain.withValues(alpha: 0.55),
@@ -732,7 +600,8 @@ class _HomePageState extends ConsumerState<HomePage>
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const TextSpan(
-                      text: '" se eliminará permanentemente. '
+                      text:
+                          '" se eliminará permanentemente. '
                           'Esta acción no se puede deshacer.',
                     ),
                   ],
@@ -817,112 +686,50 @@ class _HomePageState extends ConsumerState<HomePage>
     // Limitamos el retraso para que una lista muy larga
     // no haga esperar demasiado al usuario.
 
-    final double start =
-        (0.55 + (index * 0.045))
-            .clamp(
-              0.55,
-              0.82,
-            );
+    final double start = (0.55 + (index * 0.045)).clamp(0.55, 0.82);
 
-    final double end =
-        (start + 0.25)
-            .clamp(
-              0.70,
-              1.00,
-            );
+    final double end = (start + 0.25).clamp(0.70, 1.00);
 
-    final Animation<double>
-        cardAnimation =
-        CurvedAnimation(
+    final Animation<double> cardAnimation = CurvedAnimation(
       parent: _entryController,
-      curve: Interval(
-        start,
-        end,
-        curve:
-            Curves.easeOutCubic,
-      ),
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
     );
 
     return AnimatedBuilder(
       animation: cardAnimation,
-      builder: (
-        context,
-        child,
-      ) {
-        final value =
-            cardAnimation.value;
+      builder: (context, child) {
+        final value = cardAnimation.value;
 
         return Opacity(
           opacity: value,
           child: Transform.translate(
-            offset: Offset(
-              0,
-              28 * (1 - value),
-            ),
+            offset: Offset(0, 28 * (1 - value)),
             child: child,
           ),
         );
       },
       child: Padding(
-        padding:
-            const EdgeInsets.only(
-          bottom: 10,
-        ),
+        padding: const EdgeInsets.only(bottom: 10),
         child: Dismissible(
-          key: Key(
-            memory.id,
-          ),
-          direction:
-              DismissDirection
-                  .endToStart,
-          confirmDismiss: (
-            _,
-          ) =>
-              _confirmDeleteMemory(
-            memory,
-          ),
-          onDismissed: (
-            _,
-          ) =>
-              ref
-                  .read(
-                    memoryProvider
-                        .notifier,
-                  )
-                  .removeMemory(
-                    memory.id,
-                  ),
-          background:
-              Container(
-            alignment:
-                Alignment.centerRight,
-            padding:
-                const EdgeInsets.only(
-              right: 20,
+          key: Key(memory.id),
+          direction: DismissDirection.endToStart,
+          confirmDismiss: (_) => _confirmDeleteMemory(memory),
+          onDismissed: (_) =>
+              ref.read(memoryProvider.notifier).removeMemory(memory.id),
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            decoration: BoxDecoration(
+              color: Colors.red.shade400,
+              borderRadius: BorderRadius.circular(18),
             ),
-            decoration:
-                BoxDecoration(
-              color:
-                  Colors.red.shade400,
-              borderRadius:
-                  BorderRadius.circular(
-                18,
-              ),
-            ),
-            child:
-                const Icon(
-              Icons
-                  .delete_outline_rounded,
-              color:
-                  Colors.white,
+            child: const Icon(
+              Icons.delete_outline_rounded,
+              color: Colors.white,
               size: 24,
             ),
           ),
-          child:
-              MemoryCardCompact(
-            memory:
-                memory,
-          ),
+          child: MemoryCardCompact(memory: memory),
         ),
       ),
     );
@@ -934,11 +741,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildEmptyState() {
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Center(
         // Entrada suave (sin rebote: no es una celebración, solo evita que
         // el estado vacío aparezca de golpe la primera vez que se ve).
@@ -956,53 +759,39 @@ class _HomePageState extends ConsumerState<HomePage>
             );
           },
           child: Container(
-          width:
-              double.infinity,
-          padding:
-              const EdgeInsets.all(
-            28,
-          ),
-          decoration: BoxDecoration(
-            color: colorCardSurface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colorTextMain, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: colorTextMain,
-                blurRadius: 0,
-                offset: const Offset(3, 3),
-              ),
-            ],
-          ),
-          child:
-              Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            children: [
-              Icon(
-                Icons
-                    .restaurant_menu_rounded,
-                size: 32,
-                color:
-                    Colors.grey
-                        .shade400,
-              ),
-              const SizedBox(
-                height: 10,
-              ),
-              Text(
-                "No hay experiencias guardadas aquí",
-                style:
-                    GoogleFonts.outfit(
-                  color:
-                      colorTextMain,
-                  fontWeight:
-                      FontWeight.w600,
-                  fontSize: 15,
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: colorCardSurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorTextMain, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: colorTextMain,
+                  blurRadius: 0,
+                  offset: const Offset(3, 3),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.restaurant_menu_rounded,
+                  size: 32,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "No hay experiencias guardadas aquí",
+                  style: GoogleFonts.outfit(
+                    color: colorTextMain,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1021,10 +810,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildErrorState(bool isPermissionDenied) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Center(
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
@@ -1040,57 +826,57 @@ class _HomePageState extends ConsumerState<HomePage>
             );
           },
           child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: colorCardSurface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colorTextMain, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: colorTextMain,
-                blurRadius: 0,
-                offset: const Offset(3, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isPermissionDenied
-                    ? Icons.lock_outline_rounded
-                    : Icons.cloud_off_rounded,
-                size: 32,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                isPermissionDenied
-                    ? "Este dispositivo no tiene acceso todavía"
-                    : "No se pudieron cargar tus recuerdos",
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: colorCardSurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colorTextMain, width: 2),
+              boxShadow: [
+                BoxShadow(
                   color: colorTextMain,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
+                  blurRadius: 0,
+                  offset: const Offset(3, 3),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                isPermissionDenied
-                    ? "No es un problema de conexión — suele pasar tras "
-                          "reinstalar la app. Avisa para añadir este "
-                          "dispositivo a la lista autorizada."
-                    : "Comprueba tu conexión — se actualizará solo en cuanto vuelva.",
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: Colors.grey.shade500,
-                  fontSize: 12,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPermissionDenied
+                      ? Icons.lock_outline_rounded
+                      : Icons.cloud_off_rounded,
+                  size: 32,
+                  color: Colors.grey.shade400,
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(height: 10),
+                Text(
+                  isPermissionDenied
+                      ? "Este dispositivo no tiene acceso todavía"
+                      : "No se pudieron cargar tus recuerdos",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    color: colorTextMain,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isPermissionDenied
+                      ? "No es un problema de conexión — suele pasar tras "
+                            "reinstalar la app. Avisa para añadir este "
+                            "dispositivo a la lista autorizada."
+                      : "Comprueba tu conexión — se actualizará solo en cuanto vuelva.",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1106,10 +892,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildLoadingState() {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 20,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Center(
         child: Container(
           width: double.infinity,
@@ -1157,33 +940,19 @@ class _HomePageState extends ConsumerState<HomePage>
   // CABECERA DE SECCIÓN
   // ===========================================================================
 
-  Widget _buildSectionHeader(
-    String title,
-  ) {
+  Widget _buildSectionHeader(String title) {
     return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        20,
-        14,
-        20,
-        8,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
       child: Row(
-        mainAxisAlignment:
-            MainAxisAlignment
-                .spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             title,
-            style:
-                GoogleFonts.outfit(
+            style: GoogleFonts.outfit(
               fontSize: 18,
-              fontWeight:
-                  FontWeight.bold,
-              color:
-                  colorTextMain,
-              letterSpacing:
-                  -0.3,
+              fontWeight: FontWeight.bold,
+              color: colorTextMain,
+              letterSpacing: -0.3,
             ),
           ),
 
@@ -1191,78 +960,62 @@ class _HomePageState extends ConsumerState<HomePage>
           // BOTÓN DE ORDENACIÓN
           // ===================================================================
 
-          Material(
-            color:
-                Colors.transparent,
-            child:
-                InkWell(
-              onTap: () {
-                setState(() {
-                  _sortRatingAscending =
-                      !_sortRatingAscending;
-                });
-              },
-              borderRadius:
-                  BorderRadius.circular(
-                20,
-              ),
-              child:
-                  Padding(
-                padding:
-                    const EdgeInsets.all(
-                  6,
-                ),
-                child:
-                    Row(
-                  mainAxisSize:
-                      MainAxisSize.min,
-                  children: [
-                    AnimatedSwitcher(
-                      duration:
-                          const Duration(
-                        milliseconds:
-                            250,
-                      ),
-                      transitionBuilder:
-                          (
-                        child,
-                        animation,
-                      ) {
-                        return ScaleTransition(
-                          scale:
-                              animation,
-                          child:
-                              child,
-                        );
-                      },
-                      child:
-                          Icon(
-                        _sortRatingAscending
-                            ? Icons
-                                .south_rounded
-                            : Icons
-                                .north_rounded,
-                        key:
-                            ValueKey(
-                          _sortRatingAscending,
+          // Dos iconos sin etiqueta ni tooltip: ni un lector de pantalla ni
+          // una persona vidente podían saber que esto ordena por puntuación.
+          Tooltip(
+            message: _sortRatingAscending
+                ? 'Ordenar de mayor a menor puntuación'
+                : 'Ordenar de menor a mayor puntuación',
+            child: Semantics(
+              button: true,
+              label: _sortRatingAscending
+                  ? 'Ordenado de menor a mayor puntuación. Tocar para invertir'
+                  : 'Ordenado de mayor a menor puntuación. Tocar para invertir',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _sortRatingAscending = !_sortRatingAscending;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          transitionBuilder: (child, animation) {
+                            return ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            );
+                          },
+                          child: Icon(
+                            _sortRatingAscending
+                                ? Icons.south_rounded
+                                : Icons.north_rounded,
+                            key: ValueKey(_sortRatingAscending),
+                            size: 20,
+                            color: colorAccentCoral,
+                          ),
                         ),
-                        size:
-                            20,
-                        color:
-                            colorAccentCoral,
-                      ),
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 17,
+                          color: colorAccentCoral,
+                        ),
+                      ],
                     ),
-                    const SizedBox(
-                      width: 2,
-                    ),
-                    const Icon(
-                      Icons
-                          .star_rounded,
-                      size: 17,
-                      color:
-                          colorAccentCoral,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1276,24 +1029,14 @@ class _HomePageState extends ConsumerState<HomePage>
   // FILTRO DE CATEGORÍA
   // ===========================================================================
 
-  Widget _buildFilterChip(
-    String label,
-    String selected,
-    WidgetRef ref,
-  ) {
-    final bool isSelected =
-        label == selected;
+  Widget _buildFilterChip(String label, String selected, WidgetRef ref) {
+    final bool isSelected = label == selected;
 
     return _FilterChip(
       label: label,
       isSelected: isSelected,
       onTap: () {
-        ref
-            .read(
-              selectedCategoryProvider
-                  .notifier,
-            )
-            .state = label;
+        ref.read(selectedCategoryProvider.notifier).state = label;
       },
     );
   }
@@ -1329,44 +1072,70 @@ class _FilterChipState extends State<_FilterChip> {
 
   @override
   Widget build(BuildContext context) {
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onTapDown: (_) => _setPressed(true),
-        onTapUp: (_) => _setPressed(false),
-        onTapCancel: () => _setPressed(false),
-        child: AnimatedScale(
-          scale: _pressed ? 0.96 : 1.0,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: widget.isSelected ? colorTextMain : colorCardSurface,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: widget.isSelected ? 0.12 : 0.03,
+      child: Semantics(
+        button: true,
+        selected: widget.isSelected,
+        label: widget.label,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: (_) => _setPressed(true),
+          onTapUp: (_) => _setPressed(false),
+          onTapCancel: () => _setPressed(false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.96 : 1.0,
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.center,
+              // Objetivo táctil de 48 px de alto (el tamaño visual sigue
+              // siendo el mismo: el relleno crece, no la caja pintada).
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: widget.isSelected ? colorTextMain : colorCardSurface,
+                borderRadius: BorderRadius.circular(14),
+                // Un chip no seleccionado era blanco sin borde sobre un fondo
+                // casi blanco: el trozo que el ListView recortaba en el borde
+                // derecho se veía como un "chip en blanco" sin texto.
+                border: widget.isSelected
+                    ? null
+                    : Border.all(
+                        color: colorTextMain.withValues(alpha: 0.22),
+                        width: 1.5,
+                      ),
+                boxShadow: [
+                  BoxShadow(
+                    color: colorTextMain.withValues(
+                      alpha: widget.isSelected ? 0.12 : 0.03,
+                    ),
+                    blurRadius: widget.isSelected ? 6 : 4,
+                    offset: const Offset(0, 2),
                   ),
-                  blurRadius: widget.isSelected ? 6 : 4,
-                  offset: const Offset(0, 2),
+                ],
+              ),
+              child: ExcludeSemantics(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    color: widget.isSelected
+                        ? Colors.white
+                        : const Color(0xFF4A5260),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ],
-            ),
-            child: Text(
-              widget.label,
-              style: GoogleFonts.outfit(
-                color: widget.isSelected ? Colors.white : Colors.grey.shade700,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -1375,4 +1144,3 @@ class _FilterChipState extends State<_FilterChip> {
     );
   }
 }
-

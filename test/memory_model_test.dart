@@ -133,10 +133,7 @@ void main() {
     });
 
     test('nunca lanza excepción con un mapa vacío o con basura', () {
-      expect(
-        () => MemoryModel.fromMap(<String, dynamic>{}),
-        returnsNormally,
-      );
+      expect(() => MemoryModel.fromMap(<String, dynamic>{}), returnsNormally);
 
       expect(
         () => MemoryModel.fromMap({

@@ -82,7 +82,10 @@ class AddPlayerModal extends StatelessWidget {
             onPressed: onAdd,
             child: Text(
               'Añadir a la Mesa',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16),
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
         ),

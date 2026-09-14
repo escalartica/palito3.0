@@ -208,8 +208,13 @@ class AtencionFields implements DynamicFieldGenerator {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 6.0;
+              // El ancho real y el tamaño de letra del sistema deciden
+              // cuántas columnas caben: con el umbral fijo de caracteres que
+              // había antes, "Decepcionante" se partía en "Decepcionant"/"e".
               final int columns = NeoChip.columnsFor(
                 options.map((o) => o['label'] as String).toList(),
+                maxWidth: constraints.maxWidth,
+                textScaler: MediaQuery.textScalerOf(context),
               );
               final chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -259,9 +264,7 @@ class AtencionFields implements DynamicFieldGenerator {
 
                         // Si se deselecciona "Otro",
                         // limpiamos el texto personalizado.
-                        if (option == 'Otro' &&
-                            isSelected &&
-                            otroKey != null) {
+                        if (option == 'Otro' && isSelected && otroKey != null) {
                           onUpdate(otroKey, '');
                           otroController?.clear();
                         }

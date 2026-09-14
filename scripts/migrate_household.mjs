@@ -44,6 +44,11 @@ import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const OLD_HOUSEHOLD_DOC_ID = 'palito-hogar';
+// ⚠️ SEGURIDAD: un id de grupo FIJO y adivinable publicado en el repositorio.
+// Con las reglas antiguas, conocer el id de un grupo bastaba para meterse en
+// él. Ya no (ver firestore.rules → isJoiningWithInvite), pero este grupo
+// concreto debe migrarse a un id aleatorio. Ver docs/SEGURIDAD.md §3.
+// Para grupos nuevos: SIEMPRE `db.collection('groups').doc()` sin argumento.
 const NEW_GROUP_ID = 'palito-hogar'; // se reutiliza el mismo id, a propósito
 
 // ── Argumentos de línea de comandos ─────────────────────────────────────────

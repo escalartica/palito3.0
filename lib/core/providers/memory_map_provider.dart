@@ -1,4 +1,3 @@
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'household_provider.dart';
@@ -9,8 +8,7 @@ import '../models/memory_model.dart';
 /// MEMORY MAP FIRESTORE SERVICE PROVIDER
 /// ============================================================
 
-final memoryMapServiceProvider =
-    Provider<MemoryMapFirestoreService>((ref) {
+final memoryMapServiceProvider = Provider<MemoryMapFirestoreService>((ref) {
   final String? groupId = ref.watch(activeGroupIdProvider);
 
   return MemoryMapFirestoreService(groupId: groupId);
@@ -20,13 +18,8 @@ final memoryMapServiceProvider =
 /// MEMORY MODELS STREAM PROVIDER
 /// ============================================================
 
-
-final memoryModelsStreamProvider =
-    StreamProvider<List<MemoryModel>>((ref) {
-  final service =
-      ref.watch(
-    memoryMapServiceProvider,
-  );
+final memoryModelsStreamProvider = StreamProvider<List<MemoryModel>>((ref) {
+  final service = ref.watch(memoryMapServiceProvider);
 
   return service.getMemoryModelsStream();
 });
@@ -49,12 +42,10 @@ final memoryModelsStreamProvider =
 /// partes de la aplicación que todavía esperan mapas dinámicos.
 ///
 
-final memoriesStreamProvider =
-    StreamProvider<List<Map<String, dynamic>>>((ref) {
-  final service =
-      ref.watch(
-    memoryMapServiceProvider,
-  );
+final memoriesStreamProvider = StreamProvider<List<Map<String, dynamic>>>((
+  ref,
+) {
+  final service = ref.watch(memoryMapServiceProvider);
 
   return service.getMemoriesStream();
 });
@@ -88,11 +79,7 @@ final memoriesStreamProvider =
 // siempre, incluso navegando a otras pantallas.
 final locationsStreamProvider =
     StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
-  final service =
-      ref.watch(
-    memoryMapServiceProvider,
-  );
+      final service = ref.watch(memoryMapServiceProvider);
 
-  return service.getLocationsStream();
-});
-
+      return service.getLocationsStream();
+    });

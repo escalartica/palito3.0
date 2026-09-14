@@ -18,8 +18,7 @@ MemoryModel _memoryWithLocation(LocationData location) {
 
 void main() {
   group('MemorySaveController.resolveKnownLocation', () {
-    test(
-        'reutiliza el GPS actual si su dirección coincide (sin '
+    test('reutiliza el GPS actual si su dirección coincide (sin '
         'distinguir mayúsculas) con la escrita', () {
       final result = MemorySaveController.resolveKnownLocation(
         addressText: 'Calle Mayor 1',
@@ -49,15 +48,10 @@ void main() {
       expect(result, isNull);
     });
 
-    test(
-        'reutiliza las coordenadas del recuerdo existente si su '
+    test('reutiliza las coordenadas del recuerdo existente si su '
         'dirección coincide con la escrita', () {
       final existing = _memoryWithLocation(
-        const LocationData(
-          address: 'Plaza Mayor',
-          lat: 41.0,
-          lng: -4.0,
-        ),
+        const LocationData(address: 'Plaza Mayor', lat: 41.0, lng: -4.0),
       );
 
       final result = MemorySaveController.resolveKnownLocation(
@@ -70,15 +64,10 @@ void main() {
       expect(result?.lng, -4.0);
     });
 
-    test(
-        'no reutiliza las coordenadas del recuerdo existente si la '
+    test('no reutiliza las coordenadas del recuerdo existente si la '
         'dirección ha cambiado (se corrigió a mano)', () {
       final existing = _memoryWithLocation(
-        const LocationData(
-          address: 'Dirección vieja',
-          lat: 41.0,
-          lng: -4.0,
-        ),
+        const LocationData(address: 'Dirección vieja', lat: 41.0, lng: -4.0),
       );
 
       final result = MemorySaveController.resolveKnownLocation(
@@ -93,11 +82,7 @@ void main() {
     test('prioriza el GPS actual sobre el recuerdo existente si ambos '
         'coinciden con la dirección escrita', () {
       final existing = _memoryWithLocation(
-        const LocationData(
-          address: 'Calle Mayor 1',
-          lat: 41.0,
-          lng: -4.0,
-        ),
+        const LocationData(address: 'Calle Mayor 1', lat: 41.0, lng: -4.0),
       );
 
       final result = MemorySaveController.resolveKnownLocation(
@@ -186,8 +171,7 @@ void main() {
       expect(queries, ['Main Street, Spain']);
     });
 
-    test(
-        'caso especial: "Medellín" antepone la pedanía de Badajoz, para '
+    test('caso especial: "Medellín" antepone la pedanía de Badajoz, para '
         'no geocodificar por defecto a Colombia', () {
       final queries = MemorySaveController.buildGeocodingQueries('Medellín');
 

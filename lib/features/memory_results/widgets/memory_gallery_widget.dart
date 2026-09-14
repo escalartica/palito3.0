@@ -23,7 +23,7 @@ class MemoryGalleryWidget extends StatelessWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 15),
-        
+
         // Imagen Principal con manejo de estado
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -48,11 +48,17 @@ class MemoryGalleryWidget extends StatelessWidget {
             onTap: () {
               // Lógica de navegación a vídeo
             },
-            leading: const Icon(Icons.play_circle_fill, color: Colors.indigoAccent, size: 40),
+            leading: const Icon(
+              Icons.play_circle_fill,
+              color: Colors.indigoAccent,
+              size: 40,
+            ),
             title: const Text("Ver momento ambiente"),
             subtitle: const Text("Toca para revivir el sonido y el entorno"),
             tileColor: Colors.indigoAccent.withValues(alpha: 0.1),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         ],
       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/memory_model.dart';
+import '../../../core/data/rating_scale.dart';
 
 /// Selector de recuerdos para un grupo de marcadores que comparten
 /// coordenada.
@@ -37,9 +38,7 @@ class MemoryGroupPicker {
           decoration: const BoxDecoration(
             color: Color(0xFFFFFDF5),
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(
-              top: BorderSide(color: Color(0xFF0F172A), width: 3),
-            ),
+            border: Border(top: BorderSide(color: Color(0xFF0F172A), width: 3)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -176,14 +175,10 @@ class MemoryGroupPicker {
               ),
               Row(
                 children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    size: 16,
-                    color: Colors.amber,
-                  ),
+                  const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
                   const SizedBox(width: 2),
                   Text(
-                    memory.rating.toStringAsFixed(1),
+                    RatingScale.shortLabel(memory.rating) ?? '—',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
@@ -193,10 +188,7 @@ class MemoryGroupPicker {
                 ],
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF0F172A),
-              ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF0F172A)),
             ],
           ),
         ),

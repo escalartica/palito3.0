@@ -20,8 +20,7 @@ void main() {
       expect(outcome.challenge, isNull);
     });
 
-    test(
-        'cualquier modo distinto de 0 (Juicio Picante) otorga 10 puntos, '
+    test('cualquier modo distinto de 0 (Juicio Picante) otorga 10 puntos, '
         'medalla, y elige un reto de la lista', () {
       final outcome = GamerGameLogic.computeSpinOutcome(
         selectedMode: 1,

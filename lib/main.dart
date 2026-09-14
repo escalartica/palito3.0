@@ -4,313 +4,96 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'package:palito_3_0/firebase_options.dart';
 import 'package:palito_3_0/core/models/memory_model.dart';
 import 'package:palito_3_0/core/providers/auth_provider.dart';
+import 'package:palito_3_0/core/providers/dock_provider.dart';
 import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/theme/app_theme.dart';
 import 'package:palito_3_0/core/theme/components/app_dock.dart';
-import 'package:palito_3_0/core/providers/dock_provider.dart';
+import 'package:palito_3_0/core/utils/app_log.dart';
 import 'package:palito_3_0/features/auth/sign_in_page.dart';
+import 'package:palito_3_0/features/gamer/gamer_page.dart';
 import 'package:palito_3_0/features/home/home_page.dart';
 import 'package:palito_3_0/features/home/memory_detail_page.dart';
 import 'package:palito_3_0/features/home/memory_form_page.dart';
 import 'package:palito_3_0/features/map/map_page.dart';
-import 'package:palito_3_0/features/gamer/gamer_page.dart';
 import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
 import 'package:palito_3_0/features/onboarding/invite_partner_page.dart';
+import 'package:palito_3_0/features/onboarding/name_page.dart';
 import 'package:palito_3_0/features/profile/profile_page.dart';
 
 /// Indica si Firebase se ha inicializado correctamente.
 bool firebaseInitialized = false;
 
+final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
 Future<void> main() async {
-WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
-// ============================================================
-// ORIENTACIÓN
-// ============================================================
+  await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+  ]);
 
-await SystemChrome.setPreferredOrientations([
-DeviceOrientation.portraitUp,
-]);
+  final bool firebaseReady = await _initializeFirebase();
 
-// ============================================================
-// FIREBASE
-// ============================================================
+  if (firebaseReady) {
+    _initializeObservability();
+  } else {
+    AppLog.e('Firebase no pudo inicializarse correctamente.');
+  }
 
-final firebaseReady = await _initializeFirebase();
-
-if (!firebaseReady) {
-debugPrint(
-'❌ Firebase no pudo inicializarse correctamente.',
-);
-}
-
-// ============================================================
-// OBSERVABILIDAD (ANALYTICS + CRASHLYTICS)
-// ============================================================
-//
-// Antes no había ninguna forma de saber si algo fallaba en producción
-// salvo que un usuario lo reportara a mano.
-
-if (firebaseReady) {
-_initializeObservability();
-}
-
-// ============================================================
-// ESTADO FINAL DE FIREBASE
-// ============================================================
-//
-// Ya no hay autenticación anónima silenciosa aquí: con Sign in with
-// Apple, el usuario inicia sesión explícitamente desde SignInPage, y el
-// `redirect` de GoRouter (ver routerProvider) reacciona solo a los
-// cambios de sesión — no hace falta bloquear runApp() para esperarla.
-
-_printFirebaseStatus();
-
-// ============================================================
-// APP
-// ============================================================
-
-runApp(
-const ProviderScope(
-child: PalitoDeSaboresApp(),
-),
-);
+  runApp(const ProviderScope(child: PalitoDeSaboresApp()));
 }
 
 // ================================================================
-// FIREBASE INITIALIZATION
+// FIREBASE
 // ================================================================
 
 Future<bool> _initializeFirebase() async {
-try {
-debugPrint('🔥 Inicializando Firebase...');
-
-await Firebase.initializeApp(
-  options: DefaultFirebaseOptions.currentPlatform,
-);
-
-firebaseInitialized = true;
-
-final app = Firebase.app();
-
-debugPrint(
-  '✅ Firebase inicializado correctamente.',
-);
-
-debugPrint(
-  '🔥 Firebase App name: ${app.name}',
-);
-
-debugPrint(
-  '🔥 Firebase Project ID: ${app.options.projectId}',
-);
-
-debugPrint(
-  '🔥 Firebase App ID: ${app.options.appId}',
-);
-
-debugPrint(
-  '🔥 Firebase Messaging Sender ID: '
-  '${app.options.messagingSenderId}',
-);
-
-debugPrint(
-  '🔥 Firebase iOS Bundle ID: '
-  '${app.options.iosBundleId}',
-);
-
-return true;
-
-} on FirebaseException catch (e, stack) {
-firebaseInitialized = false;
-
-debugPrint(
-  '❌ ERROR INICIALIZANDO FIREBASE',
-);
-
-debugPrint(
-  '❌ Código: ${e.code}',
-);
-
-debugPrint(
-  '❌ Mensaje: ${e.message}',
-);
-
-debugPrintStack(
-  stackTrace: stack,
-);
-
-return false;
-
-} catch (e, stack) {
-firebaseInitialized = false;
-
-debugPrint(
-  '❌ ERROR INESPERADO INICIALIZANDO FIREBASE: $e',
-);
-
-debugPrintStack(
-  stackTrace: stack,
-);
-
-return false;
-
-}
-}
-
-// ================================================================
-// OBSERVABILIDAD (ANALYTICS + CRASHLYTICS)
-// ================================================================
-//
-// Crashlytics no está disponible en Flutter Web (solo iOS/Android), así
-// que se omite en esa plataforma en vez de fallar. Analytics sí
-// funciona en las tres plataformas.
-//
-// En debug (desarrollo local) se desactiva la recogida en ambos: no
-// tiene sentido mezclar sesiones de prueba del propio desarrollo con
-// datos reales de uso, ni llenar Crashlytics de errores provocados a
-// propósito mientras se depura.
-
-final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-
-void _initializeObservability() {
-try {
-analytics.setAnalyticsCollectionEnabled(!kDebugMode);
-
-if (!kIsWeb) {
-  FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
-    !kDebugMode,
-  );
-
-  FlutterError.onError =
-      FirebaseCrashlytics.instance.recordFlutterFatalError;
-
-  PlatformDispatcher.instance.onError = (
-    Object error,
-    StackTrace stack,
-  ) {
-    FirebaseCrashlytics.instance.recordError(
-      error,
-      stack,
-      fatal: true,
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    firebaseInitialized = true;
+    AppLog.i('Firebase inicializado (${Firebase.app().options.projectId}).');
 
     return true;
-  };
-}
+  } catch (e, stack) {
+    // Los volcados anteriores imprimían el uid y el correo del usuario en el
+    // log del sistema, que NO se desactiva en release. Ver core/utils/app_log.
+    firebaseInitialized = false;
+    AppLog.e('Error inicializando Firebase', e, stack);
 
-debugPrint(
-  '📊 Analytics/Crashlytics inicializados '
-  '(recogida activa: ${!kDebugMode}).',
-);
-} catch (e, stack) {
-debugPrint(
-  '⚠️ No se pudo inicializar Analytics/Crashlytics: $e',
-);
-
-debugPrintStack(stackTrace: stack);
-}
-}
-
-// ================================================================
-// FIREBASE STATUS
-// ================================================================
-
-void _printFirebaseStatus() {
-debugPrint(
-'============================================================',
-);
-
-debugPrint(
-'🔥 ESTADO FINAL DE FIREBASE',
-);
-
-debugPrint(
-'============================================================',
-);
-
-debugPrint(
-'🔥 Firebase inicializado: $firebaseInitialized',
-);
-
-if (!firebaseInitialized) {
-debugPrint(
-'❌ Firebase no está disponible.',
-);
-
-debugPrint(
-  '============================================================',
-);
-
-return;
-
-}
-
-try {
-final app = Firebase.app();
-final user = FirebaseAuth.instance.currentUser;
-
-debugPrint(
-  '🔥 Firebase apps activas: ${Firebase.apps.length}',
-);
-
-debugPrint(
-  '🔥 Firebase App: ${app.name}',
-);
-
-debugPrint(
-  '🔥 Project ID: ${app.options.projectId}',
-);
-
-debugPrint(
-  '🔥 App ID: ${app.options.appId}',
-);
-
-debugPrint(
-  '🔥 Bundle ID: ${app.options.iosBundleId}',
-);
-
-if (user != null) {
-  debugPrint(
-    '✅ Firebase Auth: USUARIO AUTENTICADO',
-  );
-
-  if (kDebugMode) {
-    debugPrint(
-      '🔐 UID: ${user.uid}',
-    );
-
-    debugPrint(
-      '🔐 Usuario anónimo: ${user.isAnonymous}',
-    );
+    return false;
   }
-} else {
-  debugPrint(
-    '❌ Firebase Auth: SIN USUARIO',
-  );
-
-  debugPrint(
-    '❌ Firestore no podrá acceder a '
-    'users/{uid}/memories.',
-  );
 }
 
-} catch (e) {
-debugPrint(
-'❌ Error comprobando estado final de Firebase: $e',
-);
-}
+/// Analytics y Crashlytics. Crashlytics no existe en Flutter Web, así que se
+/// omite ahí en vez de fallar. En debug se desactiva la recogida en ambos: no
+/// tiene sentido mezclar sesiones de desarrollo con datos reales de uso.
+void _initializeObservability() {
+  try {
+    analytics.setAnalyticsCollectionEnabled(!kDebugMode);
 
-debugPrint(
-'============================================================',
-);
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(!kDebugMode);
+
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    }
+  } catch (e, stack) {
+    AppLog.e('No se pudo inicializar Analytics/Crashlytics', e, stack);
+  }
 }
 
 // ================================================================
@@ -318,39 +101,28 @@ debugPrint(
 // ================================================================
 
 class PalitoDeSaboresApp extends ConsumerStatefulWidget {
-const PalitoDeSaboresApp({
-super.key,
-});
+  const PalitoDeSaboresApp({super.key});
 
-@override
-ConsumerState<PalitoDeSaboresApp> createState() => _PalitoDeSaboresAppState();
+  @override
+  ConsumerState<PalitoDeSaboresApp> createState() => _PalitoDeSaboresAppState();
 }
 
 class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
-  // Evita relanzar la creación del grupo personal más de una vez por
-  // sesión mientras la escritura está en curso (entre el momento en que
-  // se detecta que falta y el momento en que Firestore confirma el
-  // nuevo personalGroupId, currentUserDocProvider puede volver a emitir
-  // por otros motivos).
+  // Evita relanzar la creación del grupo personal más de una vez por sesión
+  // mientras la escritura está en curso.
   String? _backfillInFlightForUid;
 
   @override
   Widget build(BuildContext context) {
-    // Cuentas creadas antes de introducir grupos múltiples (o cualquier
-    // cuenta cuyo documento exista pero sin `personalGroupId` por el
-    // motivo que sea) no pasan por AuthService.signInWithApple() en cada
-    // apertura de la app —solo la primera vez que se pulsa el botón—,
-    // así que ese backfill nunca se dispararía para una sesión ya
-    // persistida. Este listener lo cubre de forma reactiva, sin
-    // depender de que se vuelva a iniciar sesión a mano.
+    // Cuentas creadas antes de introducir grupos múltiples (o cualquier cuenta
+    // cuyo documento exista pero sin `personalGroupId`) no pasan por
+    // AuthService.signInWithApple() en cada apertura, así que ese backfill
+    // nunca se dispararía para una sesión ya persistida. Este listener lo
+    // cubre de forma reactiva.
     ref.listen<AsyncValue<Map<String, dynamic>?>>(currentUserDocProvider, (
-      previous,
-      next,
+      AsyncValue<Map<String, dynamic>?>? previous,
+      AsyncValue<Map<String, dynamic>?> next,
     ) {
-      // `hasValue` (a diferencia de `valueOrNull`) distingue "todavía
-      // cargando" de "ya cargado, y el documento no existe" — este
-      // segundo caso es justo el que hay que reparar (una sesión de
-      // Auth persistida cuyo perfil nunca llegó a escribirse).
       if (!next.hasValue) return;
 
       final String? uid = ref.read(currentUidProvider);
@@ -361,17 +133,13 @@ class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
       if (data != null && data['personalGroupId'] != null) return;
 
       _backfillInFlightForUid = uid;
-      final authService = ref.read(authServiceProvider);
-      authService
-          .ensureUserDocument(
-            uid,
-            fallbackDisplayName:
-                authService.currentUser?.email?.split('@').first ?? 'Usuario',
-            existingData: data,
-          )
+
+      ref
+          .read(authServiceProvider)
+          .ensureUserDocument(uid, existingData: data)
           .whenComplete(() {
-        if (_backfillInFlightForUid == uid) _backfillInFlightForUid = null;
-      });
+            if (_backfillInFlightForUid == uid) _backfillInFlightForUid = null;
+          });
     });
 
     return MaterialApp.router(
@@ -379,6 +147,23 @@ class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: ref.watch(routerProvider),
+      builder: (BuildContext context, Widget? child) {
+        // La app tiene bastantes alturas fijas (chips, dock, botones). Con el
+        // texto del sistema al 200% varias de ellas reventaban con overflow.
+        // Se permite escalar —es un requisito de accesibilidad— pero con un
+        // techo que las estructuras actuales sí soportan.
+        final MediaQueryData mq = MediaQuery.of(context);
+
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              minScaleFactor: 0.85,
+              maxScaleFactor: 1.4,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
@@ -387,486 +172,301 @@ class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
 // NAVEGACIÓN
 // ================================================================
 
+/// Pestañas del dock. Inicio es una de ellas: antes no lo era, así que desde
+/// Mapa/Gamer/Perfil no había ninguna forma evidente de volver.
+const List<_Tab> _tabs = <_Tab>[
+  _Tab(path: '/', icon: Icons.home_rounded, label: 'Inicio'),
+  _Tab(path: '/map', icon: Icons.map_rounded, label: 'Mapa'),
+  _Tab(
+    path: '/gamer',
+    icon: Icons.videogame_asset_rounded,
+    label: 'Zona Gamer',
+  ),
+  _Tab(path: '/profile', icon: Icons.person_rounded, label: 'Perfil'),
+];
+
+class _Tab {
+  const _Tab({required this.path, required this.icon, required this.label});
+
+  final String path;
+  final IconData icon;
+  final String label;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-// Declaradas aquí dentro (no como `final` de nivel superior) para que
-// cada instancia de routerProvider —una sola vez en la app real, pero
-// una nueva por cada ProviderScope en los tests— tenga sus propias
-// GlobalKey. Compartir las mismas claves entre varias instancias de
-// GoRouter (como ocurría antes) confunde a Flutter sobre qué Navigator
-// es cuál — invisible con un solo GoRouter vivo a la vez, pero rompía
-// los tests en cuanto había más de uno en la misma ejecución.
-final rootNavigatorKey =
-GlobalKey<NavigatorState>();
+  // Declaradas aquí dentro (no como `final` de nivel superior) para que cada
+  // instancia de routerProvider tenga sus propias GlobalKey: compartirlas
+  // entre varias instancias de GoRouter rompía los tests en cuanto había más
+  // de uno en la misma ejecución.
+  final GlobalKey<NavigatorState> rootNavigatorKey =
+      GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> shellNavigatorKey =
+      GlobalKey<NavigatorState>();
 
-final shellNavigatorKey =
-GlobalKey<NavigatorState>();
+  // `ref.watch` aquí (no `.read`) es deliberado: reconstruye el GoRouter
+  // entero —con un `redirect` nuevo que cierra sobre estos valores ya
+  // resueltos— cada vez que cambia la sesión, evitando la condición de
+  // carrera de leer providers derivados dentro del propio `redirect`.
+  final String? uid = ref.watch(currentUidProvider);
+  final AsyncValue<Map<String, dynamic>?> userDocAsync = ref.watch(
+    currentUserDocProvider,
+  );
+  final bool needsName = ref.watch(needsDisplayNameProvider);
 
-// `ref.watch` aquí (no `.read`) es deliberado: reconstruye por completo
-// el GoRouter —con un `redirect` nuevo que cierra sobre estos valores ya
-// resueltos como variables locales normales— cada vez que cambia la
-// sesión. La alternativa (un solo GoRouter con
-// `refreshListenable` y `redirect` leyendo providers con `ref.read` en
-// cada llamada) tiene una condición de carrera real: `ref.listen`
-// puede disparar la notificación de refresco antes de que Riverpod
-// termine de recalcular los providers derivados que ese mismo
-// `redirect` necesita leer, así que `ref.read` devuelve el valor
-// anterior (caducado) justo en el momento decisivo. Reconstruir el
-// GoRouter entero evita el problema de raíz: no hay nada que leer
-// "por fuera" del ciclo de build.
-final String? uid = ref.watch(currentUidProvider);
-final userDocAsync = ref.watch(currentUserDocProvider);
+  return GoRouter(
+    navigatorKey: rootNavigatorKey,
+    initialLocation: '/',
+    observers: <NavigatorObserver>[
+      // El `if` evita tocar FirebaseAnalytics.instance (y por tanto
+      // Firebase.app()) cuando Firebase no se ha inicializado — el caso de los
+      // tests de widget, que construyen la app sin pasar por main().
+      if (firebaseInitialized) FirebaseAnalyticsObserver(analytics: analytics),
+    ],
+    redirect: (BuildContext context, GoRouterState state) {
+      final String location = state.matchedLocation;
+      final bool onSignIn = location == '/sign-in';
+      final bool onNamePage = location == '/tu-nombre';
 
-return GoRouter(
-navigatorKey: rootNavigatorKey,
-initialLocation: '/',
-// El `if` evita tocar FirebaseAnalytics.instance (y por tanto
-// Firebase.app()) cuando Firebase no se ha inicializado — el caso de
-// los tests de widget, que construyen PalitoDeSaboresApp sin pasar por
-// main().
-observers: [
-if (firebaseInitialized)
-  FirebaseAnalyticsObserver(analytics: analytics),
-],
-redirect: (context, state) {
-  final String location = state.matchedLocation;
-  final bool onSignIn = location == '/sign-in';
+      if (uid == null) {
+        return onSignIn ? null : '/sign-in';
+      }
 
-  if (uid == null) {
-    return onSignIn ? null : '/sign-in';
-  }
+      if (userDocAsync.isLoading) {
+        // Todavía no sabemos si su grupo personal está creado ni si tiene
+        // nombre — no redirigir hasta saberlo.
+        return null;
+      }
 
-  if (userDocAsync.isLoading) {
-    // Todavía no sabemos si su grupo personal ya se ha terminado de
-    // crear (ver AuthService) — no redirigir hasta saberlo.
-    return null;
-  }
+      // Única puerta de onboarding: el nombre. Apple solo entrega el nombre
+      // real la PRIMERA vez que se autoriza la app; sin esta pantalla, quien
+      // reinstalaba se quedaba sin nombre (y antes, con el prefijo de su
+      // correo: `gdvcgp2gdt`) sin forma de arreglarlo.
+      if (needsName) {
+        return onNamePage ? null : '/tu-nombre';
+      }
 
-  // Sin puerta de onboarding: todo el mundo tiene ya su grupo personal
-  // en cuanto su documento de usuario existe, así que iniciar sesión
-  // lleva siempre directo a Home. Compartir con alguien (crear/unirse
-  // a otro grupo) es una acción opcional posterior, no un paso
-  // bloqueante — ver /household-setup más abajo, alcanzable solo desde
-  // Perfil.
-  if (onSignIn) {
-    return '/';
-  }
+      if (onSignIn || onNamePage) {
+        return '/';
+      }
 
-  return null;
-},
-routes: [
-// ============================================================
-// INICIO DE SESIÓN
-// ============================================================
-
-GoRoute(
-  path: '/sign-in',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: const SignInPage(),
-      direction: 1,
-    );
-  },
-),
-
-// ============================================================
-// COMPARTIR CON ALGUIEN (crear/unirse a un grupo) — opcional,
-// alcanzable solo desde Perfil, nunca por redirect.
-// ============================================================
-
-GoRoute(
-  path: '/household-setup',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: const HouseholdSetupPage(),
-      direction: 1,
-    );
-  },
-),
-
-// ============================================================
-// INVITAR A ALGUIEN A UN GRUPO
-// ============================================================
-
-GoRoute(
-  path: '/invite-partner',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    final groupId = state.extra as String;
-
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: InvitePartnerPage(
-        groupId: groupId,
+      return null;
+    },
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/sign-in',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _page(context, state, const SignInPage()),
       ),
-      direction: 1,
-    );
-  },
-),
-// ============================================================
-// DETALLE DE MEMORIA
-// ============================================================
 
-GoRoute(
-  path: '/memory-detail',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    final memory =
-        state.extra as MemoryModel;
-
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: MemoryDetailPage(
-        memory: memory,
+      GoRoute(
+        path: '/tu-nombre',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _page(context, state, const NamePage()),
       ),
-      direction: 1,
-    );
-  },
-),
 
-// ============================================================
-// NUEVA MEMORIA
-// ============================================================
-
-GoRoute(
-  path: '/new-memory',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: const MemoryFormPage(),
-      direction: 1,
-    );
-  },
-),
-
-// ============================================================
-// GAMER
-// ============================================================
-
-GoRoute(
-  path: '/gamer',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: const GamerPage(),
-      direction: 1,
-    );
-  },
-),
-
-// ============================================================
-// MAPA
-// ============================================================
-
-GoRoute(
-  path: '/map',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    final initialCategory =
-        state.extra as String?;
-
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: MapPage(
-        initialCategory: initialCategory,
+      // Compartir con alguien (crear/unirse a un grupo) — opcional,
+      // alcanzable desde Perfil, nunca por redirect.
+      GoRoute(
+        path: '/household-setup',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (BuildContext context, GoRouterState state) => _page(
+          context,
+          state,
+          HouseholdSetupPage(initialMode: state.uri.queryParameters['mode']),
+        ),
       ),
-      direction: 1,
-    );
-  },
-),
 
-// ============================================================
-// PERFIL
-// ============================================================
+      GoRoute(
+        path: '/invite-partner',
+        parentNavigatorKey: rootNavigatorKey,
+        redirect: (BuildContext context, GoRouterState state) =>
+            state.extra is String ? null : '/',
+        pageBuilder: (BuildContext context, GoRouterState state) => _page(
+          context,
+          state,
+          InvitePartnerPage(groupId: state.extra as String),
+        ),
+      ),
 
-GoRoute(
-  path: '/profile',
-  parentNavigatorKey: rootNavigatorKey,
-  pageBuilder: (context, state) {
-    return _buildDynamicPage(
-      context: context,
-      state: state,
-      child: const ProfilePage(),
-      direction: 1,
-    );
-  },
-),
+      GoRoute(
+        path: '/memory-detail',
+        parentNavigatorKey: rootNavigatorKey,
+        // Sin esta guarda, entrar por enlace profundo o volver tras un
+        // reinicio del proceso reventaba con un cast nulo.
+        redirect: (BuildContext context, GoRouterState state) =>
+            state.extra is MemoryModel ? null : '/',
+        pageBuilder: (BuildContext context, GoRouterState state) => _page(
+          context,
+          state,
+          MemoryDetailPage(memory: state.extra as MemoryModel),
+        ),
+      ),
 
-// ============================================================
-// SHELL PRINCIPAL
-// ============================================================
+      GoRoute(
+        path: '/new-memory',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (BuildContext context, GoRouterState state) =>
+            _page(context, state, const MemoryFormPage()),
+      ),
 
-ShellRoute(
-  navigatorKey: shellNavigatorKey,
-  builder: (
-    context,
-    state,
-    child,
-  ) {
-    return Scaffold(
-      backgroundColor:
-          const Color(0xFFFDFBF7),
-      body: Stack(
-        children: [
-          // ==================================================
-          // CONTENIDO PRINCIPAL
-          // ==================================================
-
-          Positioned.fill(
-            child: child,
+      // ============================================================
+      // SHELL PRINCIPAL — las cuatro pestañas del dock
+      // ============================================================
+      //
+      // Antes, solo `/` estaba dentro del shell: Mapa, Zona Gamer y Perfil
+      // eran rutas sueltas sin dock, así que la barra de navegación
+      // desaparecía en cuanto salías de Inicio — y el índice de pestaña que
+      // se calculaba para ellas no se llegaba a ver nunca.
+      ShellRoute(
+        navigatorKey: shellNavigatorKey,
+        builder: (BuildContext context, GoRouterState state, Widget child) {
+          return _ShellScaffold(location: state.uri.path, child: child);
+        },
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _page(context, state, const HomePage()),
           ),
+          GoRoute(
+            path: '/map',
+            pageBuilder: (BuildContext context, GoRouterState state) => _page(
+              context,
+              state,
+              MapPage(initialCategory: state.extra as String?),
+            ),
+          ),
+          GoRoute(
+            path: '/gamer',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _page(context, state, const GamerPage()),
+          ),
+          GoRoute(
+            path: '/profile',
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                _page(context, state, const ProfilePage()),
+          ),
+        ],
+      ),
+    ],
+  );
+});
 
-          // ==================================================
-          // APP DOCK
-          // ==================================================
+/// Andamio común de las cuatro pestañas: el contenido y, encima, el dock.
+class _ShellScaffold extends ConsumerWidget {
+  const _ShellScaffold({required this.location, required this.child});
 
+  final String location;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // El dock solo se esconde al hacer scroll en Inicio. En el resto de
+    // pestañas está siempre visible: antes bastaba con abrir un recuerdo
+    // (que apagaba `dockVisibleProvider` y no volvía a encenderlo) para
+    // quedarse sin barra de navegación hasta reiniciar la app.
+    final bool isHome = location == '/';
+    final bool isVisible = !isHome || ref.watch(dockVisibleProvider);
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    final int selectedIndex = _tabs.indexWhere((_Tab t) => t.path == location);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDFBF7),
+      body: Stack(
+        children: <Widget>[
+          Positioned.fill(child: child),
           Align(
-            alignment:
-                Alignment.bottomCenter,
-            child: Consumer(
-              builder: (
-                context,
-                ref,
-                _,
-              ) {
-                final isVisible =
-                    ref.watch(
-                  dockVisibleProvider,
-                );
-
-                return AnimatedSlide(
-                  offset: isVisible
-                      ? Offset.zero
-                      : const Offset(
-                          0,
-                          2,
-                        ),
-                  duration:
-                      const Duration(
-                    milliseconds: 350,
-                  ),
-                  curve:
-                      Curves.easeOutCubic,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.only(
-                      bottom: 24,
-                      left: 24,
-                      right: 24,
-                    ),
-                    child: ConstrainedBox(
-                      constraints:
-                          const BoxConstraints(
-                        maxWidth: 640,
-                      ),
-                      child: AppDock(
-                      items: const [
-                        Icons
-                            .map_rounded,
-                        Icons
-                            .videogame_asset_rounded,
-                        Icons
-                            .person_rounded,
-                      ],
-                      currentIndex:
-                          _calculateSelectedIndex(
-                        context,
-                      ),
-                      onTap:
-                          (index) {
-                        _onItemTapped(
-                          index,
-                          context,
-                        );
+            alignment: Alignment.bottomCenter,
+            child: AnimatedSlide(
+              offset: isVisible ? Offset.zero : const Offset(0, 2),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  // Un único sitio que decide la separación inferior: antes
+                  // el margen estaba a la vez dentro de AppDock y aquí, y se
+                  // sumaban sin que nadie lo supiera.
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: AppDock(
+                      items: _tabs
+                          .map(
+                            (_Tab t) => DockItem(icon: t.icon, label: t.label),
+                          )
+                          .toList(),
+                      currentIndex: selectedIndex,
+                      onTap: (int index) {
+                        HapticFeedback.lightImpact();
+                        context.go(_tabs[index].path);
                       },
                     ),
-                    ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
-  },
-  routes: [
-    // ========================================================
-    // HOME
-    // ========================================================
-
-    GoRoute(
-      path: '/',
-      pageBuilder: (
-        context,
-        state,
-      ) {
-        return _buildDynamicPage(
-          context: context,
-          state: state,
-          child: const HomePage(),
-          direction: 1,
-        );
-      },
-    ),
-  ],
-),
-
-],
-);
-});
+  }
+}
 
 // ================================================================
-// TRANSICIÓN DINÁMICA DE PÁGINAS
+// TRANSICIÓN DE PÁGINAS
 // ================================================================
 
-CustomTransitionPage<void> _buildDynamicPage({
-required BuildContext context,
-required GoRouterState state,
-required Widget child,
-required int direction,
-}) {
-return CustomTransitionPage<void>(
-key: state.pageKey,
-child: child,
-transitionDuration:
-const Duration(
-milliseconds: 500,
-),
-reverseTransitionDuration:
-const Duration(
-milliseconds: 350,
-),
-transitionsBuilder: (
-context,
-animation,
-secondaryAnimation,
-child,
+/// Transición compartida por todas las rutas. Respeta "Reducir movimiento"
+/// (`MediaQuery.disableAnimations`): con esa opción activada, la app tardaba
+/// más de un segundo en mostrar nada porque las animaciones de entrada seguían
+/// corriendo igual.
+CustomTransitionPage<void> _page(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
 ) {
-final curvedAnimation =
-CurvedAnimation(
-parent: animation,
-curve: Curves.easeOutCubic,
-reverseCurve: Curves.easeInCubic,
-);
+  final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-  final slideAnimation =
-      Tween<Offset>(
-    begin: Offset(
-      0.12 * direction,
-      0.035,
-    ),
-    end: Offset.zero,
-  ).animate(
-    curvedAnimation,
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 320),
+    reverseTransitionDuration: reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 240),
+    transitionsBuilder:
+        (
+          BuildContext context,
+          Animation<double> animation,
+          Animation<double> secondaryAnimation,
+          Widget child,
+        ) {
+          if (reduceMotion) return child;
+
+          final CurvedAnimation curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.06, 0.02),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
   );
-
-  final scaleAnimation =
-      Tween<double>(
-    begin: 0.96,
-    end: 1.0,
-  ).animate(
-    CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-    ),
-  );
-
-  final fadeAnimation =
-      Tween<double>(
-    begin: 0.0,
-    end: 1.0,
-  ).animate(
-    CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOut,
-    ),
-  );
-
-  return FadeTransition(
-    opacity: fadeAnimation,
-    child: SlideTransition(
-      position: slideAnimation,
-      child: ScaleTransition(
-        scale: scaleAnimation,
-        alignment: Alignment.center,
-        child: child,
-      ),
-    ),
-  );
-},
-
-);
-}
-
-// ================================================================
-// ÍNDICE DEL DOCK
-// ================================================================
-
-int _calculateSelectedIndex(
-BuildContext context,
-) {
-final String location =
-GoRouterState
-.of(context)
-.uri
-.path;
-
-// MAPA
-if (location.startsWith('/map')) {
-return 0;
-}
-
-// GAMER
-if (location.startsWith('/gamer')) {
-return 1;
-}
-
-// PERFIL
-if (location.startsWith('/profile')) {
-return 2;
-}
-
-// HOME Y CUALQUIER OTRA RUTA
-// No seleccionamos ningún icono.
-return -1;
-}
-
-// ================================================================
-// NAVEGACIÓN DEL DOCK
-// ================================================================
-
-void _onItemTapped(
-int index,
-BuildContext context,
-) {
-HapticFeedback.lightImpact();
-
-switch (index) {
-case 0:
-context.go('/map');
-break;
-
-
-case 1:
-  context.go('/gamer');
-  break;
-
-case 2:
-  context.go('/profile');
-  break;
-
-}
 }

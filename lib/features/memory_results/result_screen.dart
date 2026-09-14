@@ -13,9 +13,13 @@ class ResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final logic = MemoryResultLogic(memoryData);
-    
-    final double globalScore = logic.getAverageScore(['nota_espacio', 'nota_atencion']);
-    final String restaurantName = memoryData['nombre_restaurante'] ?? 'Restaurante sin nombre';
+
+    final double globalScore = logic.getAverageScore([
+      'nota_espacio',
+      'nota_atencion',
+    ]);
+    final String restaurantName =
+        memoryData['nombre_restaurante'] ?? 'Restaurante sin nombre';
     final bool willReturn = memoryData['volverias'] ?? false;
 
     return Scaffold(
@@ -30,16 +34,18 @@ class ResultScreen extends StatelessWidget {
               score: globalScore,
               volverias: willReturn,
             ),
-            
+
             const SizedBox(height: 30),
-            const Text("Desglose de la experiencia", 
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text(
+              "Desglose de la experiencia",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 10),
             MemoryScoreDashboard(data: memoryData),
-            
+
             const SizedBox(height: 30),
             MemoryInsightsWidget(data: memoryData),
-            
+
             // Integración final de la galería
             const SizedBox(height: 30),
             MemoryGalleryWidget(data: memoryData),

@@ -1,32 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/household_service.dart';
+import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/tokens/app_colors.dart';
 
-/// Pantalla para compartir el diario con alguien más: crear un grupo nuevo
-/// (y a continuación compartir su código de invitación) o unirse a uno
-/// existente con un código que ya tenga. Cada persona tiene siempre su
-/// propio grupo personal (creado automáticamente al iniciar sesión — ver
-/// `AuthService`), así que esta pantalla es opcional y no bloquea nada:
-/// se accede a ella desde Perfil, nunca por un `redirect` obligatorio.
+/// Pantalla para compartir el diario con alguien más: crear un grupo nuevo (y
+/// a continuación compartir su código de invitación) o unirse a uno existente
+/// con un código. Cada persona tiene siempre su propio grupo personal, así que
+/// esta pantalla es opcional y no bloquea nada.
 class HouseholdSetupPage extends ConsumerStatefulWidget {
-  const HouseholdSetupPage({super.key});
+  const HouseholdSetupPage({super.key, this.initialMode});
+
+  /// Permite entrar directamente en "Unirme con un código" desde el banner de
+  /// Inicio, sin obligar al invitado a adivinar el camino.
+  final String? initialMode;
 
   @override
-  ConsumerState<HouseholdSetupPage> createState() =>
-      _HouseholdSetupPageState();
+  ConsumerState<HouseholdSetupPage> createState() => _HouseholdSetupPageState();
 }
 
 enum _Mode { choose, naming, joining }
 
 class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
-  _Mode _mode = _Mode.choose;
+  late _Mode _mode = widget.initialMode == 'join'
+      ? _Mode.joining
+      : _Mode.choose;
+
   bool _isBusy = false;
   String? _errorMessage;
+
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
 
@@ -37,11 +46,15 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     super.dispose();
   }
 
+  String _myName() {
+    return ref.read(currentDisplayNameProvider) ?? AuthService.unnamedMember;
+  }
+
   Future<void> _createHousehold() async {
-    final uid = ref.read(currentUidProvider);
+    final String? uid = ref.read(currentUidProvider);
     if (uid == null) return;
 
-    final name = _nameController.text.trim();
+    final String name = _nameController.text.trim();
     if (name.isEmpty) {
       setState(() => _errorMessage = 'Ponle un nombre a este grupo.');
       return;
@@ -53,18 +66,18 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     });
 
     try {
-      final userDoc = await ref.read(currentUserDocProvider.future);
-      final displayName = (userDoc?['displayName'] as String?)?.trim();
-
-      final groupId = await ref.read(householdServiceProvider).createHousehold(
-            uid: uid,
-            displayName: displayName?.isNotEmpty == true ? displayName! : 'Yo',
-            name: name,
-          );
+      final String groupId = await ref
+          .read(householdServiceProvider)
+          .createHousehold(uid: uid, displayName: _myName(), name: name);
 
       if (!mounted) return;
-      context.push('/invite-partner', extra: groupId);
-    } catch (e) {
+
+      // El grupo recién creado pasa a ser el activo: si no, lo creabas y la
+      // app seguía mostrando "Mi diario" como si no hubiera pasado nada.
+      ref.read(activeGroupIdOverrideProvider.notifier).state = groupId;
+
+      context.pushReplacement('/invite-partner', extra: groupId);
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _errorMessage =
@@ -77,10 +90,10 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
   }
 
   Future<void> _joinHousehold() async {
-    final uid = ref.read(currentUidProvider);
+    final String? uid = ref.read(currentUidProvider);
     if (uid == null) return;
 
-    final code = _codeController.text.trim();
+    final String code = _codeController.text.trim();
     if (code.isEmpty) {
       setState(() => _errorMessage = 'Introduce el código que te han dado.');
       return;
@@ -92,24 +105,31 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     });
 
     try {
-      final userDoc = await ref.read(currentUserDocProvider.future);
-      final displayName = (userDoc?['displayName'] as String?)?.trim();
-
-      await ref.read(householdServiceProvider).joinHouseholdWithCode(
-            code: code,
-            uid: uid,
-            displayName: displayName?.isNotEmpty == true ? displayName! : 'Yo',
-          );
+      final JoinResult result = await ref
+          .read(householdServiceProvider)
+          .joinHouseholdWithCode(code: code, uid: uid, displayName: _myName());
 
       if (!mounted) return;
-      // A diferencia de antes, unirse a un grupo ya no dispara ningún
-      // redirect automático (no hay puerta de onboarding) — hay que
-      // volver explícitamente.
-      context.pop();
+
+      // Activar el grupo al que acabas de entrar y DECIRLO. Antes la pantalla
+      // se cerraba en silencio y seguías viendo tu diario personal, así que
+      // parecía que el código no había funcionado.
+      ref.read(activeGroupIdOverrideProvider.notifier).state = result.groupId;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Ya estás en «${result.groupName}» 🎉'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+      context.go('/');
     } on StateError catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.message);
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _errorMessage =
@@ -121,43 +141,56 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
     }
   }
 
+  void _back() {
+    // El botón de volver retrocede DENTRO de la pantalla si estás en un
+    // subpaso. Antes te sacaba del todo y había que empezar de cero.
+    if (_mode != _Mode.choose) {
+      setState(() {
+        _mode = _Mode.choose;
+        _errorMessage = null;
+      });
+      return;
+    }
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
+    }
+  }
+
   String get _title => switch (_mode) {
-        _Mode.choose => '¿Con quién vas a compartir?',
-        _Mode.naming => 'Ponle un nombre a tu grupo',
-        _Mode.joining => 'Únete a un grupo',
-      };
+    _Mode.choose => '¿Con quién vas a compartir?',
+    _Mode.naming => 'Ponle un nombre a tu grupo',
+    _Mode.joining => 'Únete a un grupo',
+  };
 
   String get _subtitle => switch (_mode) {
-        _Mode.choose =>
-          'Crea un grupo para invitar a quien quieras, o únete a uno si '
-              'ya te han pasado un código. Tu diario personal sigue '
-              'siendo solo tuyo.',
-        _Mode.naming =>
-          'Por ejemplo "Con Marta" o "Amigos del curro" — te ayudará a '
-              'distinguirlo cuando tengas varios.',
-        _Mode.joining => 'Pide el código de invitación a quien quieras unirte.',
-      };
+    _Mode.choose =>
+      'Crea un grupo para invitar a quien quieras, o únete a uno si ya te '
+          'han pasado un código. Tu diario personal sigue siendo solo tuyo.',
+    _Mode.naming =>
+      'Por ejemplo "Con Marta" o "Amigos del curro" — te ayudará a '
+          'distinguirlo cuando tengas varios.',
+    _Mode.joining =>
+      'Pide el código a quien te quiera invitar. Son 8 letras y números.',
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          color: AppColors.textPrimary,
-          onPressed: () => context.pop(),
-        ),
-      ),
+      appBar: NeoHeader(title: 'Grupos', onBack: _isBusy ? null : _back),
       body: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: SingleChildScrollView(
+          // Sin scroll, al abrir el teclado el contenido no cabía y salía la
+          // franja amarilla y negra de overflow.
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
               Text(
                 _title,
                 style: GoogleFonts.outfit(
@@ -172,28 +205,15 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textSecondary,
-                  height: 1.4,
+                  height: 1.45,
                 ),
               ),
-              const SizedBox(height: 32),
-              if (_errorMessage != null) ...[
-                Text(
-                  _errorMessage!,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: AppColors.error,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (_isBusy)
-                const Center(child: CircularProgressIndicator())
-              else
-                switch (_mode) {
-                  _Mode.choose => _buildChoices(),
-                  _Mode.naming => _buildNamingForm(),
-                  _Mode.joining => _buildJoinForm(),
-                },
+              const SizedBox(height: 28),
+              switch (_mode) {
+                _Mode.choose => _buildChoices(),
+                _Mode.naming => _buildNamingForm(),
+                _Mode.joining => _buildJoinForm(),
+              },
             ],
           ),
         ),
@@ -203,7 +223,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
 
   Widget _buildChoices() {
     return Column(
-      children: [
+      children: <Widget>[
         _ActionCard(
           icon: Icons.group_add_rounded,
           title: 'Crear un grupo nuevo',
@@ -230,48 +250,27 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
   Widget _buildNamingForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+      children: <Widget>[
         TextField(
           controller: _nameController,
+          enabled: !_isBusy,
+          autofocus: true,
+          maxLength: 60,
           textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _createHousehold(),
           style: GoogleFonts.outfit(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
-          decoration: InputDecoration(
-            hintText: 'Nombre del grupo',
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.textPrimary, width: 2),
-            ),
-          ),
+          decoration: _fieldDecoration(hint: 'Nombre del grupo'),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(
+        NeoPrimaryButton(
+          label: 'Crear grupo',
+          isBusy: _isBusy,
           onPressed: _createHousehold,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: Text(
-            'Crear grupo',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => setState(() {
-            _errorMessage = null;
-            _mode = _Mode.choose;
-          }),
-          child: const Text('Volver'),
         ),
       ],
     );
@@ -280,55 +279,81 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
   Widget _buildJoinForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _codeController,
-          textCapitalization: TextCapitalization.characters,
-          textAlign: TextAlign.center,
-          maxLength: 6,
-          style: GoogleFonts.outfit(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 6,
-            color: AppColors.textPrimary,
-          ),
-          decoration: InputDecoration(
-            counterText: '',
-            hintText: 'CÓDIGO',
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.textPrimary, width: 2),
+      children: <Widget>[
+        Semantics(
+          label: 'Código de invitación',
+          textField: true,
+          child: TextField(
+            controller: _codeController,
+            enabled: !_isBusy,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            textAlign: TextAlign.center,
+            maxLength: 8,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _joinHousehold(),
+            // El generador usa un alfabeto sin O/0/I/1; cualquier otra tecla
+            // solo puede producir un código inválido.
+            inputFormatters: <TextInputFormatter>[
+              _UpperCaseFormatter(),
+              FilteringTextInputFormatter.allow(RegExp('[A-HJ-NP-Z2-9]')),
+              LengthLimitingTextInputFormatter(8),
+            ],
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 5,
+              color: AppColors.textPrimary,
             ),
+            decoration: _fieldDecoration(hint: 'CÓDIGO'),
           ),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(
+        NeoPrimaryButton(
+          label: 'Unirme',
+          isBusy: _isBusy,
           onPressed: _joinHousehold,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: Text(
-            'Unirme',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => setState(() {
-            _errorMessage = null;
-            _mode = _Mode.choose;
-          }),
-          child: const Text('Volver'),
         ),
       ],
     );
+  }
+
+  InputDecoration _fieldDecoration({required String hint}) {
+    return InputDecoration(
+      counterText: '',
+      hintText: hint,
+      // El error va pegado al campo que lo causa. Antes se pintaba arriba del
+      // todo, a 32 px y un formulario entero de distancia.
+      errorText: _errorMessage,
+      filled: true,
+      fillColor: AppColors.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      border: _border(2),
+      enabledBorder: _border(2),
+      focusedBorder: _border(2.5),
+      errorBorder: _border(2, color: AppColors.error),
+      focusedErrorBorder: _border(2.5, color: AppColors.error),
+    );
+  }
+
+  OutlineInputBorder _border(double width, {Color? color}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(
+        color: color ?? AppColors.textPrimary,
+        width: width,
+      ),
+    );
+  }
+}
+
+class _UpperCaseFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
   }
 }
 
@@ -347,62 +372,79 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.textPrimary, width: 2),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.textPrimary,
-              blurRadius: 0,
-              offset: Offset(3, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.textPrimary, width: 1.5),
+    return Semantics(
+      button: true,
+      label: '$title. $subtitle',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.textPrimary, width: 2),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: AppColors.textPrimary,
+                blurRadius: 0,
+                offset: Offset(3, 3),
               ),
-              child: Icon(icon, color: AppColors.textPrimary),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
+            ],
+          ),
+          child: ExcludeSemantics(
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
                       color: AppColors.textPrimary,
+                      width: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                  child: Icon(icon, color: AppColors.textPrimary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary,
+                ),
+              ],
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
-          ],
+          ),
         ),
       ),
     );

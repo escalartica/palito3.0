@@ -9,9 +9,21 @@ class MemoryScoreDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _scoreBar("Sabor", data['nota_sabor']?.toDouble() ?? 0.0, Colors.redAccent),
-        _scoreBar("Atención", data['nota_atencion']?.toDouble() ?? 0.0, Colors.orange),
-        _scoreBar("Espacio", data['nota_espacio']?.toDouble() ?? 0.0, Colors.indigoAccent),
+        _scoreBar(
+          "Sabor",
+          data['nota_sabor']?.toDouble() ?? 0.0,
+          Colors.redAccent,
+        ),
+        _scoreBar(
+          "Atención",
+          data['nota_atencion']?.toDouble() ?? 0.0,
+          Colors.orange,
+        ),
+        _scoreBar(
+          "Espacio",
+          data['nota_espacio']?.toDouble() ?? 0.0,
+          Colors.indigoAccent,
+        ),
         _scoreBar("Higiene", data['detalle']?.toDouble() ?? 0.0, Colors.teal),
       ],
     );
@@ -26,7 +38,10 @@ class MemoryScoreDashboard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text("${value.toStringAsFixed(1)} / 10", style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+              Text(
+                "${value.toStringAsFixed(1)} / 10",
+                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 8),

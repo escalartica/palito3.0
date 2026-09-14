@@ -6,11 +6,11 @@ class MemoryHeroCard extends StatelessWidget {
   final bool volverias;
 
   const MemoryHeroCard({
-  super.key,
-  required this.nombreRestaurante,
-  required this.score,
-  required this.volverias,
-});
+    super.key,
+    required this.nombreRestaurante,
+    required this.score,
+    required this.volverias,
+  });
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -23,7 +23,7 @@ class MemoryHeroCard extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 5),
-          )
+          ),
         ],
       ),
       child: Row(

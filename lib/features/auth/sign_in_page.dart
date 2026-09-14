@@ -93,10 +93,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         ),
                       ],
                     ),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      width: 116,
-                    ),
+                    child: Image.asset('assets/images/logo.png', width: 116),
                   ),
                 ),
               ),
@@ -196,6 +193,28 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                               style: SignInWithAppleButtonStyle.black,
                               borderRadius: BorderRadius.circular(14),
                             ),
+                    ),
+                    const SizedBox(height: 14),
+                    // La única pantalla de registro de la app no decía nada
+                    // sobre la política de privacidad, y es lo primero que
+                    // mira App Review en una app que comparte contenido entre
+                    // usuarios (guideline 5.1.1).
+                    //
+                    // PENDIENTE: hacerlo pulsable hacia
+                    // https://palito-de-sabores.web.app/privacy.html requiere
+                    // añadir `url_launcher` a pubspec.yaml — ver
+                    // docs/PRUEBAS_ANTES_DE_SUBIR.md.
+                    Center(
+                      child: Text(
+                        'Al continuar aceptas nuestra política de privacidad,\n'
+                        'disponible en palito-de-sabores.web.app/privacy.html',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          height: 1.4,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
                   ],
                 ),

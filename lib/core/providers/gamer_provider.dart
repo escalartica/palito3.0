@@ -1,4 +1,3 @@
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:palito_3_0/core/providers/household_provider.dart';
@@ -25,13 +24,11 @@ import 'package:palito_3_0/core/services/gamer_firestore_service.dart';
 // De esta forma, toda la aplicación utiliza la misma instancia del servicio.
 // ============================================================================
 
-final gamerServiceProvider = Provider<GamerFirestoreService>(
-  (ref) {
-    final String? groupId = ref.watch(activeGroupIdProvider);
+final gamerServiceProvider = Provider<GamerFirestoreService>((ref) {
+  final String? groupId = ref.watch(activeGroupIdProvider);
 
-    return GamerFirestoreService(groupId: groupId);
-  },
-);
+  return GamerFirestoreService(groupId: groupId);
+});
 
 // ============================================================================
 // ESTADÍSTICAS GAMER DEL USUARIO ACTUAL
@@ -69,14 +66,11 @@ final gamerServiceProvider = Provider<GamerFirestoreService>(
 //
 // ============================================================================
 
-final gamerStatsStreamProvider = StreamProvider<GamerStats?>(
-  (ref) {
-    final GamerFirestoreService service =
-        ref.watch(gamerServiceProvider);
+final gamerStatsStreamProvider = StreamProvider<GamerStats?>((ref) {
+  final GamerFirestoreService service = ref.watch(gamerServiceProvider);
 
-    return service.getGamerStatsStream();
-  },
-);
+  return service.getGamerStatsStream();
+});
 
 // ============================================================================
 // PERFIL GENERAL DE FIRESTORE POR UID
@@ -99,17 +93,11 @@ final gamerStatsStreamProvider = StreamProvider<GamerStats?>(
 // ============================================================================
 
 final userProfileStreamProvider =
-    StreamProvider.family<Map<String, dynamic>?, String>(
-  (
-    ref,
-    uid,
-  ) {
-    final GamerFirestoreService service =
-        ref.watch(gamerServiceProvider);
+    StreamProvider.family<Map<String, dynamic>?, String>((ref, uid) {
+      final GamerFirestoreService service = ref.watch(gamerServiceProvider);
 
-    return service.getUserProfileStream(uid);
-  },
-);
+      return service.getUserProfileStream(uid);
+    });
 
 // ============================================================================
 // ESTADÍSTICAS GAMER DE UN UID ESPECÍFICO
@@ -138,15 +126,8 @@ final userProfileStreamProvider =
 // ============================================================================
 
 final userGamerStatsStreamProvider =
-    StreamProvider.family<GamerPlayerStats?, String>(
-  (
-    ref,
-    uid,
-  ) {
-    final GamerFirestoreService service =
-        ref.watch(gamerServiceProvider);
+    StreamProvider.family<GamerPlayerStats?, String>((ref, uid) {
+      final GamerFirestoreService service = ref.watch(gamerServiceProvider);
 
-    return service.getUserGamerStatsStream(uid);
-  },
-);
-
+      return service.getUserGamerStatsStream(uid);
+    });

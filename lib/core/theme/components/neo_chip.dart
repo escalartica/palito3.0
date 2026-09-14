@@ -27,100 +27,178 @@ class NeoChip extends StatelessWidget {
   final VoidCallback onTap;
   final double? width;
 
-  /// Altura fija de todo chip, independientemente de si su texto ocupa
-  /// una o dos líneas. Compacta a propósito: con 3 columnas + fuente
-  /// pequeña, una sola línea basta para casi cualquier etiqueta, así que
-  /// no hace falta reservar la altura de dos líneas por defecto.
-  static const double height = 42;
+  /// Altura MÍNIMA de todo chip. Antes era fija (42 px): con el texto del
+  /// sistema ampliado, la segunda línea se recortaba y el `ellipsis` se comía
+  /// la etiqueta. 44 px es además el objetivo táctil mínimo de las HIG.
+  static const double minHeight = 44;
 
-  /// Calcula cuántas columnas caben en una rejilla de chips sin que
-  /// ninguna palabra individual se vea forzada a partirse a mitad
-  /// (el bug original: "Enciclopedia gastronómica" → "Enciclopedi" /
-  /// "a gastronó..."). Con el tamaño de fuente de [NeoChip], 3 columnas
-  /// admiten cómodamente palabras de hasta ~13 caracteres; solo palabras
-  /// más largas que eso fuerzan 2 columnas (más chips por fila = formulario
-  /// más corto, así que se evita bajar a 2 salvo que sea necesario).
-  static int columnsFor(List<String> labels) {
-    final int longestWord = labels
-        .expand((label) => label.split(' '))
-        .map((word) => word.length)
-        .fold(0, (max, len) => len > max ? len : max);
+  /// Compatibilidad con el código que leía la altura fija.
+  static const double height = minHeight;
 
-    return longestWord > 13 ? 2 : 3;
+  static const double fontSize = 11;
+  static const double gridSpacing = 6;
+
+  /// Espacio que consumen borde + padding + icono + separación dentro del
+  /// chip, es decir, lo que NO queda para el texto.
+  static const double _chrome = 2 * 2 + 2 * 6 + 13 + 4;
+
+  /// Calcula cuántas columnas caben en una rejilla de chips sin que ninguna
+  /// palabra se parta a mitad.
+  ///
+  /// La versión anterior usaba un umbral fijo de caracteres (`> 13 ? 2 : 3`)
+  /// sin mirar el ancho real de la pantalla ni el tamaño de letra del
+  /// sistema. "Decepcionante" tiene exactamente 13 caracteres, así que caía
+  /// en la rama de 3 columnas: en un móvil de 360 dp el texto necesita ~79 dp
+  /// y solo hay ~71, y Flutter lo partía en "Decepcionant" / "e" — el defecto
+  /// que se ve en el vídeo. Con el texto ampliado fallaba en cualquier móvil.
+  ///
+  /// Ahora se mide de verdad con un [TextPainter] contra el ancho disponible.
+  /// [maxWidth] y [textScaler] son opcionales para no romper las llamadas
+  /// antiguas, pero conviene pasarlos siempre.
+  static int columnsFor(
+    List<String> labels, {
+    double? maxWidth,
+    TextScaler textScaler = TextScaler.noScaling,
+  }) {
+    final List<String> words = labels
+        .expand((String label) => label.split(RegExp(r'[\s/]+')))
+        .where((String w) => w.isNotEmpty)
+        .toList();
+
+    if (words.isEmpty) return 3;
+
+    if (maxWidth == null || maxWidth <= 0) {
+      // Sin ancho no se puede medir: heurística conservadora (antes 13, que
+      // dejaba fuera justo el caso que fallaba).
+      final int longest = words
+          .map((String w) => w.length)
+          .fold(0, (int max, int len) => len > max ? len : max);
+      return longest > 11 ? 2 : 3;
+    }
+
+    final TextStyle style = GoogleFonts.inter(
+      fontWeight: FontWeight.w700, // el más ancho de los dos estados
+      fontSize: fontSize,
+      height: 1.1,
+    );
+
+    double widestWord = 0;
+    for (final String word in words) {
+      final TextPainter painter = TextPainter(
+        text: TextSpan(text: word, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+      )..layout();
+      if (painter.width > widestWord) widestWord = painter.width;
+      painter.dispose();
+    }
+
+    for (final int columns in <int>[3, 2]) {
+      final double chipWidth =
+          (maxWidth - gridSpacing * (columns - 1)) / columns;
+      if (chipWidth - _chrome >= widestWord) return columns;
+    }
+
+    return 1;
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
     final Widget chip = AnimatedScale(
       scale: isSelected ? 1.02 : 1.0,
-      duration: const Duration(milliseconds: 180),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
       curve: Curves.easeOutBack,
-      child: InkWell(
-        onTap: onTap,
+      // Sin un Material propio, la onda del InkWell se pintaba por DETRÁS del
+      // AnimatedContainer opaco: al tocar un chip no había ninguna
+      // confirmación visual.
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          height: height,
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.textPrimary
-                  : AppColors.textPrimary.withValues(alpha: 0.25),
-              width: 2.0,
-            ),
-            boxShadow: isSelected
-                ? const [
-                    BoxShadow(
-                      color: AppColors.textPrimary,
-                      blurRadius: 0,
-                      offset: Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                transitionBuilder: (child, animation) {
-                  return ScaleTransition(scale: animation, child: child);
-                },
-                child: Icon(
-                  icon,
-                  key: ValueKey('${label}_$isSelected'),
-                  size: 13,
-                  color: AppColors.textPrimary,
-                ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: minHeight),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primary : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected
+                    ? AppColors.textPrimary
+                    : AppColors.textPrimary.withValues(alpha: 0.35),
+                width: 2.0,
               ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              boxShadow: isSelected
+                  ? const <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.textPrimary,
+                        blurRadius: 0,
+                        offset: Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        return ScaleTransition(scale: animation, child: child);
+                      },
+                  child: Icon(
+                    icon,
+                    key: ValueKey<String>('${label}_$isSelected'),
+                    size: 13,
                     color: AppColors.textPrimary,
-                    fontSize: 11,
-                    height: 1.1,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: AppColors.textPrimary,
+                      fontSize: fontSize,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
 
-    return width != null ? SizedBox(width: width, child: chip) : chip;
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      child: ExcludeSemantics(
+        child: width != null ? SizedBox(width: width, child: chip) : chip,
+      ),
+    );
   }
 }
 
@@ -149,7 +227,6 @@ class NeoChipGroup extends StatelessWidget {
     final List<String> labels = options
         .map((option) => option['label'] as String)
         .toList();
-    final int columns = NeoChip.columnsFor(labels);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -167,7 +244,12 @@ class NeoChipGroup extends StatelessWidget {
           const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, constraints) {
-              const double spacing = 6.0;
+              const double spacing = NeoChip.gridSpacing;
+              final int columns = NeoChip.columnsFor(
+                labels,
+                maxWidth: constraints.maxWidth,
+                textScaler: MediaQuery.textScalerOf(context),
+              );
               final double chipWidth =
                   (constraints.maxWidth - spacing * (columns - 1)) / columns;
 

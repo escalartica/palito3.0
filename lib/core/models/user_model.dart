@@ -17,10 +17,7 @@ class UserProfile {
   // CONVERSIÓN SEGURA A INT
   // ==========================================================================
 
-  static int _parseInt(
-    dynamic value, {
-    int fallback = 0,
-  }) {
+  static int _parseInt(dynamic value, {int fallback = 0}) {
     if (value == null) {
       return fallback;
     }
@@ -34,20 +31,13 @@ class UserProfile {
     }
 
     if (value is String) {
-      final String cleanValue =
-          value.replaceAll(
-        RegExp(r'[^0-9-]'),
-        '',
-      );
+      final String cleanValue = value.replaceAll(RegExp(r'[^0-9-]'), '');
 
       if (cleanValue.isEmpty) {
         return fallback;
       }
 
-      return int.tryParse(
-            cleanValue,
-          ) ??
-          fallback;
+      return int.tryParse(cleanValue) ?? fallback;
     }
 
     return fallback;
@@ -57,16 +47,13 @@ class UserProfile {
   // FROM MAP
   // ==========================================================================
 
-  factory UserProfile.fromMap(
-    String uid,
-    Map<String, dynamic> data,
-  ) {
+  factory UserProfile.fromMap(String uid, Map<String, dynamic> data) {
     return UserProfile(
       uid: uid,
       displayName:
           data['displayName']?.toString() ??
-              data['name']?.toString() ??
-              'Usuario',
+          data['name']?.toString() ??
+          'Usuario',
       gamerPoints: _parseInt(
         data['gamerPoints'] ??
             data['total_score'] ??
@@ -74,14 +61,9 @@ class UserProfile {
             data['points'],
       ),
       decisions: _parseInt(
-        data['decisions'] ??
-            data['totalDecisions'] ??
-            data['total_decisions'],
+        data['decisions'] ?? data['totalDecisions'] ?? data['total_decisions'],
       ),
-      streak: _parseInt(
-        data['streak'] ??
-            data['decisions_streak'],
-      ),
+      streak: _parseInt(data['streak'] ?? data['decisions_streak']),
     );
   }
 
@@ -112,14 +94,10 @@ class UserProfile {
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
-      displayName:
-          displayName ?? this.displayName,
-      gamerPoints:
-          gamerPoints ?? this.gamerPoints,
-      decisions:
-          decisions ?? this.decisions,
-      streak:
-          streak ?? this.streak,
+      displayName: displayName ?? this.displayName,
+      gamerPoints: gamerPoints ?? this.gamerPoints,
+      decisions: decisions ?? this.decisions,
+      streak: streak ?? this.streak,
     );
   }
 

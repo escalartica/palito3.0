@@ -28,9 +28,8 @@ import '../../../core/services/memory_map_firestore_service.dart';
 /// para actualizar la UI (comprobar si sigue montado, reconstruir,
 /// reencuadrar la cámara).
 class MemoryGeocodingService {
-  MemoryGeocodingService({
-    required MemoryMapFirestoreService firestoreService,
-  }) : _firestoreService = firestoreService;
+  MemoryGeocodingService({required MemoryMapFirestoreService firestoreService})
+    : _firestoreService = firestoreService;
 
   /// Inyectable para tests; en producción, la misma instancia compartida
   /// que expone `memoryMapServiceProvider`.
@@ -65,15 +64,9 @@ class MemoryGeocodingService {
   // FIRMA DE DATOS
   // ============================================================
 
-  String _buildMemorySignature(
-    List<MemoryModel> memories,
-  ) {
-    final sortedMemories =
-        List<MemoryModel>.from(
-      memories,
-    )..sort(
-        (a, b) => a.id.compareTo(b.id),
-      );
+  String _buildMemorySignature(List<MemoryModel> memories) {
+    final sortedMemories = List<MemoryModel>.from(memories)
+      ..sort((a, b) => a.id.compareTo(b.id));
 
     return sortedMemories
         .map(
@@ -92,12 +85,12 @@ class MemoryGeocodingService {
 
   /// Indica si `memories` difiere de la última tanda procesada y, en ese
   /// caso, actualiza la firma recordada para la próxima comprobación.
-  bool shouldResolve(
-    List<MemoryModel> memories,
-  ) {
-    final signature = _buildMemorySignature(
-      memories,
-    );
+  /// `true` si una tanda anterior se descartó por llegar mientras había otra
+  /// resolución en curso.
+  bool _hasPendingResolution = false;
+
+  bool shouldResolve(List<MemoryModel> memories) {
+    final signature = _buildMemorySignature(memories);
 
     if (_lastProcessedSignature == signature) {
       return false;
@@ -118,29 +111,19 @@ class MemoryGeocodingService {
     final Map<String, Map<String, dynamic>> result = {};
 
     for (final location in locations) {
-      final id = location['id']
-          ?.toString()
-          .trim();
+      final id = location['id']?.toString().trim();
 
       if (id != null && id.isNotEmpty) {
         result['id:$id'] = location;
       }
 
       final memoryId =
-          location['memoryId']
-                  ?.toString()
-                  .trim() ??
-              location['memory_id']
-                  ?.toString()
-                  .trim() ??
-              location['memoryID']
-                  ?.toString()
-                  .trim();
+          location['memoryId']?.toString().trim() ??
+          location['memory_id']?.toString().trim() ??
+          location['memoryID']?.toString().trim();
 
-      if (memoryId != null &&
-          memoryId.isNotEmpty) {
-        result['memory:$memoryId'] =
-            location;
+      if (memoryId != null && memoryId.isNotEmpty) {
+        result['memory:$memoryId'] = location;
       }
     }
 
@@ -151,15 +134,13 @@ class MemoryGeocodingService {
     MemoryModel memory,
     Map<String, Map<String, dynamic>> locationsByKey,
   ) {
-    final byId =
-        locationsByKey['id:${memory.id}'];
+    final byId = locationsByKey['id:${memory.id}'];
 
     if (byId != null) {
       return byId;
     }
 
-    final byMemoryId =
-        locationsByKey['memory:${memory.id}'];
+    final byMemoryId = locationsByKey['memory:${memory.id}'];
 
     if (byMemoryId != null) {
       return byMemoryId;
@@ -184,16 +165,10 @@ class MemoryGeocodingService {
   }
 
   String _normalizeAddress(String address) {
-    return address
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'\s+'), ' ');
+    return address.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  bool _isValidCoordinate(
-    double? lat,
-    double? lng,
-  ) {
+  bool _isValidCoordinate(double? lat, double? lng) {
     if (lat == null || lng == null) {
       return false;
     }
@@ -217,15 +192,11 @@ class MemoryGeocodingService {
     if (value is num) {
       final result = value.toDouble();
 
-      return result.isFinite
-          ? result
-          : null;
+      return result.isFinite ? result : null;
     }
 
     if (value is String) {
-      final result = double.tryParse(
-        value.trim(),
-      );
+      final result = double.tryParse(value.trim());
 
       if (result != null && result.isFinite) {
         return result;
@@ -264,70 +235,52 @@ class MemoryGeocodingService {
     }
 
     if (_isResolvingCoordinates) {
-      debugPrint(
-        '🗺️ Ya hay una resolución de coordenadas en curso.',
+      _log(
+        '🗺️ Ya hay una resolución de coordenadas en curso; se reintentará.',
       );
+
+      // `shouldResolve` ya había consumido la firma de esta tanda, así que
+      // descartarla aquí sin más significaba que esos recuerdos NO volvían a
+      // resolverse nunca y sus pines no aparecían hasta reiniciar la app —
+      // el caso típico: guardas un recuerdo mientras el mapa está
+      // geocodificando los anteriores.
+      _lastProcessedSignature = '';
+      _hasPendingResolution = true;
 
       return;
     }
 
     _isResolvingCoordinates = true;
 
-    final int generation =
-        ++_coordinateResolutionGeneration;
+    final int generation = ++_coordinateResolutionGeneration;
 
-    debugPrint(
-      '============================================================',
-    );
+    _log('============================================================');
 
-    debugPrint(
-      '🗺️ INICIANDO RESOLUCIÓN DE COORDENADAS',
-    );
+    _log('🗺️ INICIANDO RESOLUCIÓN DE COORDENADAS');
 
-    debugPrint(
-      '🗺️ Generación: $generation',
-    );
+    _log('🗺️ Generación: $generation');
 
-    debugPrint(
-      '🗺️ Memories recibidas: ${memories.length}',
-    );
+    _log('🗺️ Memories recibidas: ${memories.length}');
 
-    debugPrint(
-      '📍 Locations legacy recibidas: ${locations.length}',
-    );
+    _log('📍 Locations legacy recibidas: ${locations.length}');
 
-    debugPrint(
-      '============================================================',
-    );
+    _log('============================================================');
 
     try {
-      final locationsByKey =
-          _indexLocations(
-        locations,
-      );
+      final locationsByKey = _indexLocations(locations);
 
       // ----------------------------------------------------------
       // LIMPIAR MEMORIAS ELIMINADAS
       // ----------------------------------------------------------
 
       final currentMemoryIds = memories
-          .map(
-            (memory) => memory.id.trim(),
-          )
-          .where(
-            (id) => id.isNotEmpty,
-          )
+          .map((memory) => memory.id.trim())
+          .where((id) => id.isNotEmpty)
           .toSet();
 
-      memoryCoordinates.removeWhere(
-        (id, _) =>
-            !currentMemoryIds.contains(id),
-      );
+      memoryCoordinates.removeWhere((id, _) => !currentMemoryIds.contains(id));
 
-      resolvingMemoryIds.removeWhere(
-        (id) =>
-            !currentMemoryIds.contains(id),
-      );
+      resolvingMemoryIds.removeWhere((id) => !currentMemoryIds.contains(id));
 
       // ----------------------------------------------------------
       // PROCESAR MEMORIAS
@@ -338,91 +291,57 @@ class MemoryGeocodingService {
           return;
         }
 
-        if (generation !=
-            _coordinateResolutionGeneration) {
-          debugPrint(
-            '🗺️ Resolución antigua invalidada.',
-          );
+        if (generation != _coordinateResolutionGeneration) {
+          _log('🗺️ Resolución antigua invalidada.');
 
           return;
         }
 
-        final memoryId =
-            memory.id.trim();
+        final memoryId = memory.id.trim();
 
         if (memoryId.isEmpty) {
-          debugPrint(
-            '⚠️ Recuerdo ignorado porque no tiene ID.',
-          );
+          _log('⚠️ Recuerdo ignorado porque no tiene ID.');
 
           continue;
         }
 
-        if (memoryCoordinates.containsKey(
-          memoryId,
-        )) {
+        if (memoryCoordinates.containsKey(memoryId)) {
           continue;
         }
 
-        if (resolvingMemoryIds.contains(
-          memoryId,
-        )) {
+        if (resolvingMemoryIds.contains(memoryId)) {
           continue;
         }
 
-        resolvingMemoryIds.add(
-          memoryId,
-        );
+        resolvingMemoryIds.add(memoryId);
 
         try {
           LatLng? coordinates;
 
-          debugPrint(
-            '------------------------------------------------------------',
-          );
+          _log('------------------------------------------------------------');
 
-          debugPrint(
-            '📌 PROCESANDO MEMORY',
-          );
+          _log('📌 PROCESANDO MEMORY');
 
-          debugPrint(
-            '📌 ID: $memoryId',
-          );
+          _log('📌 ID: $memoryId');
 
-          debugPrint(
-            '📌 Título: ${memory.title}',
-          );
+          _log('📌 Título: ${memory.title}');
 
-          debugPrint(
-            '📌 Dirección: "${memory.location.address}"',
-          );
+          _log('📌 Dirección: "${memory.location.address}"');
 
-          debugPrint(
-            '📌 Lat: ${memory.location.lat}',
-          );
+          _log('📌 Lat: ${memory.location.lat}');
 
-          debugPrint(
-            '📌 Lng: ${memory.location.lng}',
-          );
+          _log('📌 Lng: ${memory.location.lng}');
 
           // ------------------------------------------------------
           // 1. COORDENADAS DIRECTAS
           // ------------------------------------------------------
 
-          if (_isValidCoordinate(
-            memory.location.lat,
-            memory.location.lng,
-          )) {
-            coordinates = LatLng(
-              memory.location.lat!,
-              memory.location.lng!,
-            );
+          if (_isValidCoordinate(memory.location.lat, memory.location.lng)) {
+            coordinates = LatLng(memory.location.lat!, memory.location.lng!);
 
-            memoryCoordinates[
-              memoryId
-            ] = coordinates;
+            memoryCoordinates[memoryId] = coordinates;
 
-            debugPrint(
+            _log(
               '✅ [$memoryId] '
               'Coordenadas desde memory.location.',
             );
@@ -434,40 +353,24 @@ class MemoryGeocodingService {
           // 2. FALLBACK LEGACY
           // ------------------------------------------------------
 
-          final locationData =
-              _findLocationForMemory(
-            memory,
-            locationsByKey,
-          );
+          final locationData = _findLocationForMemory(memory, locationsByKey);
 
           if (locationData != null) {
-            debugPrint(
+            _log(
               '📍 [$memoryId] '
               'Encontrada location legacy asociada.',
             );
 
-            final lat = _parseCoordinate(
-              locationData['lat'],
-            );
+            final lat = _parseCoordinate(locationData['lat']);
 
-            final lng = _parseCoordinate(
-              locationData['lng'],
-            );
+            final lng = _parseCoordinate(locationData['lng']);
 
-            if (_isValidCoordinate(
-              lat,
-              lng,
-            )) {
-              coordinates = LatLng(
-                lat!,
-                lng!,
-              );
+            if (_isValidCoordinate(lat, lng)) {
+              coordinates = LatLng(lat!, lng!);
 
-              memoryCoordinates[
-                memoryId
-              ] = coordinates;
+              memoryCoordinates[memoryId] = coordinates;
 
-              debugPrint(
+              _log(
                 '✅ [$memoryId] '
                 'Coordenadas desde locations legacy.',
               );
@@ -480,26 +383,17 @@ class MemoryGeocodingService {
           // 3. CACHÉ POR DIRECCIÓN
           // ------------------------------------------------------
 
-          final address =
-              memory.location.address.trim();
+          final address = memory.location.address.trim();
 
           if (address.isNotEmpty) {
-            final cacheKey =
-                _normalizeAddress(
-              address,
-            );
+            final cacheKey = _normalizeAddress(address);
 
-            final cachedCoordinates =
-                geocodedCache[
-                  cacheKey
-                ];
+            final cachedCoordinates = geocodedCache[cacheKey];
 
             if (cachedCoordinates != null) {
-              memoryCoordinates[
-                memoryId
-              ] = cachedCoordinates;
+              memoryCoordinates[memoryId] = cachedCoordinates;
 
-              debugPrint(
+              _log(
                 '✅ [$memoryId] '
                 'Coordenadas recuperadas desde caché.',
               );
@@ -513,7 +407,7 @@ class MemoryGeocodingService {
           // ------------------------------------------------------
 
           if (address.isEmpty) {
-            debugPrint(
+            _log(
               '⚠️ [$memoryId] '
               'No tiene dirección para geocodificar.',
             );
@@ -523,50 +417,37 @@ class MemoryGeocodingService {
 
           String query = address;
 
-          final normalizedAddress =
-              _normalize(address);
+          final normalizedAddress = _normalize(address);
 
-          if (normalizedAddress ==
-              'medellin') {
-            query =
-                'Medellín, Badajoz, España';
+          if (normalizedAddress == 'medellin') {
+            query = 'Medellín, Badajoz, España';
           }
 
-          final normalizedQuery =
-              _normalize(query);
+          final normalizedQuery = _normalize(query);
 
-          if (!normalizedQuery.contains(
-                'espana',
-              ) &&
-              !normalizedQuery.contains(
-                'spain',
-              )) {
-            query =
-                '$query, España';
+          if (!normalizedQuery.contains('espana') &&
+              !normalizedQuery.contains('spain')) {
+            query = '$query, España';
           }
 
-          debugPrint(
+          _log(
             '🔎 [$memoryId] '
             'Geocodificando: "$query"',
           );
 
           try {
-            final results =
-                await locationFromAddress(
-              query,
-            );
+            final results = await locationFromAddress(query);
 
             if (!isActive()) {
               return;
             }
 
-            if (generation !=
-                _coordinateResolutionGeneration) {
+            if (generation != _coordinateResolutionGeneration) {
               return;
             }
 
             if (results.isEmpty) {
-              debugPrint(
+              _log(
                 '⚠️ [$memoryId] '
                 'No se encontraron resultados.',
               );
@@ -577,22 +458,15 @@ class MemoryGeocodingService {
             LatLng? resolvedCoordinates;
 
             for (final result in results) {
-              if (_isValidCoordinate(
-                result.latitude,
-                result.longitude,
-              )) {
-                resolvedCoordinates =
-                    LatLng(
-                  result.latitude,
-                  result.longitude,
-                );
+              if (_isValidCoordinate(result.latitude, result.longitude)) {
+                resolvedCoordinates = LatLng(result.latitude, result.longitude);
 
                 break;
               }
             }
 
             if (resolvedCoordinates == null) {
-              debugPrint(
+              _log(
                 '⚠️ [$memoryId] '
                 'Todos los resultados fueron inválidos.',
               );
@@ -600,28 +474,20 @@ class MemoryGeocodingService {
               continue;
             }
 
-            coordinates =
-                resolvedCoordinates;
+            coordinates = resolvedCoordinates;
 
-            final cacheKey =
-                _normalizeAddress(
-              address,
-            );
+            final cacheKey = _normalizeAddress(address);
 
-            geocodedCache[
-              cacheKey
-            ] = coordinates;
+            geocodedCache[cacheKey] = coordinates;
 
-            memoryCoordinates[
-              memoryId
-            ] = coordinates;
+            memoryCoordinates[memoryId] = coordinates;
 
-            debugPrint(
+            _log(
               '✅ [$memoryId] '
               'Geocodificación correcta.',
             );
 
-            debugPrint(
+            _log(
               '📍 ${coordinates.latitude}, '
               '${coordinates.longitude}',
             );
@@ -636,31 +502,28 @@ class MemoryGeocodingService {
             unawaited(
               _firestoreService
                   .updateMemoryCoordinates(
-                memoryId: memoryId,
-                lat: coordinates.latitude,
-                lng: coordinates.longitude,
-              ).catchError((Object e) {
-                debugPrint(
-                  '⚠️ [$memoryId] '
-                  'No se pudieron guardar las coordenadas '
-                  'geocodificadas: $e',
-                );
-              }),
+                    memoryId: memoryId,
+                    lat: coordinates.latitude,
+                    lng: coordinates.longitude,
+                  )
+                  .catchError((Object e) {
+                    _log(
+                      '⚠️ [$memoryId] '
+                      'No se pudieron guardar las coordenadas '
+                      'geocodificadas: $e',
+                    );
+                  }),
             );
           } catch (e, stack) {
-            debugPrint(
+            _log(
               '❌ [$memoryId] '
               'Error geocodificando "$query": $e',
             );
 
-            debugPrintStack(
-              stackTrace: stack,
-            );
+            _logStack(stackTrace: stack);
           }
         } finally {
-          resolvingMemoryIds.remove(
-            memoryId,
-          );
+          resolvingMemoryIds.remove(memoryId);
         }
       }
 
@@ -668,53 +531,43 @@ class MemoryGeocodingService {
         return;
       }
 
-      if (generation !=
-          _coordinateResolutionGeneration) {
+      if (generation != _coordinateResolutionGeneration) {
         return;
       }
 
-      debugPrint(
-        '============================================================',
-      );
+      _log('============================================================');
 
-      debugPrint(
-        '🗺️ COORDENADAS RESUELTAS',
-      );
+      _log('🗺️ COORDENADAS RESUELTAS');
 
-      debugPrint(
-        '🗺️ ${memoryCoordinates.length}/${memories.length}',
-      );
+      _log('🗺️ ${memoryCoordinates.length}/${memories.length}');
 
-      debugPrint(
+      _log(
         '🗺️ Caché geocodificación: '
         '${geocodedCache.length}',
       );
 
-      debugPrint(
-        '============================================================',
-      );
+      _log('============================================================');
 
       onCoordinatesUpdated();
 
-      WidgetsBinding.instance
-          .addPostFrameCallback(
-        (_) {
-          if (!isActive()) {
-            return;
-          }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!isActive()) {
+          return;
+        }
 
-          if (generation !=
-              _coordinateResolutionGeneration) {
-            return;
-          }
+        if (generation != _coordinateResolutionGeneration) {
+          return;
+        }
 
-          onCameraFitNeeded(
-            memories,
-          );
-        },
-      );
+        onCameraFitNeeded(memories);
+      });
     } finally {
       _isResolvingCoordinates = false;
+
+      if (_hasPendingResolution) {
+        _hasPendingResolution = false;
+        _lastProcessedSignature = '';
+      }
     }
   }
 
@@ -727,58 +580,44 @@ class MemoryGeocodingService {
     double lng,
     String currentAddress,
   ) async {
-    final normalizedAddress =
-        currentAddress.trim();
+    final normalizedAddress = currentAddress.trim();
 
     if (normalizedAddress.isNotEmpty &&
-        !normalizedAddress.startsWith(
-          'GPS:',
-        ) &&
-        !normalizedAddress.startsWith(
-          'Lat:',
-        ) &&
+        !normalizedAddress.startsWith('GPS:') &&
+        !normalizedAddress.startsWith('Lat:') &&
         normalizedAddress.length > 3) {
       return normalizedAddress;
     }
 
     try {
-      final placemarks =
-          await placemarkFromCoordinates(
-        lat,
-        lng,
-      );
+      final placemarks = await placemarkFromCoordinates(lat, lng);
 
       if (placemarks.isNotEmpty) {
-        final place =
-            placemarks.first;
+        final place = placemarks.first;
 
         final locality =
             place.locality ??
-                place.subAdministrativeArea ??
-                place.administrativeArea ??
-                '';
+            place.subAdministrativeArea ??
+            place.administrativeArea ??
+            '';
 
-        final subLocality =
-            place.subLocality ?? '';
+        final subLocality = place.subLocality ?? '';
 
         if (locality.isNotEmpty) {
-          return subLocality.isNotEmpty &&
-                  subLocality != locality
+          return subLocality.isNotEmpty && subLocality != locality
               ? '$subLocality, $locality'
               : locality;
         }
       }
     } catch (e) {
-      debugPrint(
-        '⚠️ Error obteniendo nombre de ubicación: $e',
-      );
+      _log('⚠️ Error obteniendo nombre de ubicación: $e');
     }
 
     return normalizedAddress.isNotEmpty
         ? normalizedAddress
         : 'Ubicación GPS '
-            '(${lat.toStringAsFixed(2)}, '
-            '${lng.toStringAsFixed(2)})';
+              '(${lat.toStringAsFixed(2)}, '
+              '${lng.toStringAsFixed(2)})';
   }
 
   // ============================================================
@@ -798,4 +637,21 @@ class MemoryGeocodingService {
 
     geocodedCache.clear();
   }
+}
+
+// ===========================================================================
+// LOGS
+// ===========================================================================
+//
+// `debugPrint` NO se desactiva en una build de release: sigue escribiendo al
+// log del sistema (Console.app en iOS, logcat en Android), donde lo puede leer
+// cualquiera con el dispositivo delante o un informe de diagnóstico. Este
+// archivo estaba volcando ahí identificadores de usuario, de grupo y datos de
+// ubicación. Con este envoltorio, en release no se escribe nada.
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
+void _logStack({StackTrace? stackTrace}) {
+  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
 }

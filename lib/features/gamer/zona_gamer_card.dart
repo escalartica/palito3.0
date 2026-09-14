@@ -45,11 +45,7 @@ class _ZonaGamerCardState extends State<ZonaGamerCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 90),
         curve: Curves.easeOut,
-        transform: Matrix4.translationValues(
-          translation.dx,
-          translation.dy,
-          0,
-        ),
+        transform: Matrix4.translationValues(translation.dx, translation.dy, 0),
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(

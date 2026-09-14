@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/dock_provider.dart';
+
 import '../tokens/app_colors.dart';
 
-// Paleta de colores neo-brutalista (alias locales sobre AppColors, la
-// fuente única de verdad — ver core/theme/tokens/app_colors.dart).
+// Paleta neo-brutalista (alias locales sobre AppColors, la fuente única de
+// verdad — ver core/theme/tokens/app_colors.dart).
 const Color palitoDark = AppColors.textPrimary;
 const Color palitoYellow = AppColors.primary;
 
-class AppDock extends ConsumerWidget {
-  final List<IconData> items;
-  final int currentIndex;
-  final Function(int) onTap;
+/// Una pestaña del dock. El texto no se pinta —el dock es solo de iconos—
+/// pero es imprescindible para VoiceOver/TalkBack: antes la barra de
+/// navegación principal de la app era literalmente invisible para un lector
+/// de pantalla (tres `GestureDetector` con un `Icon` pelado dentro).
+class DockItem {
+  const DockItem({required this.icon, required this.label});
 
+  final IconData icon;
+  final String label;
+}
+
+/// Barra de navegación flotante.
+///
+/// Ya no decide ni su posición (el `margin` inferior lo pone quien lo coloca,
+/// para que no haya dos márgenes sumándose sin que nadie lo sepa) ni su
+/// visibilidad (la decide la pantalla que lo contiene). Solo se dibuja.
+class AppDock extends StatelessWidget {
   const AppDock({
     super.key,
     required this.items,
@@ -21,80 +32,88 @@ class AppDock extends ConsumerWidget {
     required this.onTap,
   });
 
+  final List<DockItem> items;
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  /// Alto real del dock, para que quien lo coloque pueda reservar el hueco
+  /// exacto por debajo (el FAB de Inicio y el final de la lista lo usan).
+  static const double height = 68;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bool isVisible = ref.watch(dockVisibleProvider);
+  Widget build(BuildContext context) {
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-    return AnimatedSlide(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
-      offset: isVisible ? Offset.zero : const Offset(0, 1.5),
-      child: Container(
-        margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: palitoDark, width: 2.5),
-          boxShadow: const [
-            BoxShadow(color: palitoDark, offset: Offset(4, 4), blurRadius: 0),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (index) {
-              // El estado visual del Dock depende ÚNICAMENTE
-              // de currentIndex.
-              //
-              // Si currentIndex no coincide con index,
-              // el icono nunca se considera seleccionado.
-              final bool isSelected = currentIndex == index;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: palitoDark, width: 2.5),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: palitoDark, offset: Offset(4, 4), blurRadius: 0),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        child: Row(
+          children: List<Widget>.generate(items.length, (int index) {
+            final DockItem item = items[index];
+            final bool isSelected = currentIndex == index;
 
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (!isSelected) HapticFeedback.selectionClick();
-                  onTap(index);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? palitoYellow : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? palitoDark : Colors.transparent,
-                      width: 2,
+            return Expanded(
+              child: Semantics(
+                button: true,
+                selected: isSelected,
+                label: item.label,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    if (!isSelected) HapticFeedback.selectionClick();
+                    onTap(index);
+                  },
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      // 48x48 mínimo: el área táctil anterior era de 42 px de
+                      // alto, por debajo del mínimo de iOS (44) y de Android
+                      // (48).
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? palitoYellow : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? palitoDark : Colors.transparent,
+                          width: 2,
+                        ),
+                        boxShadow: isSelected
+                            ? const <BoxShadow>[
+                                BoxShadow(
+                                  color: palitoDark,
+                                  offset: Offset(2, 2),
+                                  blurRadius: 0,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: ExcludeSemantics(
+                        child: Icon(item.icon, size: 24, color: palitoDark),
+                      ),
                     ),
-                    boxShadow: isSelected
-                        ? const [
-                            BoxShadow(
-                              color: palitoDark,
-                              offset: Offset(2, 2),
-                              blurRadius: 0,
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: isSelected ? 1 : 0),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutBack,
-                    builder: (context, value, child) => Transform.scale(
-                      scale: 1 + (value * 0.18),
-                      child: child,
-                    ),
-                    child: Icon(items[index], size: 26, color: palitoDark),
                   ),
                 ),
-              );
-            }),
-          ),
+              ),
+            );
+          }),
         ),
       ),
     );

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,8 +10,11 @@ import '../../core/providers/household_provider.dart';
 import '../../core/providers/memory_provider.dart';
 import '../../core/providers/gamer_provider.dart';
 import '../../core/services/gamer_firestore_service.dart';
+import '../../core/data/rating_scale.dart';
+import '../../core/services/account_deletion_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/storage_image_service.dart';
-import '../../core/theme/components/neo_pressable.dart';
+import '../../core/theme/components/group_switcher.dart';
 
 // ─── Constantes de color ────────────────────────────────────────────────────
 const _kDark = Color(0xFF0F172A);
@@ -60,21 +62,39 @@ const List<(Color, Color, IconData)> _memberPalette = [
   (Color(0xFF10B981), Color(0xFFD1FAE5), Icons.eco_rounded),
 ];
 
+/// El color de cada persona sale de un hash estable de su uid, no de su
+/// posición en la lista: antes, que alguien entrara o saliera del grupo
+/// cambiaba el color y el icono de todos los demás.
+(Color, Color, IconData) _paletteFor(String uid) =>
+    _memberPalette[uid.hashCode.abs() % _memberPalette.length];
+
 List<_ProfileConfig> _buildMemberTabs({
   required List<String> memberUids,
   required Map<String, dynamic> memberProfiles,
+  required String? myUid,
+  required String? createdBy,
 }) {
+  // Tú siempre primero: la pantalla se llama "Perfil" y lo primero que hay
+  // que poder responder es "¿cuál soy yo?".
+  final List<String> ordered = <String>[
+    ...memberUids.where((String u) => u == myUid),
+    ...memberUids.where((String u) => u != myUid),
+  ];
+
   final tabs = <_ProfileConfig>[
-    for (int i = 0; i < memberUids.length; i++)
+    for (final String uid in ordered)
       () {
-        final uid = memberUids[i];
         final profile = memberProfiles[uid] as Map<String, dynamic>?;
-        final palette = _memberPalette[i % _memberPalette.length];
+        final palette = _paletteFor(uid);
         final name = (profile?['displayName'] as String?)?.trim();
         return _ProfileConfig(
           uid: uid,
-          name: name?.isNotEmpty == true ? name! : 'Miembro',
-          subtitle: 'Miembro del grupo',
+          name: uid == myUid
+              ? (name?.isNotEmpty == true ? name! : 'Tú')
+              : (name?.isNotEmpty == true ? name! : AuthService.unnamedMember),
+          subtitle: uid == myUid
+              ? 'Tu cuenta'
+              : (uid == createdBy ? 'Creó el grupo' : 'Miembro del grupo'),
           color: palette.$1,
           bgCard: palette.$2,
           icon: palette.$3,
@@ -82,12 +102,15 @@ List<_ProfileConfig> _buildMemberTabs({
       }(),
   ];
 
-  if (memberUids.length > 1) {
+  if (ordered.length > 1) {
     tabs.add(
       const _ProfileConfig(
         uid: null,
-        name: 'Team',
-        subtitle: 'Vista conjunta de todo el grupo',
+        // "Team" en una app en español, colado entre nombres de personas como
+        // si fuera una más. Y lo único que cambiaba al tocarlo eran dos
+        // números, sin decirlo en ninguna parte.
+        name: 'Todo el grupo',
+        subtitle: 'Suma de todas las personas del grupo',
         color: _kDark,
         bgCard: _kSlateBg,
         icon: Icons.groups_rounded,
@@ -165,8 +188,15 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage>
     with SingleTickerProviderStateMixin {
   int _selectedProfileIndex = 0;
-  final Map<String, String?> _savedImagePaths = {};
-  List<String> _lastLoadedMemberUids = const [];
+
+  /// Foto recién subida, para verla al instante sin esperar al stream.
+  /// Las demás salen de `activeGroupProfileImagesProvider`, que lee el mismo
+  /// documento del grupo que esta pantalla ya observa — antes se hacía una
+  /// lectura COMPLETA del documento por cada miembro, en serie y sin
+  /// try/catch: un `permission-denied` dejaba a todo el mundo sin foto y sin
+  /// aviso.
+  final Map<String, String> _justUploaded = <String, String>{};
+
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
 
@@ -221,76 +251,138 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
-  // Las fotos de perfil viven en Cloudinary, con su URL guardada en
-  // groups/{groupId}.profileImages, indexado por uid — así son las
-  // mismas en todos los dispositivos del grupo (y las de cada persona
-  // sobreviven aunque cambie el orden de las pestañas).
-  Future<void> _loadProfileImages(String groupId, List<String> uids) async {
-    final resolved = <String, String?>{};
+  Future<void> _pickImageForProfile(String groupId, String uid) async {
+    final XFile? image;
 
-    for (final uid in uids) {
-      resolved[uid] = await StorageImageService.getProfileImageUrl(
-        groupId,
-        uid,
+    try {
+      // Foto de perfil pequeña y circular: no hace falta subirla a
+      // resolución de cámara completa.
+      image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1024,
       );
+    } on PlatformException catch (e) {
+      // Denegar el acceso a Fotos lanzaba una excepción sin capturar: el
+      // selector se cerraba y no pasaba absolutamente nada.
+      if (!mounted) return;
+      _snack(
+        e.code.contains('denied')
+            ? 'Palito no tiene permiso para acceder a tus fotos. Puedes '
+                  'dárselo desde Ajustes.'
+            : 'No se pudo abrir la galería.',
+      );
+      return;
     }
 
-    if (!mounted) return;
-    setState(() => _savedImagePaths.addAll(resolved));
-  }
-
-  Future<void> _pickImageForProfile(String groupId, String uid) async {
-    // Foto de perfil pequeña y circular: no hace falta subirla a
-    // resolución de cámara completa.
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-      maxWidth: 1024,
-    );
     if (image == null) return;
 
     final bytes = await image.readAsBytes();
 
     try {
-      final downloadUrl = await StorageImageService.uploadProfileImage(
+      final String downloadUrl = await StorageImageService.uploadProfileImage(
         groupId: groupId,
-        uid: uid,
         bytes: bytes,
       );
 
       if (!mounted) return;
-      setState(() => _savedImagePaths[uid] = downloadUrl);
+      setState(() => _justUploaded[uid] = downloadUrl);
       HapticFeedback.mediumImpact();
     } catch (e) {
       // Sin esto, un fallo de red al subir la foto quedaba como una
       // excepción sin capturar: ni se avisaba al usuario ni se sabía
       // por qué la foto "no se guardó".
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No se pudo subir la foto. Comprueba tu conexión '
-            'e inténtalo de nuevo.',
-          ),
-        ),
+      _snack(
+        'No se pudo subir la foto. Comprueba tu conexión e inténtalo de nuevo.',
       );
     }
   }
 
-  void _saveProfileChanges() {
-    HapticFeedback.heavyImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '¡Cambios guardados con éxito! 🚀',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: _kDark),
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+
+  // El antiguo botón "Guardar Cambios" no guardaba nada: solo vibraba y
+  // mostraba "¡Cambios guardados con éxito!". La foto ya se sube sola al
+  // elegirla y no había ningún otro campo editable en la pantalla. Se ha
+  // eliminado: cada acción guarda al instante y lo dice.
+
+  /// Cambiar tu nombre. Antes no existía NINGUNA pantalla en toda la app para
+  /// hacerlo, así que quien se quedaba con un nombre derivado de su correo
+  /// (`gdvcgp2gdt`) no tenía forma de arreglarlo.
+  Future<void> _editDisplayName() async {
+    final String? uid = ref.read(currentUidProvider);
+    if (uid == null) return;
+
+    final TextEditingController controller = TextEditingController(
+      text: ref.read(currentDisplayNameProvider) ?? '',
+    );
+
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Tu nombre'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            counterText: '',
+            hintText: 'Cómo quieres que te llamen',
+          ),
+          onSubmitted: (String v) => Navigator.pop(dialogContext, v),
         ),
-        backgroundColor: _kYellow,
-        behavior: SnackBarBehavior.floating,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Guardar'),
+          ),
+        ],
       ),
     );
+
+    controller.dispose();
+
+    if (newName == null || newName.trim().isEmpty || !mounted) return;
+
+    try {
+      await ref
+          .read(authServiceProvider)
+          .updateDisplayName(
+            uid: uid,
+            displayName: newName,
+            groupIds: ref.read(userGroupIdsProvider),
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Nombre actualizado'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo guardar el nombre.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   // ─── Cuenta: cerrar sesión / eliminar cuenta ────────────────────────────
@@ -335,11 +427,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       builder: (context) => AlertDialog(
         title: const Text('Eliminar tu cuenta'),
         content: const Text(
-          'Se eliminará tu cuenta y saldrás de todos tus grupos '
-          'compartidos. Los recuerdos, fotos y estadísticas que hayas '
-          'compartido NO se borran, por si alguien más los sigue usando '
-          'o vuelves a unirte más adelante. Esta acción no se puede '
-          'deshacer para tu cuenta personal.',
+          'Se eliminará tu cuenta y saldrás de todos tus grupos. Tu diario '
+          'personal y cualquier grupo en el que estés tú solo se borran por '
+          'completo. En los grupos donde quede más gente, el contenido '
+          'compartido sigue ahí para ellos. Esta acción no se puede '
+          'deshacer.',
         ),
         actions: [
           TextButton(
@@ -350,7 +442,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               'Continuar',
-              style: GoogleFonts.inter(color: _kRed, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(
+                color: _kRed,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -372,7 +467,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               'Sí, eliminar mi cuenta',
-              style: GoogleFonts.inter(color: _kRed, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(
+                color: _kRed,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -385,16 +483,19 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       await ref.read(accountDeletionServiceProvider).deleteAccount();
       // Éxito: authStateChangesProvider emite null y el redirect de
       // GoRouter saca de aquí solo — no hace falta navegar a mano.
+    } on AccountDeletionCancelled {
+      // Cancelar la hoja de Apple no es un error: no se ha borrado nada.
+      // Antes se mostraba "No se pudo eliminar la cuenta, comprueba tu
+      // conexión" y, peor, los datos YA se habían borrado en ese punto.
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      _snack('Borrado cancelado. No se ha eliminado nada.');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No se pudo eliminar la cuenta. Comprueba tu conexión e '
-            'inténtalo de nuevo.',
-          ),
-        ),
+      _snack(
+        'No se pudo eliminar la cuenta. Comprueba tu conexión e '
+        'inténtalo de nuevo.',
       );
     }
   }
@@ -420,41 +521,81 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             ?.cast<String, dynamic>() ??
         const {};
 
-    // Carga (o recarga) las fotos de perfil en cuanto se conoce la lista
-    // real de miembros — puede tardar un instante en el primer frame
-    // mientras se resuelve el stream de Firestore, y puede cambiar más
-    // adelante si alguien se une al grupo con esta pantalla ya abierta.
-    if (groupId != null &&
-        memberUids.isNotEmpty &&
-        !listEquals(memberUids, _lastLoadedMemberUids)) {
-      _lastLoadedMemberUids = memberUids;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loadProfileImages(groupId, memberUids);
-      });
-    }
+    // Las fotos salen del documento del grupo que esta pantalla YA observa.
+    // Antes se lanzaba un efecto secundario desde dentro de build() (mutando
+    // un campo del State), que además hacía una lectura completa del
+    // documento por cada miembro, en serie y sin try/catch.
+    final Map<String, String> profileImages = <String, String>{
+      ...ref.watch(activeGroupProfileImagesProvider),
+      ..._justUploaded,
+    };
+
+    final String? myUid = ref.watch(currentUidProvider);
+    final String? createdBy = ref.watch(activeGroupCreatedByProvider);
+    final String? groupName =
+        ref.watch(activeGroupDocProvider).valueOrNull?['name'] as String?;
+    final String? personalGroupId = ref.watch(personalGroupIdProvider);
+    final bool isPersonalGroup = groupId != null && groupId == personalGroupId;
+    final String scopeLabel = isPersonalGroup
+        ? 'Mi diario'
+        : (groupName ?? 'este grupo');
 
     final tabs = _buildMemberTabs(
       memberUids: memberUids,
       memberProfiles: memberProfiles,
+      myUid: myUid,
+      createdBy: createdBy,
     );
 
     if (tabs.isEmpty) {
-      return const Scaffold(
+      // Antes se devolvía un Scaffold con SOLO un spinner: sin AppBar y sin
+      // botón de volver. Si el grupo activo dejaba de ser accesible (te
+      // expulsaron, o saliste de él), el usuario quedaba atrapado ahí.
+      return Scaffold(
         backgroundColor: _kBg,
-        body: Center(child: CircularProgressIndicator()),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Cargando tu perfil…',
+                    style: GoogleFonts.inter(fontSize: 14, color: _kDark),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      ref.read(activeGroupIdOverrideProvider.notifier).state =
+                          null;
+                    },
+                    child: const Text('Volver a mi diario'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       );
     }
 
     final int safeIndex = _selectedProfileIndex.clamp(0, tabs.length - 1);
     final config = tabs[safeIndex];
-    final imagePath = config.uid == null
+    final String? imagePath = config.uid == null
         ? null
-        : _savedImagePaths[config.uid];
+        : profileImages[config.uid];
+    final bool isMyTab = config.uid != null && config.uid == myUid;
 
     final total = memories.length;
-    final avgRating = total > 0
-        ? memories.map((m) => m.rating).reduce((a, b) => a + b) / total
-        : 0.0;
+    // Solo cuentan los recuerdos que SÍ tienen nota: dividir entre el total
+    // hacía que, con cuatro recuerdos heredados sin puntuar y uno de 4,5, la
+    // "Nota Media" saliera 0,9 — y con todos heredados, exactamente 0,0.
+    final double? avgRating = RatingScale.average(
+      memories.map((m) => m.rating),
+    );
     final returnPct = total > 0
         ? memories.where((m) => m.wouldReturn).length / total * 100
         : 0.0;
@@ -469,227 +610,292 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: CustomScrollView(
-        slivers: [
-          _buildAppBar(context),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // ── Selector de perfil ──────────────────────────────────
-                _fadeSlide(
-                  _tabBarAnim,
-                  _ProfileTabBar(
-                    tabs: tabs,
-                    selectedIndex: safeIndex,
-                    onSelect: (i) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selectedProfileIndex = i);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Cabecera ────────────────────────────────────────────
-                _fadeSlide(
-                  _headerAnim,
-                  _ProfileHeader(
-                    config: config,
-                    imagePath: imagePath,
-                    // La pestaña "Team" no representa a ninguna cuenta real,
-                    // así que no tiene foto propia que cambiar.
-                    onTapImage: (groupId == null || config.uid == null)
-                        ? null
-                        : () => _pickImageForProfile(groupId, config.uid!),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Stats Gamer ─────────────────────────────────────────
-                _fadeSlide(
-                  _gamerStatsAnim,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle('Estadísticas Gamer de Sesión'),
-                      const SizedBox(height: 12),
-                      gamerStatsAsync.when(
-                        loading: () => const _GamerStatsRow(),
-                        error: (_, _) => const _GamerStatsRow(
-                          pointsValue: 0,
-                          streakValue: 0,
-                        ),
-                        data: (gamerStats) {
-                          final s = gamerStats == null
-                              ? GamerPlayerStats.empty(
-                                  uid: '',
-                                  displayName: config.name,
-                                )
-                              : _selectStats(gamerStats, config);
-                          return _GamerStatsRow(
-                            pointsValue: s.gamerPoints,
-                            streakValue: s.streak,
-                          );
+            slivers: [
+              _buildAppBar(context),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // ── Selector de perfil ──────────────────────────────────
+                    _fadeSlide(
+                      _tabBarAnim,
+                      _ProfileTabBar(
+                        tabs: tabs,
+                        selectedIndex: safeIndex,
+                        onSelect: (i) {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedProfileIndex = i);
                         },
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 24),
 
-                // ── Bitácora ────────────────────────────────────────────
-                _fadeSlide(
-                  _bitacoraAnim,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle('Bitácora y Recuerdos'),
-                      const SizedBox(height: 12),
-                      Row(
+                    // ── Cabecera ────────────────────────────────────────────
+                    _fadeSlide(
+                      _headerAnim,
+                      _ProfileHeader(
+                        config: config,
+                        imagePath: imagePath,
+                        // SOLO tu propia foto. Antes bastaba con estar en la
+                        // pestaña de otra persona para subirle una foto desde tu
+                        // galería — y las reglas de Firestore lo permitían.
+                        onTapImage: (groupId == null || !isMyTab)
+                            ? null
+                            : () => _pickImageForProfile(groupId, config.uid!),
+                        onEditName: isMyTab ? _editDisplayName : null,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── Stats Gamer ─────────────────────────────────────────
+                    _fadeSlide(
+                      _gamerStatsAnim,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: _MetricCard(
-                              title: 'Registros',
-                              numericValue: total.toDouble(),
-                              valueBuilder: (v) => '${v.round()}',
-                              icon: Icons.book_rounded,
+                          _SectionTitle(
+                            config.uid == null
+                                ? 'Puntos de todo el grupo'
+                                : (isMyTab
+                                      ? 'Tus puntos'
+                                      : 'Puntos de ${config.name}'),
+                          ),
+                          const SizedBox(height: 12),
+                          gamerStatsAsync.when(
+                            loading: () => const _GamerStatsRow(),
+                            // Mostrar "0 puntos" cuando en realidad ha fallado la
+                            // lectura es indistinguible de un usuario nuevo, y
+                            // alarmante para uno veterano.
+                            error: (_, _) =>
+                                const _GamerStatsRow(hasError: true),
+                            data: (gamerStats) {
+                              final s = gamerStats == null
+                                  ? GamerPlayerStats.empty(
+                                      uid: '',
+                                      displayName: config.name,
+                                    )
+                                  : _selectStats(gamerStats, config);
+                              return _GamerStatsRow(
+                                pointsValue: s.gamerPoints,
+                                streakValue: s.streak,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── Bitácora ────────────────────────────────────────────
+                    _fadeSlide(
+                      _bitacoraAnim,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Estas cuatro cifras son del GRUPO entero, no de la
+                          // persona cuya pestaña está seleccionada. Antes no se
+                          // decía en ninguna parte, así que al cambiar de pestaña
+                          // "no cambiaba nada" y la pantalla resultaba
+                          // incomprensible.
+                          _SectionTitle('Bitácora de $scopeLabel'),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _MetricCard(
+                                  title: 'Registros',
+                                  numericValue: total.toDouble(),
+                                  valueBuilder: (v) => '${v.round()}',
+                                  icon: Icons.book_rounded,
+                                  color: _kDark,
+                                  bgColor: _kSlateBg,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: avgRating == null
+                                    ? const _MetricCard(
+                                        title: 'Nota Media',
+                                        value: '—',
+                                        icon: Icons.star_half_rounded,
+                                        color: _kYellow,
+                                        bgColor: _kYellowBg,
+                                      )
+                                    : _MetricCard(
+                                        title: 'Nota Media',
+                                        numericValue: avgRating,
+                                        valueBuilder: (v) =>
+                                            v.toStringAsFixed(1),
+                                        icon: Icons.star_half_rounded,
+                                        color: _kYellow,
+                                        bgColor: _kYellowBg,
+                                      ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _MetricCard(
+                                  title: 'Índice de Retorno',
+                                  numericValue: returnPct,
+                                  valueBuilder: (v) => '${v.round()}%',
+                                  icon: Icons.thumb_up_rounded,
+                                  color: const Color(0xFF10B981),
+                                  bgColor: const Color(0xFFD1FAE5),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _MetricCard(
+                                  title: 'Categorías',
+                                  numericValue: categoryCounts.keys.length
+                                      .toDouble(),
+                                  valueBuilder: (v) => '${v.round()}',
+                                  icon: Icons.category_rounded,
+                                  color: Colors.deepPurple,
+                                  bgColor: Colors.purple.shade50,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ── Categorías ──────────────────────────────────────────
+                    _fadeSlide(
+                      _categoriesAnim,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionTitle('Categorías de $scopeLabel'),
+                          const SizedBox(height: 14),
+                          if (categoryCounts.isEmpty)
+                            const _EmptyCategoriesPlaceholder()
+                          else
+                            ...categoryCounts.entries.map(
+                              (e) => _CategoryBar(
+                                category: e.key,
+                                count: e.value,
+                                total: total,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ── Grupos ────────────────────────────────────────────────
+                    _fadeSlide(
+                      _saveButtonAnim,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Aquí es donde el usuario busca "quitar a alguien" o
+                          // "salir del grupo". Antes esas acciones existían pero
+                          // solo se llegaba a ellas desde un chip pequeño en
+                          // Inicio, cuatro niveles por debajo.
+                          const _SectionTitle('Grupos'),
+                          const SizedBox(height: 12),
+                          _AccountActionTile(
+                            icon: Icons.swap_horiz_rounded,
+                            label: 'Estás en: $scopeLabel · Cambiar',
+                            color: _kDark,
+                            bgColor: _kSlateBg,
+                            isLoading: false,
+                            onTap: () => openGroupSwitcher(context, ref),
+                          ),
+                          const SizedBox(height: 12),
+                          _AccountActionTile(
+                            icon: Icons.people_alt_rounded,
+                            label: isPersonalGroup
+                                ? 'Tu diario es privado'
+                                : 'Miembros de $scopeLabel (${memberUids.length})',
+                            color: _kDark,
+                            bgColor: _kYellowBg,
+                            isLoading: false,
+                            onTap: groupId == null
+                                ? null
+                                : () => openGroupMembersSheet(
+                                    context,
+                                    ref,
+                                    groupId: groupId,
+                                    groupData:
+                                        ref
+                                            .read(activeGroupDocProvider)
+                                            .valueOrNull ??
+                                        const <String, dynamic>{},
+                                  ),
+                          ),
+                          if (!isPersonalGroup && groupId != null) ...[
+                            const SizedBox(height: 12),
+                            _AccountActionTile(
+                              icon: Icons.person_add_alt_1_rounded,
+                              label: 'Invitar con un código',
                               color: _kDark,
-                              bgColor: _kSlateBg,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _MetricCard(
-                              title: 'Nota Media',
-                              numericValue: avgRating,
-                              valueBuilder: (v) => v.toStringAsFixed(1),
-                              icon: Icons.star_half_rounded,
-                              color: _kYellow,
                               bgColor: _kYellowBg,
+                              isLoading: false,
+                              onTap: () => context.push(
+                                '/invite-partner',
+                                extra: groupId,
+                              ),
                             ),
+                          ],
+                          const SizedBox(height: 12),
+                          _AccountActionTile(
+                            icon: Icons.group_add_rounded,
+                            label: 'Crear grupo o unirme con un código',
+                            color: _kDark,
+                            bgColor: _kYellowBg,
+                            isLoading: false,
+                            onTap: () => context.push('/household-setup'),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      Row(
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── Cuenta ──────────────────────────────────────────────
+                    _fadeSlide(
+                      _saveButtonAnim,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: _MetricCard(
-                              title: 'Índice de Retorno',
-                              numericValue: returnPct,
-                              valueBuilder: (v) => '${v.round()}%',
-                              icon: Icons.thumb_up_rounded,
-                              color: const Color(0xFF10B981),
-                              bgColor: const Color(0xFFD1FAE5),
-                            ),
+                          const _SectionTitle('Cuenta'),
+                          const SizedBox(height: 12),
+                          _AccountActionTile(
+                            icon: Icons.logout_rounded,
+                            label: 'Cerrar sesión',
+                            color: _kDark,
+                            bgColor: _kSlateBg,
+                            isLoading: _isSigningOut,
+                            onTap: _isSigningOut || _isDeletingAccount
+                                ? null
+                                : _handleSignOut,
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _MetricCard(
-                              title: 'Categorías',
-                              numericValue: categoryCounts.keys.length
-                                  .toDouble(),
-                              valueBuilder: (v) => '${v.round()}',
-                              icon: Icons.category_rounded,
-                              color: Colors.deepPurple,
-                              bgColor: Colors.purple.shade50,
-                            ),
+                          const SizedBox(height: 12),
+                          _AccountActionTile(
+                            icon: Icons.delete_forever_rounded,
+                            label: 'Eliminar cuenta',
+                            color: _kRed,
+                            bgColor: _kRedBg,
+                            isLoading: _isDeletingAccount,
+                            onTap: _isSigningOut || _isDeletingAccount
+                                ? null
+                                : _handleDeleteAccount,
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 30),
+                  ]),
                 ),
-                const SizedBox(height: 32),
-
-                // ── Categorías ──────────────────────────────────────────
-                _fadeSlide(
-                  _categoriesAnim,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle('Categorías Principales'),
-                      const SizedBox(height: 14),
-                      if (categoryCounts.isEmpty)
-                        const _EmptyCategoriesPlaceholder()
-                      else
-                        ...categoryCounts.entries.map(
-                          (e) => _CategoryBar(
-                            category: e.key,
-                            count: e.value,
-                            total: total,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // ── Grupos ────────────────────────────────────────────────
-                _fadeSlide(
-                  _saveButtonAnim,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle('Grupos'),
-                      const SizedBox(height: 12),
-                      _AccountActionTile(
-                        icon: Icons.group_add_rounded,
-                        label: 'Compartir con alguien',
-                        color: _kDark,
-                        bgColor: _kYellowBg,
-                        isLoading: false,
-                        onTap: () => context.push('/household-setup'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Cuenta ──────────────────────────────────────────────
-                _fadeSlide(
-                  _saveButtonAnim,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionTitle('Cuenta'),
-                      const SizedBox(height: 12),
-                      _AccountActionTile(
-                        icon: Icons.logout_rounded,
-                        label: 'Cerrar sesión',
-                        color: _kDark,
-                        bgColor: _kSlateBg,
-                        isLoading: _isSigningOut,
-                        onTap: _isSigningOut || _isDeletingAccount
-                            ? null
-                            : _handleSignOut,
-                      ),
-                      const SizedBox(height: 12),
-                      _AccountActionTile(
-                        icon: Icons.delete_forever_rounded,
-                        label: 'Eliminar cuenta',
-                        color: _kRed,
-                        bgColor: _kRedBg,
-                        isLoading: _isDeletingAccount,
-                        onTap: _isSigningOut || _isDeletingAccount
-                            ? null
-                            : _handleDeleteAccount,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Botón guardar ───────────────────────────────────────
-                _fadeSlide(
-                  _saveButtonAnim,
-                  _SaveButton(onPressed: _saveProfileChanges),
-                ),
-                const SizedBox(height: 30),
-              ]),
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -771,14 +977,21 @@ class _ProfileTabBar extends StatelessWidget {
       borderWidth: 2,
       shadowOffset: const Offset(3, 3),
     ),
-    child: Row(
-      children: List.generate(
-        tabs.length,
-        (i) => _ProfileTab(
-          index: i,
-          label: tabs[i].name,
-          isSelected: selectedIndex == i,
-          onTap: () => onSelect(i),
+    // Cada pestaña era `Expanded`: con cuatro miembros, cada una medía
+    // ancho/4 y un nombre de 11 caracteres se salía del recuadro amarillo y
+    // pisaba al vecino. Ahora cada pestaña mide lo suyo y la tira se
+    // desplaza en horizontal cuando no caben.
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          tabs.length,
+          (i) => _ProfileTab(
+            label: tabs[i].name,
+            isSelected: selectedIndex == i,
+            onTap: () => onSelect(i),
+          ),
         ),
       ),
     ),
@@ -787,18 +1000,19 @@ class _ProfileTabBar extends StatelessWidget {
 
 class _ProfileTab extends StatelessWidget {
   const _ProfileTab({
-    required this.index,
     required this.label,
     required this.isSelected,
     required this.onTap,
   });
-  final int index;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Expanded(
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: isSelected,
+    label: label,
     child: Material(
       color: Colors.transparent,
       child: InkWell(
@@ -806,7 +1020,8 @@ class _ProfileTab extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          constraints: const BoxConstraints(minWidth: 92, minHeight: 48),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected ? _kYellow : Colors.transparent,
@@ -822,12 +1037,18 @@ class _ProfileTab extends StatelessWidget {
                   ]
                 : null,
           ),
-          child: Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: isSelected ? _kDark : Colors.grey.shade600,
+          child: ExcludeSemantics(
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                // grey.shade600 sobre blanco da 4,0:1 — por debajo de AA.
+                color: isSelected ? _kDark : const Color(0xFF5A6572),
+              ),
             ),
           ),
         ),
@@ -842,10 +1063,14 @@ class _ProfileHeader extends StatelessWidget {
     required this.config,
     required this.imagePath,
     required this.onTapImage,
+    this.onEditName,
   });
   final _ProfileConfig config;
   final String? imagePath;
   final VoidCallback? onTapImage;
+
+  /// Solo se pasa en tu propia pestaña.
+  final VoidCallback? onEditName;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -854,9 +1079,12 @@ class _ProfileHeader extends StatelessWidget {
     child: Row(
       children: [
         Tooltip(
+          // El tooltip anterior decía "Cambiar foto de perfil" también en la
+          // pestaña de otra persona, confirmando una acción que no debería
+          // existir.
           message: onTapImage == null
               ? config.name
-              : 'Cambiar foto de perfil',
+              : 'Cambiar tu foto de perfil',
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -932,42 +1160,72 @@ class _ProfileHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                config.name,
-                style: GoogleFonts.outfit(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: _kDark,
-                ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      config.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: _kDark,
+                      ),
+                    ),
+                  ),
+                  if (onEditName != null)
+                    IconButton(
+                      onPressed: onEditName,
+                      tooltip: 'Cambiar tu nombre',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      icon: const Icon(Icons.edit_rounded, size: 18),
+                      color: _kDark,
+                    ),
+                ],
               ),
-              const SizedBox(height: 4),
               Text(
                 config.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: Colors.grey.shade700,
+                  color: const Color(0xFF5A6572),
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(
-                    Icons.touch_app_rounded,
-                    size: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Toca la foto para cambiarla',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                      fontStyle: FontStyle.italic,
+              // Este texto se mostraba SIEMPRE, incluso en la pestaña de otra
+              // persona y en la vista de grupo, donde tocar la foto no hacía
+              // nada.
+              if (onTapImage != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.touch_app_rounded,
+                      size: 12,
+                      color: Color(0xFF5A6572),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'Toca la foto para cambiarla',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: const Color(0xFF5A6572),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -978,9 +1236,17 @@ class _ProfileHeader extends StatelessWidget {
 
 // ── Fila de stats gamer ───────────────────────────────────────────────────────
 class _GamerStatsRow extends StatelessWidget {
-  const _GamerStatsRow({this.pointsValue, this.streakValue});
+  const _GamerStatsRow({
+    this.pointsValue,
+    this.streakValue,
+    this.hasError = false,
+  });
   final int? pointsValue;
   final int? streakValue;
+
+  /// "—" en vez de un 0 inventado: un fallo de lectura no debe parecer que
+  /// el usuario ha perdido sus puntos.
+  final bool hasError;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -988,9 +1254,9 @@ class _GamerStatsRow extends StatelessWidget {
       Expanded(
         child: _MetricCard(
           title: 'Puntos Totales',
-          value: pointsValue == null ? '…' : null,
-          numericValue: pointsValue?.toDouble(),
-          valueBuilder: (v) => '${v.round()}',
+          value: hasError ? '—' : (pointsValue == null ? '…' : null),
+          numericValue: hasError ? null : pointsValue?.toDouble(),
+          valueBuilder: hasError ? null : (v) => '${v.round()}',
           icon: Icons.star_rounded,
           color: _kYellow,
           bgColor: _kYellowBg,
@@ -1000,9 +1266,9 @@ class _GamerStatsRow extends StatelessWidget {
       Expanded(
         child: _MetricCard(
           title: 'Decisiones / Racha',
-          value: streakValue == null ? '…' : null,
-          numericValue: streakValue?.toDouble(),
-          valueBuilder: (v) => '${v.round()}',
+          value: hasError ? '—' : (streakValue == null ? '…' : null),
+          numericValue: hasError ? null : streakValue?.toDouble(),
+          valueBuilder: hasError ? null : (v) => '${v.round()}',
           icon: Icons.local_fire_department_rounded,
           color: _kRed,
           bgColor: _kRedBg,
@@ -1238,12 +1504,19 @@ class _AccountActionTile extends StatelessWidget {
                     : Icon(icon, size: 22, color: color),
               ),
               const SizedBox(width: 12),
-              Text(
-                label,
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: color,
+              // Estas etiquetas ahora llevan el nombre del grupo dentro
+              // ("Miembros de Cena de los viernes (3)"), así que sin
+              // `Flexible` + `ellipsis` desbordarían con un nombre largo.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
                 ),
               ),
             ],
@@ -1266,39 +1539,6 @@ class _SectionTitle extends StatelessWidget {
       fontSize: 18,
       fontWeight: FontWeight.w900,
       color: _kDark,
-    ),
-  );
-}
-
-// ── Botón guardar ─────────────────────────────────────────────────────────────
-class _SaveButton extends StatelessWidget {
-  const _SaveButton({required this.onPressed});
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: double.infinity,
-    height: 56,
-    child: NeoPressable(
-      onTap: onPressed,
-      color: _kYellow,
-      borderWidth: 2,
-      shadowOffset: const Offset(4, 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.save_rounded, size: 22, color: _kDark),
-          const SizedBox(width: 10),
-          Text(
-            'Guardar Cambios',
-            style: GoogleFonts.outfit(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: _kDark,
-            ),
-          ),
-        ],
-      ),
     ),
   );
 }

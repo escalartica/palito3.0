@@ -9,6 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:palito_3_0/core/providers/gamer_provider.dart';
+import 'package:palito_3_0/core/providers/household_provider.dart';
+import 'package:palito_3_0/core/utils/app_log.dart';
 import 'package:palito_3_0/core/theme/components/neo_pressable.dart';
 import '../gamer/zona_gamer_card.dart';
 import 'data/gamer_content.dart';
@@ -40,20 +42,25 @@ class _GamerPageState extends ConsumerState<GamerPage>
   // 0: Ruleta Pro  |  1: Juicio Picante
   int _selectedMode = 0;
 
+  // Los comensales por defecto se llamaban 'CeH' y 'Eme' — los nombres de
+  // quienes desarrollaron la app. Cualquier persona que se descargara Palito
+  // encontraba a dos desconocidos sentados a su mesa.
   List<Map<String, dynamic>> _players = [
     {
-      'name': 'CeH',
+      'name': 'Tú',
       'icon': Icons.person_rounded,
       'color': _kYellow,
       'points': 0,
       'medals': 0,
+      'uid': null,
     },
     {
-      'name': 'Eme',
+      'name': 'Invitado',
       'icon': Icons.favorite_rounded,
       'color': _kRed,
       'points': 0,
       'medals': 0,
+      'uid': null,
     },
     {
       'name': '🤖 Palito App',
@@ -61,6 +68,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
       'color': _kDark,
       'points': 0,
       'medals': 0,
+      'uid': null,
     },
   ];
 
@@ -94,7 +102,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -168,14 +176,49 @@ class _GamerPageState extends ConsumerState<GamerPage>
       );
       _checkAndUnlockAchievements(maxPts, _decisionsCount, fromLoad: true);
 
+      // Ninguna fila por defecto traía `uid`, y `_syncGamerStats` solo
+      // sincroniza la fila vinculada: los puntos NUNCA llegaban a la cuenta
+      // y el Perfil mostraba 0 indefinidamente. La única pista de que había
+      // que vincular era un texto gris de 11 px que nadie leía.
+      _autoLinkMyPlayer();
+
       // Re-sincronizamos con Firestore al entrar a la pantalla para que
       // Profile quede alineado con los puntos locales reales, incluso si
       // el último guardado se hizo antes de corregir la sincronización.
       await _syncGamerStats();
     } catch (e, st) {
-      debugPrint('Error cargando datos del Gamer: $e');
-      debugPrintStack(stackTrace: st);
+      AppLog.e('Error cargando datos del Gamer', e, st);
     }
+  }
+
+  /// Vincula automáticamente tu fila de la mesa la primera vez, para que tus
+  /// puntos lleguen a tu cuenta sin que tengas que descubrir un gesto. Si ya
+  /// hay una fila vinculada, no toca nada.
+  void _autoLinkMyPlayer() {
+    final String? uid = ref.read(gamerServiceProvider).currentUid;
+    if (uid == null) return;
+
+    final bool alreadyLinked = _players.any(
+      (Map<String, dynamic> p) => p['uid'] == uid,
+    );
+    if (alreadyLinked) return;
+
+    final String? myName = ref.read(currentDisplayNameProvider);
+
+    int index = _players.indexWhere((Map<String, dynamic> p) {
+      final String name = p['name']?.toString() ?? '';
+      return name == 'Tú' ||
+          (myName != null && name.toLowerCase() == myName.toLowerCase());
+    });
+
+    if (index == -1) return;
+
+    setState(() {
+      _players[index]['uid'] = uid;
+      if (myName != null && myName.isNotEmpty) {
+        _players[index]['name'] = myName;
+      }
+    });
   }
 
   Future<void> _savePersistedData() async {
@@ -201,8 +244,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
       await prefs.setString('palito_players_data', jsonEncode(serialized));
       await _syncGamerStats();
     } catch (e, st) {
-      debugPrint('Error guardando datos y sincronizando con Firestore: $e');
-      debugPrintStack(stackTrace: st);
+      AppLog.e('Error guardando datos del Gamer', e, st);
     }
   }
 
@@ -420,6 +462,44 @@ class _GamerPageState extends ConsumerState<GamerPage>
     _savePersistedData();
   }
 
+  /// Confirma antes de quitar a alguien de la mesa. La pulsación larga
+  /// borraba al instante, sin diálogo, sin deshacer y sin que en ninguna
+  /// parte se dijera que ese gesto existía.
+  Future<void> _confirmRemovePlayer(int index) async {
+    if (index < 0 || index >= _players.length) return;
+    if (_players.length <= 1) {
+      _showFeedbackSnackbar('Debe quedar al menos un comensal');
+      return;
+    }
+
+    final String name = _players[index]['name']?.toString() ?? 'Comensal';
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text('¿Quitar a $name de la mesa?'),
+        content: const Text(
+          'Sus puntos de esta sesión se pierden. Puedes volver a añadirlo '
+          'cuando quieras.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    _removePlayer(index);
+  }
+
   void _removePlayer(int index) {
     if (index < 0 || index >= _players.length) return;
     if (_players.length <= 1) {
@@ -485,9 +565,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _selectedWinner = null;
       _currentChallenge = null;
       _highlightedIndex = -1;
-      for (final a in _achievements) {
-        a['unlocked'] = false;
-      }
+      // Los logros NO se vuelven a bloquear: un logro conseguido no debería
+      // perderse al reiniciar la puntuación de una sesión de juego.
     });
     _savePersistedData();
     HapticFeedback.mediumImpact();
@@ -702,9 +781,38 @@ class _GamerPageState extends ConsumerState<GamerPage>
         decisionsCount: _decisionsCount,
         historyCount: _history.length,
         onViewBadges: _showBadgesModal,
-        onResetSession: _resetSessionScores,
+        onResetSession: _confirmResetSession,
       ),
     );
+  }
+
+  /// Reiniciar la sesión borraba puntos, medallas e historial al instante,
+  /// sin confirmación y sin forma de deshacerlo.
+  Future<void> _confirmResetSession() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('¿Reiniciar la sesión?'),
+        content: const Text(
+          'Se ponen a cero los puntos, las medallas y el historial de esta '
+          'mesa. Los logros conseguidos se mantienen. No se puede deshacer.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Reiniciar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    _resetSessionScores();
   }
 
   void _showAddPlayerDialog() {
@@ -726,6 +834,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _selectedWinner = null;
       _currentChallenge = null;
     });
+    // El pulso solo mientras gira.
+    _pulseController.repeat(reverse: true);
     HapticFeedback.heavyImpact();
 
     final random = Random();
@@ -788,6 +898,17 @@ class _GamerPageState extends ConsumerState<GamerPage>
           if (_history.length > 5) _history.removeLast();
         });
 
+        _pulseController.stop();
+
+        // Arrancar la animación AQUÍ, en el mismo turno que el setState que
+        // hace visible el panel. Antes se llamaba después de `await
+        // _savePersistedData()` y de una escritura de red: como
+        // `Transform.scale` no colapsa el layout, el panel dejaba de pintarse
+        // pero seguía ocupando su sitio — el hueco vertical enorme de Zona
+        // Gamer.
+        _winnerScaleController.forward(from: 0.0);
+        HapticFeedback.vibrate();
+
         _showFeedbackSnackbar(
           _selectedMode == 0
               ? '🍽️ ¡A $winnerName le toca elegir plato!'
@@ -806,17 +927,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
                 pointsAwarded: pointsWon,
               );
         } catch (e, st) {
-          debugPrint('Error sincronizando evento de ruleta: $e');
-          debugPrintStack(stackTrace: st);
+          AppLog.e('Error sincronizando evento de ruleta', e, st);
         }
-
-        if (!mounted) return;
-        _winnerScaleController.forward(from: 0.0);
-        HapticFeedback.vibrate();
       } catch (e, st) {
-        debugPrint('Error durante el giro de la ruleta: $e');
-        debugPrintStack(stackTrace: st);
+        AppLog.e('Error durante el giro de la ruleta', e, st);
         if (!mounted) return;
+        _pulseController.stop();
         setState(() {
           _isSpinning = false;
           _selectedWinner = null;
@@ -949,515 +1065,541 @@ class _GamerPageState extends ConsumerState<GamerPage>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 60),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Selector de modo ──────────────────────────────────────────
-              ModeSelector(
-                selectedMode: _selectedMode,
-                onSelect: (m) {
-                  HapticFeedback.selectionClick();
-                  setState(() => _selectedMode = m);
-                },
-              ),
-              const SizedBox(height: 20),
-
-              // ── Panel resultado / ruleta ───────────────────────────────────
-              ScaleTransition(
-                scale: _selectedWinner != null
-                    ? _winnerScaleAnimation
-                    : const AlwaysStoppedAnimation(1.0),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(26),
-                  decoration: BoxDecoration(
-                    color: _selectedMode == 0 ? _kYellow : _kRed,
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: _kDark, width: 2),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: _kDark,
-                        offset: Offset(4, 4),
-                        blurRadius: 0,
-                      ),
-                    ],
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 60),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Selector de modo ──────────────────────────────────────────
+                  ModeSelector(
+                    selectedMode: _selectedMode,
+                    onSelect: (m) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _selectedMode = m);
+                    },
                   ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: _kDark, width: 1.5),
-                        ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/icons/IconoRedondoTenedor.png',
-                            width: 52,
-                            height: 52,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              width: 52,
-                              height: 52,
-                              color: Colors.white,
-                              child: const Icon(
-                                Icons.restaurant,
-                                color: _kDark,
-                              ),
-                            ),
+                  const SizedBox(height: 20),
+
+                  // ── Panel resultado / ruleta ───────────────────────────────────
+                  ScaleTransition(
+                    scale: _selectedWinner != null
+                        ? _winnerScaleAnimation
+                        : const AlwaysStoppedAnimation(1.0),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(26),
+                      decoration: BoxDecoration(
+                        color: _selectedMode == 0 ? _kYellow : _kRed,
+                        borderRadius: BorderRadius.circular(32),
+                        border: Border.all(color: _kDark, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: _kDark,
+                            offset: Offset(4, 4),
+                            blurRadius: 0,
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 14),
-                      Text(
-                        _selectedWinner == null
-                            ? (_isSpinning
-                                  ? '⚡ Buscando comensal...'
-                                  : (_selectedMode == 0
-                                        ? '¡Gira para ver quién elige plato!'
-                                        : '¡El juicio picante va a empezar!'))
-                            : (_selectedMode == 0
-                                  ? '🍽️ ¡Le toca elegir plato a:'
-                                  : '🎉 ¡Veredicto Final:'),
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _selectedMode == 0
-                              ? _kDark.withValues(alpha: 0.8)
-                              : Colors.white.withValues(alpha: 0.9),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _selectedWinner != null
-                            ? _selectedWinner!['name'] as String
-                            : (_selectedMode == 0
-                                  ? 'Ruleta de Platos'
-                                  : 'Juicio Pendiente'),
-                        style: GoogleFonts.outfit(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: _selectedMode == 0 ? _kDark : Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_selectedMode == 1 && _currentChallenge != null) ...[
-                        const SizedBox(height: 14),
-                        GestureDetector(
-                          onTap: () {
-                            if (_selectedWinner != null) {
-                              _showChallengeOutcomeDialog(
-                                _selectedWinner!['name'] as String,
-                                _currentChallenge!,
-                              );
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.white.withValues(alpha: 0.9),
+                              shape: BoxShape.circle,
                               border: Border.all(color: _kDark, width: 1.5),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: _kDark,
-                                  offset: Offset(3, 3),
-                                  blurRadius: 0,
-                                ),
-                              ],
                             ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  _currentChallenge!,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/icons/IconoRedondoTenedor.png',
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  width: 52,
+                                  height: 52,
+                                  color: Colors.white,
+                                  child: const Icon(
+                                    Icons.restaurant,
                                     color: _kDark,
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '👆 Toca aquí para evaluar el reto',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _kRed,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── Botón girar ───────────────────────────────────────────────
-              ScaleTransition(
-                scale: _isSpinning
-                    ? _pulseAnimation
-                    : const AlwaysStoppedAnimation(1.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: NeoPressable(
-                    onTap: _isSpinning ? null : _spinGame,
-                    color: _kDark,
-                    borderWidth: 2,
-                    shadowOffset: const Offset(4, 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.casino_rounded,
-                          size: 22,
-                          color: _kYellow,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isSpinning
-                              ? 'Girando Ruleta...'
-                              : (_selectedMode == 0
-                                    ? '¡Girar Ruleta (Elegir Plato)!'
-                                    : '¡Lanzar Juicio Picante!'),
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // ── Comensales ────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Comensales en la Mesa (${_players.length})',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _kDark,
-                      ),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _showAddPlayerDialog,
-                    icon: const Icon(Icons.add_rounded, size: 16, color: _kRed),
-                    label: Text(
-                      'Añadir',
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        color: _kRed,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                'Toca tu comensal para vincular tus puntos a tu cuenta',
-                style: GoogleFonts.inter(
-                  fontSize: 11.5,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 94,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _players.length,
-                  itemBuilder: (context, index) {
-                    final player = _players[index];
-                    final isHighlighted = index == _highlightedIndex;
-                    final isWinner =
-                        _selectedWinner != null &&
-                        _selectedWinner!['name'] == player['name'];
-                    final playerColor = player['color'] as Color;
-                    final myUid = ref.read(gamerServiceProvider).currentUid;
-                    final isLinkedToMe =
-                        myUid != null && player['uid'] == myUid;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () => _toggleLinkedToMe(index),
-                          onLongPress: () => _removePlayer(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 76,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                              horizontal: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              // Relleno sólido, no alpha-blend: el mismo
-                              // patrón de "seleccionado" que tabs y chips
-                              // en el resto de la app — garantiza que el
-                              // texto oscuro siempre tenga contraste
-                              // suficiente, sin depender de qué haya debajo.
-                              color: isHighlighted ? _kYellow : Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isHighlighted || isWinner
-                                    ? const Color(0xFFFF9F1C)
-                                    : _kDark,
-                                width: isHighlighted || isWinner ? 2 : 1.5,
                               ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: _kDark,
-                                  offset: Offset(2, 2),
-                                  blurRadius: 0,
-                                ),
-                              ],
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Stack(
-                                  clipBehavior: Clip.none,
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            _selectedWinner == null
+                                ? (_isSpinning
+                                      ? '⚡ Buscando comensal...'
+                                      : (_selectedMode == 0
+                                            ? '¡Gira para ver quién elige plato!'
+                                            : '¡El juicio picante va a empezar!'))
+                                : (_selectedMode == 0
+                                      ? '🍽️ ¡Le toca elegir plato a:'
+                                      : '🎉 ¡Veredicto Final:'),
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _selectedMode == 0
+                                  ? _kDark.withValues(alpha: 0.8)
+                                  : Colors.white.withValues(alpha: 0.9),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedWinner != null
+                                ? _selectedWinner!['name'] as String
+                                : (_selectedMode == 0
+                                      ? 'Ruleta de Platos'
+                                      : 'Juicio Pendiente'),
+                            style: GoogleFonts.outfit(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: _selectedMode == 0 ? _kDark : Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (_selectedMode == 1 &&
+                              _currentChallenge != null) ...[
+                            const SizedBox(height: 14),
+                            GestureDetector(
+                              onTap: () {
+                                if (_selectedWinner != null) {
+                                  _showChallengeOutcomeDialog(
+                                    _selectedWinner!['name'] as String,
+                                    _currentChallenge!,
+                                  );
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: _kDark, width: 1.5),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: _kDark,
+                                      offset: Offset(3, 3),
+                                      blurRadius: 0,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
                                   children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor: playerColor.withValues(
-                                        alpha: 0.2,
+                                    Text(
+                                      _currentChallenge!,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: _kDark,
                                       ),
-                                      child: Icon(
-                                        player['icon'] as IconData,
-                                        color: playerColor,
-                                        size: 18,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '👆 Toca aquí para evaluar el reto',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: _kRed,
                                       ),
                                     ),
-                                    if (isLinkedToMe)
-                                      Positioned(
-                                        right: -2,
-                                        bottom: -2,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: const BoxDecoration(
-                                            color: _kYellow,
-                                            shape: BoxShape.circle,
-                                            border: Border.fromBorderSide(
-                                              BorderSide(color: _kDark, width: 1.5),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Botón girar ───────────────────────────────────────────────
+                  ScaleTransition(
+                    scale: _isSpinning
+                        ? _pulseAnimation
+                        : const AlwaysStoppedAnimation(1.0),
+                    child: SizedBox(
+                      width: double.infinity,
+                      // Altura mínima, no fija: con el texto del sistema ampliado
+                      // el botón principal reventaba con overflow horizontal.
+                      height:
+                          56 *
+                          MediaQuery.textScalerOf(
+                            context,
+                          ).scale(1).clamp(1.0, 1.4).toDouble(),
+                      child: NeoPressable(
+                        onTap: _isSpinning ? null : _spinGame,
+                        color: _kDark,
+                        borderWidth: 2,
+                        shadowOffset: const Offset(4, 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.casino_rounded,
+                              size: 22,
+                              color: _kYellow,
+                            ),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                _isSpinning
+                                    ? 'Girando Ruleta...'
+                                    : (_selectedMode == 0
+                                          ? '¡Girar Ruleta!'
+                                          : '¡Lanzar Juicio Picante!'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Comensales ────────────────────────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Comensales en la Mesa (${_players.length})',
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: _kDark,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _showAddPlayerDialog,
+                        icon: const Icon(
+                          Icons.add_rounded,
+                          size: 16,
+                          color: _kRed,
+                        ),
+                        label: Text(
+                          'Añadir',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            color: _kRed,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'Toca tu comensal para vincular tus puntos a tu cuenta',
+                    style: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      color: const Color(0xFF5A6572),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    // 94 fijos no dan para el nombre con el texto ampliado.
+                    height:
+                        94 *
+                        MediaQuery.textScalerOf(
+                          context,
+                        ).scale(1).clamp(1.0, 1.4).toDouble(),
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _players.length,
+                      itemBuilder: (context, index) {
+                        final player = _players[index];
+                        final isHighlighted = index == _highlightedIndex;
+                        final isWinner =
+                            _selectedWinner != null &&
+                            _selectedWinner!['name'] == player['name'];
+                        final playerColor = player['color'] as Color;
+                        final myUid = ref.read(gamerServiceProvider).currentUid;
+                        final isLinkedToMe =
+                            myUid != null && player['uid'] == myUid;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () => _toggleLinkedToMe(index),
+                              onLongPress: () => _confirmRemovePlayer(index),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 76,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                  horizontal: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  // Relleno sólido, no alpha-blend: el mismo
+                                  // patrón de "seleccionado" que tabs y chips
+                                  // en el resto de la app — garantiza que el
+                                  // texto oscuro siempre tenga contraste
+                                  // suficiente, sin depender de qué haya debajo.
+                                  color: isHighlighted
+                                      ? _kYellow
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isHighlighted || isWinner
+                                        ? const Color(0xFFFF9F1C)
+                                        : _kDark,
+                                    width: isHighlighted || isWinner ? 2 : 1.5,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: _kDark,
+                                      offset: Offset(2, 2),
+                                      blurRadius: 0,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 20,
+                                          backgroundColor: playerColor
+                                              .withValues(alpha: 0.2),
+                                          child: Icon(
+                                            player['icon'] as IconData,
+                                            color: playerColor,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        if (isLinkedToMe)
+                                          Positioned(
+                                            right: -2,
+                                            bottom: -2,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(2),
+                                              decoration: const BoxDecoration(
+                                                color: _kYellow,
+                                                shape: BoxShape.circle,
+                                                border: Border.fromBorderSide(
+                                                  BorderSide(
+                                                    color: _kDark,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.check_rounded,
+                                                size: 10,
+                                                color: _kDark,
+                                              ),
                                             ),
                                           ),
-                                          child: const Icon(
-                                            Icons.check_rounded,
-                                            size: 10,
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      player['name'] as String,
+                                      style: GoogleFonts.outfit(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: _kDark,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Zona Gamer Pro ────────────────────────────────────────────
+                  ZonaGamerCard(
+                    title: 'Zona Gamer',
+                    subtitle: 'Experiencia Pro',
+                    backgroundColor: Colors.deepPurple,
+                    onTap: _showZonaGamerProModal,
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Historial ─────────────────────────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Historial de la Sesión',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _kDark,
+                        ),
+                      ),
+                      if (_history.isNotEmpty)
+                        TextButton(
+                          onPressed: _clearHistory,
+                          child: Text(
+                            'Limpiar',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.red.shade400,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_history.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _kDark, width: 1.5),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: _kDark,
+                            offset: Offset(2, 2),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'Todavía no hay registros en esta sesión. ¡Gira la ruleta para empezar!',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF5A6572),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else
+                    ..._history.map(
+                      (record) => Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _kDark, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: _kDark,
+                              offset: Offset(2, 2),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.history_rounded,
+                                    size: 18,
+                                    color: Color(0xFFFF9F1C),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          record['winner']!,
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
                                             color: _kDark,
                                           ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  player['name'] as String,
-                                  style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: _kDark,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          record['detail']!,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              record['time']!,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: const Color(0xFF5A6572),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 28),
+                    ),
+                  const SizedBox(height: 24),
 
-              // ── Zona Gamer Pro ────────────────────────────────────────────
-              ZonaGamerCard(
-                title: 'Zona Gamer',
-                subtitle: 'Experiencia Pro',
-                backgroundColor: Colors.deepPurple,
-                onTap: _showZonaGamerProModal,
-              ),
-              const SizedBox(height: 28),
-
-              // ── Historial ─────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Historial de la Sesión',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _kDark,
+                  // ── Añadir reto ───────────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: _kRed.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: _showAddChallengeDialog,
+                      icon: const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: _kRed,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'Añadir Juicio Picante al Vuelo',
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: _kRed,
+                        ),
+                      ),
                     ),
                   ),
-                  if (_history.isNotEmpty)
-                    TextButton(
-                      onPressed: _clearHistory,
-                      child: Text(
-                        'Limpiar',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.red.shade400,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              if (_history.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _kDark, width: 1.5),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: _kDark,
-                        offset: Offset(2, 2),
-                        blurRadius: 0,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    'Todavía no hay registros en esta sesión. ¡Gira la ruleta para empezar!',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: Colors.grey.shade400,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else
-                ..._history.map(
-                  (record) => Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _kDark, width: 1.5),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: _kDark,
-                          offset: Offset(2, 2),
-                          blurRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.history_rounded,
-                                size: 18,
-                                color: Color(0xFFFF9F1C),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      record['winner']!,
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: _kDark,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      record['detail']!,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          record['time']!,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: Colors.grey.shade400,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-
-              // ── Añadir reto ───────────────────────────────────────────────
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: _kRed.withValues(alpha: 0.5)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: _showAddChallengeDialog,
-                  icon: const Icon(
-                    Icons.local_fire_department_rounded,
-                    color: _kRed,
-                    size: 18,
-                  ),
-                  label: Text(
-                    'Añadir Juicio Picante al Vuelo',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: _kRed,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
         ),
       ),
     );
