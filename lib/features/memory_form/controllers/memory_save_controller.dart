@@ -386,7 +386,3 @@ class MemorySaveController {
 void _log(String message) {
   if (kDebugMode) debugPrint(message);
 }
-
-void _logStack({StackTrace? stackTrace}) {
-  if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
-}

@@ -371,7 +371,7 @@ class HouseholdService {
             .doc(groupId)
             .update(<String, dynamic>{
               'memberProfiles.$uid.displayName': displayName,
-              if (photoUrl != null) 'memberProfiles.$uid.photoUrl': photoUrl,
+              'memberProfiles.$uid.photoUrl': ?photoUrl,
               'updatedAt': FieldValue.serverTimestamp(),
             });
       } on FirebaseException catch (e) {

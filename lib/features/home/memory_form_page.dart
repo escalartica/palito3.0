@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+// `show kDebugMode`: foundation exporta una clase `Category` (anotación de
+// dartdoc) que choca con la `Category` de core/data/categories.dart.
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1108,11 +1110,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       return;
     }
 
-    unawaited(
-      _confirmDiscard().then((bool discard) {
-        if (discard && mounted) context.pop();
-      }),
-    );
+    // async/await en vez de `.then`: dentro de un callback de `then` el
+    // analizador no reconoce la guarda `mounted` del State y avisa de
+    // use_build_context_synchronously.
+    unawaited(_confirmDiscardAndPop());
+  }
+
+  Future<void> _confirmDiscardAndPop() async {
+    final bool discard = await _confirmDiscard();
+    if (!mounted) return;
+    if (discard) context.pop();
   }
 
   Future<bool> _confirmDiscard() async {

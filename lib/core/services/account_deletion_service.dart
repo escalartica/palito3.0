@@ -53,7 +53,9 @@ class AccountDeletionService {
     final String uid = user.uid;
 
     // ----- 1. Reautenticación (antes de tocar ningún dato) -----
-    String? appleAuthorizationCode;
+    // `authorizationCode` no es nulable en el credential de Apple; la
+    // cadena vacía es el único caso a comprobar.
+    String appleAuthorizationCode = '';
 
     try {
       final AuthorizationCredentialAppleID appleCredential =
@@ -125,7 +127,7 @@ class AccountDeletionService {
     // Sin esto, la app sigue apareciendo en Ajustes → Apple ID → "Inicio de
     // sesión con Apple" después de haber borrado la cuenta, y es motivo
     // documentado de rechazo en revisión.
-    if (appleAuthorizationCode != null && appleAuthorizationCode.isNotEmpty) {
+    if (appleAuthorizationCode.isNotEmpty) {
       try {
         await _auth.revokeTokenWithAuthorizationCode(appleAuthorizationCode);
       } catch (_) {
