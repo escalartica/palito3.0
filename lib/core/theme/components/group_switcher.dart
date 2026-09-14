@@ -158,7 +158,7 @@ Future<void> openGroupSwitcher(BuildContext context, WidgetRef ref) async {
             'groupIds': FieldValue.arrayRemove(toForget),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-    } catch (e) {
+    } catch (_) {
       AppLog.w('No se pudo limpiar la lista de grupos.');
     }
 

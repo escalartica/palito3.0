@@ -128,7 +128,7 @@ class AccountDeletionService {
     if (appleAuthorizationCode != null && appleAuthorizationCode.isNotEmpty) {
       try {
         await _auth.revokeTokenWithAuthorizationCode(appleAuthorizationCode);
-      } catch (e) {
+      } catch (_) {
         // Que falle la revocación no debe dejar la cuenta a medio borrar.
         AppLog.w('No se pudo revocar el token de Apple.');
       }

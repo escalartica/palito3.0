@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -408,7 +410,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Future<void> _pickMedia(ImageSource source) async {
     final picker = ImagePicker();
 
-    final XFile? pickedFile;
+    // No `final`: se asigna dentro del try y el análisis de asignación
+    // definitiva de Dart es más frágil con variables finales ahí.
+    XFile? pickedFile;
 
     try {
       pickedFile = await picker.pickImage(
@@ -498,15 +502,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
             tooltip: 'Volver',
             // Mientras se guarda, salir destruía el widget con la subida en
             // curso y el guardado se perdía a medio camino.
-            onTap: _isSaving
-                ? null
-                : () async {
-                    if (!_hasUnsavedChanges) {
-                      context.pop();
-                      return;
-                    }
-                    if (await _confirmDiscard() && mounted) context.pop();
-                  },
+            onTap: _handleBackTap,
           ),
         ),
         body: FadeTransition(
@@ -1099,6 +1095,24 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         _descController.text.trim().isNotEmpty ||
         _dynamicData.isNotEmpty ||
         _rating > 0;
+  }
+
+  /// Manejador del botón atrás. Síncrono a propósito: `_buildAnimatedIconButton`
+  /// recibe un `VoidCallback`, y un closure `async` tiene tipo
+  /// `Future<void> Function()`, que no es asignable.
+  void _handleBackTap() {
+    if (_isSaving) return;
+
+    if (!_hasUnsavedChanges) {
+      context.pop();
+      return;
+    }
+
+    unawaited(
+      _confirmDiscard().then((bool discard) {
+        if (discard && mounted) context.pop();
+      }),
+    );
   }
 
   Future<bool> _confirmDiscard() async {

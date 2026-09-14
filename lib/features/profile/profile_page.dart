@@ -252,7 +252,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   }
 
   Future<void> _pickImageForProfile(String groupId, String uid) async {
-    final XFile? image;
+    XFile? image;
 
     try {
       // Foto de perfil pequeña y circular: no hace falta subirla a
