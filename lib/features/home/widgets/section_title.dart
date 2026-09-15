@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/theme/tokens/app_colors.dart';
 
 /// Cabecera de sección: icono + título en negrita, usada antes de las
 /// cards de "Tu opinión" y "Ubicación" en el detalle de recuerdo.
@@ -13,14 +14,14 @@ class SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF0F172A)),
+        Icon(icon, size: 20, color: AppColors.textPrimary),
         const SizedBox(width: 8),
         Text(
           title,
           style: GoogleFonts.outfit(
             fontSize: 19,
             fontWeight: FontWeight.w900,
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
           ),
         ),
       ],

@@ -58,22 +58,68 @@ class GamerGameLogic {
     );
   }
 
-  /// Comprueba si el logro [achievementId] se cumple con las
-  /// estadísticas actuales de la sesión. Devuelve `false` (nunca lanza)
-  /// para cualquier ID que no reconozca.
+  /// Cuánto llevas de un logro y cuánto hace falta: `(3, 10)` = tres de
+  /// diez. Devuelve `(0, 0)` para un id que no conoce.
   ///
-  /// Extraído de `_GamerPageState._checkAndUnlockAchievements`.
+  /// Antes solo existía un `isAchievementMet` que devolvía sí o no, y por eso
+  /// los logros bloqueados eran una lista de candados sin más: "Acumular una
+  /// racha de más de 10 decisiones", con nueve ya hechas y sin forma de
+  /// saberlo. Un logro que no enseña cuánto te queda no invita a seguir
+  /// jugando, que es exactamente para lo que está.
+  ///
+  /// Conseguido y progreso salen ahora del mismo sitio, así que no pueden
+  /// discrepar: [isAchievementMet] es literalmente "el progreso llegó a la
+  /// meta".
+  static ({int current, int goal}) achievementProgress({
+    required String achievementId,
+    required int maxPoints,
+    required int decisionsCount,
+    required int playerCount,
+    required int playersWithPoints,
+    required int maxMedals,
+  }) {
+    return switch (achievementId) {
+      'first_spin' => (current: decisionsCount.clamp(0, 1), goal: 1),
+      'king_flavor' => (current: maxPoints, goal: 40),
+      'spicy_streak' => (current: decisionsCount, goal: 10),
+      // "Interactuar con todos los comensales", ahora de verdad.
+      //
+      // Estaba implementado como `decisionsCount >= 5`: cinco tiradas
+      // seguidas a la misma persona lo desbloqueaban y la descripción
+      // mentía. Ahora cuenta a cuántos comensales ha señalado la ruleta
+      // alguna vez —que es lo que dice el texto— y la meta depende de
+      // cuánta gente haya en la mesa.
+      'soul_table' => (
+        current: playersWithPoints,
+        goal: playerCount < 2 ? 2 : playerCount,
+      ),
+      'full_table' => (current: playerCount, goal: 5),
+      'medal_hunter' => (current: maxMedals, goal: 5),
+      'marathon' => (current: decisionsCount, goal: 25),
+      _ => (current: 0, goal: 0),
+    };
+  }
+
+  /// Comprueba si el logro [achievementId] se cumple con las estadísticas
+  /// actuales de la sesión. Devuelve `false` (nunca lanza) para cualquier
+  /// ID que no reconozca.
   static bool isAchievementMet({
     required String achievementId,
     required int maxPoints,
-    required int streak,
     required int decisionsCount,
+    required int playerCount,
+    required int playersWithPoints,
+    required int maxMedals,
   }) {
-    return switch (achievementId) {
-      'king_flavor' => maxPoints >= 40,
-      'spicy_streak' => streak >= 10,
-      'soul_table' => decisionsCount >= 5,
-      _ => false,
-    };
+    final progress = achievementProgress(
+      achievementId: achievementId,
+      maxPoints: maxPoints,
+      decisionsCount: decisionsCount,
+      playerCount: playerCount,
+      playersWithPoints: playersWithPoints,
+      maxMedals: maxMedals,
+    );
+
+    return progress.goal > 0 && progress.current >= progress.goal;
   }
 }

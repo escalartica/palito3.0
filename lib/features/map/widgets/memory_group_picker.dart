@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/models/memory_model.dart';
 import '../../../core/data/rating_scale.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Selector de recuerdos para un grupo de marcadores que comparten
 /// coordenada.
@@ -30,15 +32,17 @@ class MemoryGroupPicker {
   }) {
     showModalBottomSheet(
       context: context,
+      // Por encima del dock (ver gamer_page.dart).
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           decoration: const BoxDecoration(
-            color: Color(0xFFFFFDF5),
+            color: AppColors.surfaceWarm,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(top: BorderSide(color: Color(0xFF0F172A), width: 3)),
+            border: Border(top: BorderSide(color: AppColors.textPrimary, width: 3)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -50,8 +54,11 @@ class MemoryGroupPicker {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+                    color: AppColors.textMuted,
+                    // pill, no un número suelto: cualquier radio >= mitad del
+                    // lado corto da la misma cápsula perfecta, así que el paso
+                    // "completo" de la escala es la elección correcta aquí.
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                 ),
               ),
@@ -60,7 +67,7 @@ class MemoryGroupPicker {
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -68,7 +75,7 @@ class MemoryGroupPicker {
                 'Elige cuál quieres ver',
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -107,7 +114,7 @@ class MemoryGroupPicker {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: () {
           Navigator.pop(context);
           onMemorySelected(memory);
@@ -116,11 +123,11 @@ class MemoryGroupPicker {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.textPrimary, width: 2),
             boxShadow: const [
               BoxShadow(
-                color: Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 offset: Offset(3, 3),
                 blurRadius: 0,
               ),
@@ -134,9 +141,9 @@ class MemoryGroupPicker {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: categoryColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     width: 1.5,
                   ),
                 ),
@@ -158,7 +165,7 @@ class MemoryGroupPicker {
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w800,
                         fontSize: 15,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -166,7 +173,7 @@ class MemoryGroupPicker {
                       memory.category,
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -175,20 +182,27 @@ class MemoryGroupPicker {
               ),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                  // `Colors.amber` sobre blanco mide 1,63:1. Un icono
+                  // que aporta información necesita 3:1 como mínimo; a esa
+                  // distancia del fondo, la estrella era un borrón claro.
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 16,
+                    color: AppColors.textPrimary,
+                  ),
                   const SizedBox(width: 2),
                   Text(
                     RatingScale.shortLabel(memory.rating) ?? '—',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFF0F172A)),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.textPrimary),
             ],
           ),
         ),

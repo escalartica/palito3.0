@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/components/app_motion.dart';
+import '../widgets/memory_text_field.dart';
 
 class PostreFields implements DynamicFieldGenerator {
   @override
@@ -49,7 +54,7 @@ class PostreFields implements DynamicFieldGenerator {
         child: _buildCustomTextField(
           'ingredientes',
           'Ingredientes',
-          'Escribe los ingredientes del postre o helado...',
+          'Escribe los ingredientes del postre o helado…',
           data,
           onUpdate,
           maxLines: 3,
@@ -282,8 +287,8 @@ class PostreFields implements DynamicFieldGenerator {
     return TweenAnimationBuilder<double>(
       key: ValueKey('postre_field_$index'),
       tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: 350 + (index * 45)),
-      curve: Curves.easeOutCubic,
+      duration: AppAnimation.stagger(index),
+      curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -317,7 +322,7 @@ class PostreFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -326,12 +331,12 @@ class PostreFields implements DynamicFieldGenerator {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.textPrimary, width: 1.5),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -386,37 +391,37 @@ class PostreFields implements DynamicFieldGenerator {
       onTap: () {
         onChanged(isSelected ? null : value);
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: AppAnimation.standard,
+        curve: AppAnimation.enter,
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFD400) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedScale(
               scale: isSelected ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 180),
-              child: Icon(icon, size: 18, color: const Color(0xFF0F172A)),
+              duration: AppAnimation.fast,
+              child: Icon(icon, size: 18, color: AppColors.textPrimary),
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.inter(
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontSize: 13,
               ),
             ),
             const SizedBox(width: 4),
             Radio<String>(
               value: value,
-              activeColor: const Color(0xFF0F172A),
+              activeColor: AppColors.textPrimary,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ],
@@ -447,7 +452,7 @@ class PostreFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -525,6 +530,10 @@ class PostreFields implements DynamicFieldGenerator {
   // CAMPO DE TEXTO
   // =========================================================================
 
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -533,63 +542,12 @@ class PostreFields implements DynamicFieldGenerator {
     Function(String, dynamic) onUpdate, {
     int maxLines = 1,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextFormField(
-              initialValue: data[key]?.toString() ?? '',
-              maxLines: maxLines,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey.shade400,
-                  fontSize: 12,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (value) {
-                onUpdate(key, value);
-              },
-            ),
-          ),
-        ],
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
+      maxLines: maxLines,
     );
   }
 
@@ -617,22 +575,22 @@ class PostreFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
           const SizedBox(height: 8),
 
           AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
+            duration: AppAnimation.standard,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.textPrimary, width: 1.5),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -643,12 +601,12 @@ class PostreFields implements DynamicFieldGenerator {
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
-                      activeTrackColor: const Color(0xFF0F172A),
-                      inactiveTrackColor: Colors.grey.shade300,
-                      thumbColor: const Color(0xFFFFD400),
-                      overlayColor: const Color(
-                        0xFFFFD400,
-                      ).withValues(alpha: 0.2),
+                      activeTrackColor: AppColors.textPrimary,
+                      inactiveTrackColor: AppColors.textPrimary.withValues(
+                        alpha: 0.15,
+                      ),
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withValues(alpha: 0.2),
                       trackHeight: 6,
                     ),
                     child: Slider(
@@ -664,9 +622,9 @@ class PostreFields implements DynamicFieldGenerator {
                 ),
 
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
+                  duration: AppAnimation.fast,
                   transitionBuilder: (child, animation) {
-                    return ScaleTransition(scale: animation, child: child);
+                    return AppMotion.popIn(animation, child);
                   },
                   child: Container(
                     key: ValueKey(currentValue.round()),
@@ -675,10 +633,10 @@ class PostreFields implements DynamicFieldGenerator {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFD400),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                       border: Border.all(
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         width: 1.5,
                       ),
                     ),
@@ -686,7 +644,7 @@ class PostreFields implements DynamicFieldGenerator {
                       currentValue.toStringAsFixed(0),
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         fontSize: 14,
                       ),
                     ),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart'; // Añadido para mantener las tipografías
 import '../../../core/theme/components/smart_image.dart';
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 class HeroCard extends ConsumerWidget {
   final MemoryModel? memory;
@@ -16,11 +18,11 @@ class HeroCard extends ConsumerWidget {
         height: MediaQuery.of(context).size.height * 0.35,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.textPrimary, width: 2.0),
           boxShadow: const [
             BoxShadow(
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               blurRadius: 0,
               offset: Offset(0, 4),
             ),
@@ -32,7 +34,7 @@ class HeroCard extends ConsumerWidget {
             style: GoogleFonts.outfit(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -49,11 +51,11 @@ class HeroCard extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2.0),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.textPrimary, width: 2.0),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 4),
           ),
@@ -66,11 +68,11 @@ class HeroCard extends ConsumerWidget {
             child: (path != null && path.isNotEmpty)
                 ? SmartImage(imagePath: path, fit: BoxFit.cover, width: 800)
                 : Container(
-                    color: const Color(0xFFF8FAFC),
+                    color: AppColors.textPrimary.withValues(alpha: 0.05),
                     child: const Icon(
                       Icons.image_rounded,
                       size: 50,
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                     ),
                   ),
           ),
@@ -82,7 +84,7 @@ class HeroCard extends ConsumerWidget {
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
                 colors: [
-                  const Color(0xFF0F172A).withValues(alpha: 0.85),
+                  AppColors.textPrimary.withValues(alpha: 0.85),
                   Colors.transparent,
                 ],
               ),
@@ -112,13 +114,13 @@ class HeroCard extends ConsumerWidget {
                       const Icon(
                         Icons.store_rounded,
                         size: 14,
-                        color: Color(0xFFFFD400),
+                        color: AppColors.primary,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         memory!.restaurantName,
                         style: GoogleFonts.inter(
-                          color: const Color(0xFFFFD400),
+                          color: AppColors.primary,
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),

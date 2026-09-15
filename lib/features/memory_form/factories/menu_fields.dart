@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../widgets/memory_text_field.dart';
 
 class MenuFields implements DynamicFieldGenerator {
   @override
@@ -108,7 +112,7 @@ class MenuFields implements DynamicFieldGenerator {
       // ================================================================
       _buildCompactChipGroup(
         'demasiado_de',
-        'Demasiado presencia de...',
+        'Demasiado presencia de…',
         [
           {'label': 'Carne', 'icon': Icons.kebab_dining_rounded},
           {'label': 'Pescado', 'icon': Icons.set_meal_rounded},
@@ -317,7 +321,7 @@ class MenuFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -397,9 +401,9 @@ class MenuFields implements DynamicFieldGenerator {
             const SizedBox(height: 10),
 
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
+              duration: AppAnimation.standard,
+              switchInCurve: AppAnimation.enter,
+              switchOutCurve: AppAnimation.exit,
               transitionBuilder: (child, animation) {
                 return FadeTransition(
                   opacity: animation,
@@ -413,15 +417,15 @@ class MenuFields implements DynamicFieldGenerator {
               child: Container(
                 key: ValueKey(customFieldKey),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     width: 1.5,
                   ),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       blurRadius: 0,
                       offset: Offset(0, 2),
                     ),
@@ -430,20 +434,20 @@ class MenuFields implements DynamicFieldGenerator {
                 child: TextFormField(
                   initialValue: data[customFieldKey],
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                   decoration: InputDecoration(
                     labelText: customFieldHint,
                     labelStyle: GoogleFonts.inter(
-                      color: Colors.grey.shade600,
+                      color: AppColors.textSecondary,
                       fontSize: 12,
                     ),
                     prefixIcon: const Icon(
                       Icons.edit_rounded,
                       size: 19,
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -467,6 +471,10 @@ class MenuFields implements DynamicFieldGenerator {
   // CAMPO DE TEXTO
   // ==========================================================================
 
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -474,61 +482,11 @@ class MenuFields implements DynamicFieldGenerator {
     Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextFormField(
-              initialValue: data[key],
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey.shade400,
-                  fontSize: 12,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (value) {
-                onUpdate(key, value);
-              },
-            ),
-          ),
-        ],
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
     );
   }
 }
@@ -565,12 +523,12 @@ class _AnimatedFieldEntryState extends State<_AnimatedFieldEntry>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration: AppAnimation.slow,
     );
 
     final curve = CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOutCubic,
+      curve: AppAnimation.enter,
     );
 
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(curve);
@@ -580,7 +538,7 @@ class _AnimatedFieldEntryState extends State<_AnimatedFieldEntry>
       end: Offset.zero,
     ).animate(curve);
 
-    Future.delayed(Duration(milliseconds: 50 * widget.index), () {
+    Future.delayed(AppAnimation.stagger(widget.index, base: Duration.zero, stepMs: 50), () {
       if (mounted) {
         _controller.forward();
       }

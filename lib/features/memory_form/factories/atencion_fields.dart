@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/components/app_motion.dart';
+import '../widgets/memory_text_field.dart';
 
 class AtencionFields implements DynamicFieldGenerator {
   @override
@@ -125,7 +130,7 @@ class AtencionFields implements DynamicFieldGenerator {
         isMulti: false,
         otroKey: 'otro_despedida',
         otroController: otroController,
-        otroHint: 'Escribe aquí el toque personal...',
+        otroHint: 'Escribe aquí el toque personal…',
       ),
 
       _buildCustomTextField(
@@ -199,7 +204,7 @@ class AtencionFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -283,19 +288,19 @@ class AtencionFields implements DynamicFieldGenerator {
             const SizedBox(height: 10),
 
             AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
+              duration: AppAnimation.standard,
+              curve: AppAnimation.enter,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     width: 1.5,
                   ),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       blurRadius: 0,
                       offset: Offset(0, 2),
                     ),
@@ -305,14 +310,14 @@ class AtencionFields implements DynamicFieldGenerator {
                   controller: otroController,
                   maxLines: 2,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                   decoration: InputDecoration(
-                    hintText: otroHint ?? 'Especifica la información...',
+                    hintText: otroHint ?? 'Especifica la información…',
                     hintStyle: GoogleFonts.inter(
-                      color: Colors.grey.shade400,
+                      color: AppColors.textMuted,
                       fontSize: 12,
                     ),
                     border: InputBorder.none,
@@ -333,6 +338,10 @@ class AtencionFields implements DynamicFieldGenerator {
     );
   }
 
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -340,59 +349,11 @@ class AtencionFields implements DynamicFieldGenerator {
     Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextFormField(
-              initialValue: data[key],
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey.shade400,
-                  fontSize: 12,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (v) => onUpdate(key, v),
-            ),
-          ),
-        ],
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
     );
   }
 
@@ -416,7 +377,7 @@ class AtencionFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -425,12 +386,12 @@ class AtencionFields implements DynamicFieldGenerator {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.textPrimary, width: 1.5),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -441,12 +402,12 @@ class AtencionFields implements DynamicFieldGenerator {
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
-                      activeTrackColor: const Color(0xFF0F172A),
-                      inactiveTrackColor: Colors.grey.shade300,
-                      thumbColor: const Color(0xFFFFD400),
-                      overlayColor: const Color(
-                        0xFFFFD400,
-                      ).withValues(alpha: 0.2),
+                      activeTrackColor: AppColors.textPrimary,
+                      inactiveTrackColor: AppColors.textPrimary.withValues(
+                        alpha: 0.15,
+                      ),
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withValues(alpha: 0.2),
                       trackHeight: 6,
                     ),
                     child: Slider(
@@ -460,9 +421,9 @@ class AtencionFields implements DynamicFieldGenerator {
                 ),
 
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 150),
+                  duration: AppAnimation.fast,
                   transitionBuilder: (child, animation) {
-                    return ScaleTransition(scale: animation, child: child);
+                    return AppMotion.popIn(animation, child);
                   },
                   child: Container(
                     key: ValueKey(currentValue),
@@ -471,10 +432,10 @@ class AtencionFields implements DynamicFieldGenerator {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFD400),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                       border: Border.all(
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         width: 1.5,
                       ),
                     ),
@@ -482,7 +443,7 @@ class AtencionFields implements DynamicFieldGenerator {
                       currentValue.toStringAsFixed(0),
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         fontSize: 14,
                       ),
                     ),

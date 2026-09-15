@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'animated_card.dart';
 import 'icon_box.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Card de "sabores del surtido" (croquetas variadas): cada sabor con su
 /// propia valoración, en vez del volcado genérico de specificFields que
@@ -23,7 +25,7 @@ class VariedadesCard extends StatelessWidget {
             children: [
               const IconBox(
                 icon: Icons.dining_outlined,
-                backgroundColor: Color(0xFFFFD400),
+                backgroundColor: AppColors.primary,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -32,7 +34,7 @@ class VariedadesCard extends StatelessWidget {
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -55,10 +57,10 @@ class VariedadesCard extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFDF5),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.surfaceWarm,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.12),
+                    color: AppColors.textPrimary.withValues(alpha: 0.12),
                   ),
                 ),
                 child: Row(
@@ -69,7 +71,7 @@ class VariedadesCard extends StatelessWidget {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -80,14 +82,14 @@ class VariedadesCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: _colorForValoracion(valoracion),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
                       child: Text(
                         valoracion,
                         style: GoogleFonts.inter(
-                          fontSize: 11.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -109,13 +111,13 @@ class VariedadesCard extends StatelessWidget {
     const negativas = {'Mediocres', 'Basura'};
 
     if (positivas.contains(valoracion)) {
-      return const Color(0xFFD4F4DD);
+      return AppColors.success.withValues(alpha: 0.18);
     }
 
     if (negativas.contains(valoracion)) {
-      return const Color(0xFFFFD9D2);
+      return AppColors.accent.withValues(alpha: 0.21);
     }
 
-    return const Color(0xFFF0F0F0);
+    return AppColors.textPrimary.withValues(alpha: 0.06);
   }
 }

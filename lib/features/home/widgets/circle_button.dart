@@ -30,9 +30,19 @@ class CircleButton extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: Icon(icon, color: Colors.white, size: 17),
+          // 48x48 REALES.
+          //
+          // Eran 9 de relleno más un icono de 17: **35x35** de zona
+          // pulsable, por debajo del mínimo de 44 de Apple. Lo sufre sobre
+          // todo el botón de cerrar del visor a pantalla completa: si fallas
+          // el toque, en vez de salir haces zoom en la foto.
+          //
+          // El círculo se ve igual de grande que antes; lo que crece es el
+          // área que responde, que es invisible y es la que importa.
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            alignment: Alignment.center,
+            child: Icon(icon, color: Colors.white, size: 19),
           ),
         ),
       ),

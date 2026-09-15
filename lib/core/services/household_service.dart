@@ -266,6 +266,30 @@ class HouseholdService {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
+    // PASO 4 — quemar el código si ya no le quedan usos.
+    //
+    // La regla del servidor ya impide reentrar con una invitación vieja
+    // (ver firestore.rules), pero dejar el documento ahí una semana no tiene
+    // ningún valor y sí un coste: es una llave gastada tirada en el suelo.
+    // Borrarla es lo que hace que "revocar" y "expulsar" signifiquen lo que
+    // prometen.
+    //
+    // Va en su propio try: la unión YA ha funcionado y no hay nada que
+    // deshacer si esta limpieza falla.
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> spentSnap = await inviteRef
+          .get();
+      final Map<String, dynamic> spent = spentSnap.data() ?? <String, dynamic>{};
+      final int usedNow = (spent['useCount'] as num?)?.toInt() ?? 0;
+      final int allowed = (spent['maxUses'] as num?)?.toInt() ?? 1;
+      if (usedNow >= allowed) {
+        await inviteRef.delete();
+        AppLog.i('HouseholdService: invitación agotada, borrada.');
+      }
+    } catch (_) {
+      AppLog.w('HouseholdService: no se pudo borrar la invitación gastada.');
+    }
+
     String groupName = 'tu nuevo grupo';
     try {
       final DocumentSnapshot<Map<String, dynamic>> groupSnap = await _firestore
@@ -351,6 +375,30 @@ class HouseholdService {
       'groupIds': FieldValue.arrayRemove(<String>[groupId]),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  /// Cambia el nombre de un diario compartido.
+  ///
+  /// No existía. Un diario se llamaba para siempre como lo hubieras escrito
+  /// con prisa el día que lo creaste, y la única salida era irte y crear otro
+  /// —perdiendo por el camino a la gente que ya estaba dentro—. Las reglas ya
+  /// permitían el cambio (`validName()` en `firestore.rules`, con su tope de
+  /// 60 caracteres): lo que faltaba era el botón.
+  ///
+  /// El recorte a 60 se hace aquí y no solo en el campo de texto, porque el
+  /// servidor rechaza el documento entero si se pasa y el usuario vería un
+  /// "no se pudo guardar" sin motivo aparente.
+  Future<void> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final String clean = name.trim();
+    if (clean.isEmpty) return;
+
+    await _firestore.collection('groups').doc(groupId).update(<String, dynamic>{
+      'name': clean.length > 60 ? clean.substring(0, 60) : clean,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Propaga un cambio de nombre a la copia que cada grupo guarda en

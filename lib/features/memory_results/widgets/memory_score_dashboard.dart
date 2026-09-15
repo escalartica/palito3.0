@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_typography.dart';
+
 class MemoryScoreDashboard extends StatelessWidget {
   final Map<String, dynamic> data;
 
@@ -9,27 +13,19 @@ class MemoryScoreDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _scoreBar(
-          "Sabor",
-          data['nota_sabor']?.toDouble() ?? 0.0,
-          Colors.redAccent,
-        ),
-        _scoreBar(
-          "Atención",
-          data['nota_atencion']?.toDouble() ?? 0.0,
-          Colors.orange,
-        ),
-        _scoreBar(
-          "Espacio",
-          data['nota_espacio']?.toDouble() ?? 0.0,
-          Colors.indigoAccent,
-        ),
-        _scoreBar("Higiene", data['detalle']?.toDouble() ?? 0.0, Colors.teal),
+        _scoreBar("Sabor", data['nota_sabor']?.toDouble() ?? 0.0),
+        _scoreBar("Atención", data['nota_atencion']?.toDouble() ?? 0.0),
+        _scoreBar("Espacio", data['nota_espacio']?.toDouble() ?? 0.0),
+        _scoreBar("Higiene", data['detalle']?.toDouble() ?? 0.0),
       ],
     );
   }
 
-  Widget _scoreBar(String label, double value, Color color) {
+  // Una sola familia de color (coral de marca) para las cuatro barras: cuatro
+  // matices sueltos de Material (rojo/naranja/índigo/verde azulado) no
+  // pertenecían a la paleta de marca y competían entre sí. La etiqueta ya
+  // distingue cada categoría; el color no necesita hacerlo también.
+  Widget _scoreBar(String label, double value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
@@ -37,20 +33,26 @@ class MemoryScoreDashboard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(label, style: AppTypography.labelLarge),
               Text(
                 "${value.toStringAsFixed(1)} / 10",
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.accentText,
+                  fontFeatures: AppTypography.tabular,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           LinearProgressIndicator(
             value: value / 10,
-            backgroundColor: color.withValues(alpha: 0.1),
-            color: color,
+            backgroundColor: AppColors.accent.withValues(alpha: 0.12),
+            color: AppColors.accent,
             minHeight: 8,
-            borderRadius: BorderRadius.circular(4),
+            // AppRadius.xs (8) es el paso más pequeño de la escala; por
+            // debajo de eso (el `circular(4)` original) el radio deja de
+            // leerse como intencional.
+            borderRadius: BorderRadius.circular(AppRadius.xs),
           ),
         ],
       ),

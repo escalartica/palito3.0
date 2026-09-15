@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_typography.dart';
 import 'logic/memory_result_logic.dart';
 import 'widgets/memory_hero_card.dart';
 import 'widgets/memory_score_dashboard.dart';
@@ -23,7 +26,12 @@ class ResultScreen extends StatelessWidget {
     final bool willReturn = memoryData['volverias'] ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Tu Recuerdo Palito")),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        title: Text("Tu Recuerdo Palito", style: AppTypography.titleLarge),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -36,10 +44,7 @@ class ResultScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 30),
-            const Text(
-              "Desglose de la experiencia",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            Text("Desglose de la experiencia", style: AppTypography.titleMedium),
             const SizedBox(height: 10),
             MemoryScoreDashboard(data: memoryData),
 

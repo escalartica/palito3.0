@@ -4,11 +4,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:palito_3_0/core/models/memory_model.dart';
 import 'package:palito_3_0/core/providers/gamer_provider.dart';
+import 'package:palito_3_0/core/providers/memory_provider.dart';
 import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/utils/app_log.dart';
 import 'package:palito_3_0/core/theme/components/neo_pressable.dart';
@@ -20,12 +21,33 @@ import 'widgets/badges_modal.dart';
 import 'widgets/challenge_outcome_modal.dart';
 import 'widgets/mode_selector.dart';
 import 'widgets/pro_modal.dart';
+import '../../core/theme/components/progress_track.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-const _kDark = Color(0xFF0F172A);
-const _kYellow = Color(0xFFFFD400);
-const _kRed = Color(0xFFFF4D29);
-const _kBg = Color(0xFFFFFDF5);
+const _kDark = AppColors.textPrimary;
+const _kYellow = AppColors.primary;
+const _kRed = AppColors.accent;
+const _kBg = AppColors.background;
+
+/// Naranja de insignias/historial. Acento secundario fuera de la paleta de
+/// marca (navy/amarillo/coral), reservado a iconografía de logros. Se repite
+/// en badges_modal.dart — si se necesitara en un tercer sitio, este es el
+/// candidato a subir a AppColors como token compartido.
+const _kBadgeOrange = Color(0xFFFF9F1C);
+
+/// Colores de comensal, repartidos por turnos según el orden en que se
+/// sientan. Deterministas a propósito: el mismo sitio en la mesa da siempre
+/// el mismo color, y ninguno sale de la paleta de la app.
+const List<Color> _kPlayerPalette = <Color>[
+  AppColors.primary,
+  AppColors.accent,
+  AppColors.textPrimary,
+  Color(0xFF1E7E45), // el verde de acierto
+  Color(0xFF4E5765), // pizarra
+];
 
 // ════════════════════════════════════════════════════════════════════════════
 // GamerPage
@@ -42,35 +64,18 @@ class _GamerPageState extends ConsumerState<GamerPage>
   // 0: Ruleta Pro  |  1: Juicio Picante
   int _selectedMode = 0;
 
-  // Los comensales por defecto se llamaban 'CeH' y 'Eme' — los nombres de
-  // quienes desarrollaron la app. Cualquier persona que se descargara Palito
-  // encontraba a dos desconocidos sentados a su mesa.
-  List<Map<String, dynamic>> _players = [
-    {
-      'name': 'Tú',
-      'icon': Icons.person_rounded,
-      'color': _kYellow,
-      'points': 0,
-      'medals': 0,
-      'uid': null,
-    },
-    {
-      'name': 'Invitado',
-      'icon': Icons.favorite_rounded,
-      'color': _kRed,
-      'points': 0,
-      'medals': 0,
-      'uid': null,
-    },
-    {
-      'name': '🤖 Palito App',
-      'icon': Icons.smart_toy_rounded,
-      'color': _kDark,
-      'points': 0,
-      'medals': 0,
-      'uid': null,
-    },
-  ];
+  // LA MESA EMPIEZA VACÍA.
+  //
+  // La versión publicada traía tres comensales inventados de fábrica —dos de
+  // ellos, 'CeH' y 'Eme', los nombres de quienes desarrollaron la app—, así
+  // que cualquier persona que se descargara Palito se encontraba a dos
+  // desconocidos sentados a su mesa y un bot. Eso no es un detalle estético:
+  // la primera impresión de la Zona Gamer era "esto no es mío".
+  //
+  // Ahora la lista nace vacía y `_loadPersistedData` siembra UNA sola fila,
+  // la tuya, con tu nombre real y tu cuenta ya vinculada. A los demás los
+  // añades tú, que es justo lo que ocurre en una mesa de verdad.
+  List<Map<String, dynamic>> _players = <Map<String, dynamic>>[];
 
   final _nameController = TextEditingController();
   final _customChallengeController = TextEditingController();
@@ -78,7 +83,14 @@ class _GamerPageState extends ConsumerState<GamerPage>
   Map<String, dynamic>? _selectedWinner;
   bool _isSpinning = false;
   int _highlightedIndex = -1;
-  int _decisionsCount = 3;
+  // CERO. Estaba en 3.
+  //
+  // Era un valor de prueba que se quedó puesto, y `_loadPersistedData` solo
+  // lo pisa si ya hay algo guardado en el móvil. O sea que cualquiera que se
+  // bajaba la app y abría la Zona Gamer veía "3 decisiones" y "Racha 3" sin
+  // haber jugado nada — y peor: `_checkAndUnlockAchievements` se llamaba con
+  // ese 3, así que podía desbloquearle insignias que no se había ganado.
+  int _decisionsCount = 0;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -94,6 +106,21 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
   String? _currentChallenge;
 
+  /// Lo que propone Palito cuando le toca a él.
+  ///
+  /// Un comensal llamado "Palito" es la propia app sentada a la mesa: cuando
+  /// la ruleta le señala, en vez de mirar a nadie **elige el plato**. Hasta
+  /// ahora ese comensal se podía añadir escribiendo el nombre a mano y la
+  /// ruleta lo trataba como a cualquier otro: salía su nombre, y ahí acababa
+  /// la gracia — la app anunciaba que le tocaba elegir a ella y no elegía
+  /// nada.
+  String? _palitoPick;
+
+  /// La tarjeta de "qué es esto", cerrada a mano. No se guarda entre
+  /// sesiones a propósito: si la cierras sin jugar y vuelves mañana sin
+  /// haber jugado, sigues sin saber qué es esto.
+  bool _introDismissed = false;
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -101,19 +128,19 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: AppAnimation.pulse,
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.04).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _pulseController, curve: AppAnimation.inOut),
     );
 
     _winnerScaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: AppAnimation.slow,
     );
     _winnerScaleAnimation = CurvedAnimation(
       parent: _winnerScaleController,
-      curve: Curves.elasticOut,
+      curve: AppAnimation.celebrate,
     );
 
     _loadPersistedData();
@@ -170,11 +197,31 @@ class _GamerPageState extends ConsumerState<GamerPage>
         }
       }
 
+      // Primera vez en esta Zona Gamer: te sentamos a ti y a nadie más.
+      if (_players.isEmpty) {
+        final String? myName = ref.read(currentDisplayNameProvider);
+        final String? uid = ref.read(gamerServiceProvider).currentUid;
+        setState(() {
+          _players = <Map<String, dynamic>>[
+            <String, dynamic>{
+              'name': (myName != null && myName.trim().isNotEmpty)
+                  ? myName.trim()
+                  : 'Tú',
+              'icon': Icons.person_rounded,
+              'color': _kYellow,
+              'points': 0,
+              'medals': 0,
+              'uid': uid,
+            },
+          ];
+        });
+      }
+
       final maxPts = _players.fold<int>(
         0,
         (m, p) => (p['points'] as int? ?? 0) > m ? p['points'] as int : m,
       );
-      _checkAndUnlockAchievements(maxPts, _decisionsCount, fromLoad: true);
+      _checkAndUnlockAchievements(maxPts, fromLoad: true);
 
       // Ninguna fila por defecto traía `uid`, y `_syncGamerStats` solo
       // sincroniza la fila vinculada: los puntos NUNCA llegaban a la cuenta
@@ -230,7 +277,9 @@ class _GamerPageState extends ConsumerState<GamerPage>
         final icon = p['icon'] is IconData
             ? p['icon'] as IconData
             : Icons.face_rounded;
-        final color = p['color'] is Color ? p['color'] as Color : Colors.grey;
+        final color = p['color'] is Color
+            ? p['color'] as Color
+            : AppColors.textMuted;
         return {
           'name': p['name']?.toString() ?? 'Comensal',
           'iconCode': icon.codePoint,
@@ -286,26 +335,135 @@ class _GamerPageState extends ConsumerState<GamerPage>
       (m, p) => (p['points'] as int? ?? 0) > m ? p['points'] as int : m,
     );
     if (!mounted) return;
-    _checkAndUnlockAchievements(maxPts, _decisionsCount);
+    _checkAndUnlockAchievements(maxPts);
+  }
+
+  /// Recalcula el progreso de los logros con el estado actual de la mesa.
+  ///
+  /// Hace falta porque hay logros que no dependen de girar —"Mesa llena"
+  /// depende de cuánta gente hay sentada— y el progreso solo se recalculaba
+  /// al arrancar y después de cada tirada. Sin esto, sentabas al quinto
+  /// comensal y la tira seguía diciendo "te faltan 2" hasta la siguiente
+  /// vuelta de ruleta.
+  void _refreshAchievements() {
+    final int maxPts = _players.fold<int>(
+      0,
+      (int m, Map<String, dynamic> p) =>
+          (p['points'] as int? ?? 0) > m ? p['points'] as int : m,
+    );
+    _checkAndUnlockAchievements(maxPts);
+  }
+
+  /// El logro bloqueado que está más cerca de caer.
+  ///
+  /// "Más cerca" es el porcentaje de progreso, no cuántas unidades faltan:
+  /// estar a 1 de 25 decisiones no es estar cerca, y estar a 1 de 2 sí.
+  Map<String, dynamic>? get _nextAchievement {
+    Map<String, dynamic>? best;
+    double bestRatio = -1;
+
+    for (final Map<String, dynamic> a in _achievements) {
+      if (a['unlocked'] == true) continue;
+
+      final int goal = a['goal'] as int? ?? 0;
+      if (goal <= 0) continue;
+
+      final double ratio = ((a['progress'] as int? ?? 0) / goal).clamp(0.0, 1.0);
+      if (ratio > bestRatio) {
+        bestRatio = ratio;
+        best = a;
+      }
+    }
+
+    return best;
+  }
+
+  // ─── Palito, el comensal que es la app ──────────────────────────────────────
+
+  /// Si este comensal es la propia app.
+  ///
+  /// Se marca con `isBot` al añadirlo, pero también se reconoce por el
+  /// nombre: quien ya se había inventado el truco escribiendo "Palito" o
+  /// "Palito App" a mano —que es exactamente de donde salió esta idea— se
+  /// encuentra con que ahora funciona, sin tener que borrar y volver a
+  /// añadir.
+  static bool _isPalito(Map<String, dynamic> player) {
+    if (player['isBot'] == true) return true;
+
+    final String name = (player['name']?.toString() ?? '')
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z]'), '');
+
+    return name == 'palito' || name == 'palitoapp';
+  }
+
+  /// El plato que propone Palito, sacado del diario que tenéis abierto.
+  ///
+  /// No es aleatorio del todo: tira primero de los platos que puntuasteis
+  /// con un 3,5 o más y a los que dijisteis que volveríais. Proponer a
+  /// ciegas el sitio que os pareció regular sería un chiste que se gasta a
+  /// la primera; proponer uno de los buenos es una recomendación de verdad,
+  /// hecha con lo que vosotros mismos habéis escrito.
+  String? _palitoSuggestion() {
+    final List<MemoryModel> memories = ref.read(memoryProvider);
+    if (memories.isEmpty) return null;
+
+    final List<MemoryModel> favourites = memories
+        .where((MemoryModel m) => m.rating >= 3.5 && m.wouldReturn)
+        .toList();
+
+    final List<MemoryModel> pool = favourites.isEmpty ? memories : favourites;
+    final MemoryModel pick = pool[Random().nextInt(pool.length)];
+
+    final String dish = pick.title.trim();
+    final String place = pick.restaurantName.trim();
+
+    if (place.isEmpty) return dish.isEmpty ? null : dish;
+    if (dish.isEmpty || dish.toLowerCase() == place.toLowerCase()) return place;
+
+    return '$dish · $place';
   }
 
   // ─── Logros ─────────────────────────────────────────────────────────────────
-  void _checkAndUnlockAchievements(
-    int maxPoints,
-    int streak, {
-    bool fromLoad = false,
-  }) {
+  /// El segundo parámetro era `int streak` y las dos llamadas le pasaban
+  /// `_decisionsCount`: no había ninguna racha, era el total de decisiones
+  /// con otro nombre. Se quita en vez de dejar un parámetro que promete un
+  /// dato que la app no tiene.
+  void _checkAndUnlockAchievements(int maxPoints, {bool fromLoad = false}) {
     final newlyUnlocked = <Map<String, dynamic>>[];
 
+    // Señales de la mesa, calculadas una sola vez para los siete logros.
+    final int playerCount = _players.length;
+    final int playersWithPoints = _players
+        .where((Map<String, dynamic> p) => (p['points'] as int? ?? 0) > 0)
+        .length;
+    final int maxMedals = _players.fold<int>(
+      0,
+      (int m, Map<String, dynamic> p) =>
+          (p['medals'] as int? ?? 0) > m ? p['medals'] as int : m,
+    );
+
     for (final a in _achievements) {
-      if (a['unlocked'] == true) continue;
-      final met = GamerGameLogic.isAchievementMet(
-        achievementId: a['id']?.toString() ?? '',
+      final String id = a['id']?.toString() ?? '';
+
+      final progress = GamerGameLogic.achievementProgress(
+        achievementId: id,
         maxPoints: maxPoints,
-        streak: streak,
         decisionsCount: _decisionsCount,
+        playerCount: playerCount,
+        playersWithPoints: playersWithPoints,
+        maxMedals: maxMedals,
       );
-      if (met) {
+
+      // El progreso se guarda siempre, conseguido o no: es lo que el panel
+      // de insignias enseña debajo de cada logro bloqueado ("9 de 10") para
+      // que se vea lo cerca que está.
+      a['progress'] = progress.current;
+      a['goal'] = progress.goal;
+
+      if (a['unlocked'] == true) continue;
+
+      if (progress.goal > 0 && progress.current >= progress.goal) {
         a['unlocked'] = true;
         if (!fromLoad) newlyUnlocked.add(a);
       }
@@ -334,14 +492,14 @@ class _GamerPageState extends ConsumerState<GamerPage>
     // mayor carga emocional de la app (raro, "delight" en el sentido de
     // apple-design), así que se le da una entrada propia con rebote —a
     // diferencia del fade+scale genérico de Material— en vez de reusar
-    // el mismo Curves.easeOutBack ya usado en el resto de la UI para
+    // el mismo AppAnimation.pop ya usado en el resto de la UI para
     // mantener coherencia de vocabulario.
     showGeneralDialog(
       context: context,
       barrierLabel: 'Logro desbloqueado',
       barrierDismissible: true,
       barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 400),
+      transitionDuration: AppAnimation.slow,
       transitionBuilder: (ctx, animation, secondaryAnimation, child) {
         // reverseCurve sin rebote: el rebote solo tiene sentido
         // "llegando" (el logro apareciendo), no "yéndose" — reproducir
@@ -349,8 +507,11 @@ class _GamerPageState extends ConsumerState<GamerPage>
         // desinflara de forma rara.
         final curved = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutBack,
-          reverseCurve: Curves.easeIn,
+          // `celebrate` existe exactamente para esto y no se estaba usando
+          // en ningún sitio: se pasa de largo un 45 % y vuelve, una sola
+          // vez. `pop` (14 %) es el rebote de un chip.
+          curve: AppAnimation.celebrate,
+          reverseCurve: AppAnimation.exit,
         );
         return Opacity(
           opacity: animation.value.clamp(0.0, 1.0),
@@ -359,37 +520,52 @@ class _GamerPageState extends ConsumerState<GamerPage>
       },
       pageBuilder: (ctx, animation, secondaryAnimation) => AlertDialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           side: const BorderSide(color: _kDark, width: 2.5),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Navy sobre el color del logro, nunca blanco.
+            //
+            // El icono iba en blanco y el título en el color del logro. Con
+            // los colores viejos de Material colaba de milagro; desde que
+            // los logros usan la paleta de la marca, un logro amarillo
+            // pintaba un icono blanco sobre amarillo (1,4:1) y un título
+            // amarillo sobre blanco (1,6:1). El momento más celebrado de la
+            // app enseñaba un premio que no se leía.
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(color: _kDark, width: 2),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(color: _kDark, offset: Offset(3, 3), blurRadius: 0),
+                ],
               ),
-              child: Icon(icon, size: 40, color: Colors.white),
+              child: Icon(icon, size: 40, color: _kDark),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
-              '¡Logro Desbloqueado!',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: _kDark,
+              'LOGRO DESBLOQUEADO',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+                color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               title,
+              textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                height: 1.15,
+                letterSpacing: -0.4,
+                color: _kDark,
               ),
             ),
             const SizedBox(height: 8),
@@ -398,7 +574,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: Colors.grey.shade600,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 20),
@@ -407,11 +583,14 @@ class _GamerPageState extends ConsumerState<GamerPage>
               height: 42,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
+                  // Amarillo de marca con texto navy (12,47:1), no el color
+                  // del logro con texto blanco: ese blanco sobre amarillo
+                  // medía 1,4:1.
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: _kDark,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     side: const BorderSide(color: _kDark, width: 2),
                   ),
                 ),
@@ -440,6 +619,29 @@ class _GamerPageState extends ConsumerState<GamerPage>
   };
 
   // ─── Jugadores ──────────────────────────────────────────────────────────────
+  /// Sienta a la app a la mesa como un comensal más.
+  void _addPalito() {
+    if (_players.any(_isPalito)) return;
+
+    setState(() {
+      _players.add(<String, dynamic>{
+        'name': 'Palito',
+        'icon': Icons.restaurant_rounded,
+        'color': AppColors.textPrimary,
+        'points': 0,
+        'medals': 0,
+        'uid': null,
+        'isBot': true,
+      });
+    });
+
+    _refreshAchievements();
+    Navigator.pop(context);
+    HapticFeedback.mediumImpact();
+    _showFeedbackSnackbar('Palito se sienta con vosotros');
+    _savePersistedData();
+  }
+
   void _addPlayer() {
     final text = _nameController.text.trim();
     if (text.isEmpty) return;
@@ -448,7 +650,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _players.add({
         'name': text,
         'icon': Icons.face_rounded,
-        'color': Colors.primaries[Random().nextInt(Colors.primaries.length)],
+        // Antes: `Colors.primaries[Random().nextInt(...)]`. Un color de
+        // Material al azar —lima, cian, índigo— en una app que es navy,
+        // amarillo y coral, y distinto cada vez que se añadía a la misma
+        // persona. Ahora se reparte por turnos de una paleta corta y
+        // propia, así que dos comensales nunca coinciden hasta el quinto.
+        'color': _kPlayerPalette[_players.length % _kPlayerPalette.length],
         'points': 0,
         'medals': 0,
         'uid': null,
@@ -456,6 +663,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _nameController.clear();
     });
 
+    _refreshAchievements();
     Navigator.pop(context);
     HapticFeedback.mediumImpact();
     _showFeedbackSnackbar('¡$text añadido a la mesa!');
@@ -516,6 +724,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
         _selectedWinner = null;
       }
     });
+    _refreshAchievements();
     _savePersistedData();
     HapticFeedback.mediumImpact();
     _showFeedbackSnackbar('Comensal $removedName eliminado');
@@ -564,6 +773,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _decisionsCount = 0;
       _selectedWinner = null;
       _currentChallenge = null;
+      _palitoPick = null;
       _highlightedIndex = -1;
       // Los logros NO se vuelven a bloquear: un logro conseguido no debería
       // perderse al reiniciar la puntuación de una sesión de juego.
@@ -600,7 +810,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
           backgroundColor: _kYellow,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
@@ -647,6 +857,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
   void _showChallengeOutcomeDialog(String playerName, String challengeText) {
     showModalBottomSheet(
       context: context,
+      // Sobre TODO, incluido el dock. Sin esto la hoja se abre dentro
+      // del navegador del shell, y el dock —que vive en un Stack por
+      // encima— le pasa por delante y le tapa el botón de confirmar.
+      // Pasaba en el modal de añadir comensal: el botón "Añadir a la
+      // Mesa" quedaba detrás de la barra de pestañas.
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => ChallengeOutcomeModal(
@@ -661,6 +877,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
   void _showAddChallengeDialog() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
@@ -702,12 +919,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                hintText: 'Ej: Pagar la cuenta o hacer un baile...',
-                hintStyle: TextStyle(color: Colors.grey.shade400),
+                hintText: 'Ej: Pagar la cuenta o hacer un baile…',
+                hintStyle: TextStyle(color: AppColors.textMuted),
                 filled: true,
-                fillColor: Colors.grey.shade50,
+                fillColor: AppColors.surfaceWarm,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -722,7 +939,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                 ),
                 onPressed: () {
@@ -764,6 +981,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) =>
@@ -774,6 +992,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
   void _showZonaGamerProModal() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => ProModal(
@@ -818,24 +1037,58 @@ class _GamerPageState extends ConsumerState<GamerPage>
   void _showAddPlayerDialog() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) =>
-          AddPlayerModal(controller: _nameController, onAdd: _addPlayer),
+          AddPlayerModal(
+            controller: _nameController,
+            onAdd: _addPlayer,
+            onAddPalito: _addPalito,
+            palitoAlreadyPlaying: _players.any(_isPalito),
+          ),
     );
   }
 
   // ─── Ruleta ──────────────────────────────────────────────────────────────────
   void _spinGame() {
-    if (_players.isEmpty || _isSpinning || !mounted) return;
+    if (_isSpinning || !mounted) return;
+
+    // Una ruleta con un solo comensal siempre sale tú. Antes el botón se
+    // pulsaba igual y "elegía" al único que había, que es una forma tonta de
+    // no hacer nada. Ahora dice qué falta.
+    if (_players.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.textPrimary,
+          content: const Text(
+            'Añade a quien esté contigo en la mesa para poder jugar.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          action: SnackBarAction(
+            label: 'Añadir',
+            textColor: AppColors.primary,
+            onPressed: _showAddPlayerDialog,
+          ),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isSpinning = true;
       _selectedWinner = null;
       _currentChallenge = null;
+      _palitoPick = null;
     });
-    // El pulso solo mientras gira.
-    _pulseController.repeat(reverse: true);
+    // El pulso solo mientras gira — y solo si el sistema no pide reducir el
+    // movimiento. Un latido que no para nunca es de lo que peor sienta a
+    // quien tiene vértigo o migraña, y es justo lo que esa opción del sistema
+    // existe para evitar.
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _pulseController.repeat(reverse: true);
+    }
     HapticFeedback.heavyImpact();
 
     final random = Random();
@@ -868,6 +1121,11 @@ class _GamerPageState extends ConsumerState<GamerPage>
           _isSpinning = false;
           _selectedWinner = winner;
           _decisionsCount++;
+
+          // Si le toca a la app, la app elige.
+          _palitoPick = (_selectedMode == 0 && _isPalito(winner))
+              ? _palitoSuggestion()
+              : null;
 
           final outcome = GamerGameLogic.computeSpinOutcome(
             selectedMode: _selectedMode,
@@ -911,7 +1169,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
         _showFeedbackSnackbar(
           _selectedMode == 0
-              ? '🍽️ ¡A $winnerName le toca elegir plato!'
+              ? 'A $winnerName le toca elegir plato'
               : '🔥 ¡Juicio Picante para $winnerName!',
         );
 
@@ -937,6 +1195,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
           _isSpinning = false;
           _selectedWinner = null;
           _currentChallenge = null;
+          _palitoPick = null;
         });
         _showFeedbackSnackbar(
           '⚠️ No se pudo completar el giro. Inténtalo de nuevo.',
@@ -955,27 +1214,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
       appBar: AppBar(
         backgroundColor: _kBg,
         elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: _kDark, width: 2),
-              boxShadow: const [
-                BoxShadow(color: _kDark, offset: Offset(2, 2), blurRadius: 0),
-              ],
-            ),
-            child: const Icon(
-              Icons.arrow_back_rounded,
-              size: 16,
-              color: _kDark,
-            ),
-          ),
-          tooltip: 'Volver',
-          onPressed: () => context.go('/'),
-        ),
-        titleSpacing: 0,
+        // SIN flecha de volver. Zona Gamer es una pestaña raíz del dock, no
+        // una pantalla apilada: esa flecha prometía un "atrás" que no existe
+        // y en realidad te mandaba a Inicio, que no es de donde venías. El
+        // mismo fallo que tenía el Perfil.
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
         title: Row(
           children: [
             Container(
@@ -985,13 +1229,14 @@ class _GamerPageState extends ConsumerState<GamerPage>
               padding: const EdgeInsets.all(1.5),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.xs),
                 border: Border.all(color: _kDark, width: 1.5),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AppRadius.xs),
                 child: Image.asset(
                   'assets/images/logo.png',
+                  semanticLabel: 'Logotipo de Palito de Sabores',
                   fit: BoxFit.contain,
                 ),
               ),
@@ -1017,7 +1262,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
                 border: Border.all(color: _kDark, width: 1.5),
                 boxShadow: const [
                   BoxShadow(color: _kDark, offset: Offset(2, 2), blurRadius: 0),
@@ -1025,27 +1270,32 @@ class _GamerPageState extends ConsumerState<GamerPage>
               ),
               child: const Icon(
                 Icons.military_tech_rounded,
-                color: Color(0xFFFF9F1C),
+                color: _kBadgeOrange,
                 size: 18,
               ),
             ),
             onPressed: _showBadgesModal,
             tooltip: 'Ver Puntuaciones e Insignias',
           ),
-          Container(
+          // Era una llama y un número, sin una palabra. Nadie sabía qué
+          // contaba, y para un lector de pantalla era literalmente "3".
+          Semantics(
+            label: '$_decisionsCount decisiones tomadas en esta partida',
+            child: Container(
             margin: const EdgeInsets.only(right: 16, left: 6),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: _kYellow,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(color: _kDark, width: 1.5),
             ),
-            child: Row(
+            child: ExcludeSemantics(
+              child: Row(
               children: [
                 const Icon(
                   Icons.local_fire_department_rounded,
                   size: 15,
-                  color: Colors.black87,
+                  color: _kDark,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -1056,7 +1306,18 @@ class _GamerPageState extends ConsumerState<GamerPage>
                     fontSize: 13,
                   ),
                 ),
+                const SizedBox(width: 4),
+                Text(
+                  'decisiones',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    color: _kDark,
+                    fontSize: 10,
+                  ),
+                ),
               ],
+            ),
+            ),
             ),
           ),
         ],
@@ -1070,6 +1331,25 @@ class _GamerPageState extends ConsumerState<GamerPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Qué es esto ───────────────────────────────────────────────
+                  //
+                  // Zona Gamer no se explicaba en ninguna parte. Entrabas y
+                  // te encontrabas dos pestañas, una tarjeta amarilla que
+                  // preguntaba "¿Quién elige?" y un botón de girar: se podía
+                  // deducir con dos o tres toques, pero nadie tiene por qué
+                  // deducir para qué sirve una pestaña de la barra.
+                  //
+                  // Sale solo hasta la primera tirada —`_decisionsCount` ya
+                  // se guarda entre sesiones, así que no hace falta recordar
+                  // nada más— y se puede cerrar antes. Quien ya juega no lo
+                  // vuelve a ver.
+                  if (_decisionsCount == 0 && !_introDismissed) ...<Widget>[
+                    _GamerIntroCard(
+                      onDismiss: () => setState(() => _introDismissed = true),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // ── Selector de modo ──────────────────────────────────────────
                   ModeSelector(
                     selectedMode: _selectedMode,
@@ -1082,15 +1362,29 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
                   // ── Panel resultado / ruleta ───────────────────────────────────
                   ScaleTransition(
+                    // Desde el 90 %. El panel entero creciendo desde un punto
+                    // no se leia como celebracion, se leia como un fallo de
+                    // dibujado.
                     scale: _selectedWinner != null
-                        ? _winnerScaleAnimation
-                        : const AlwaysStoppedAnimation(1.0),
+                        ? Tween<double>(
+                            begin: 0.90,
+                            end: 1.0,
+                          ).animate(_winnerScaleAnimation)
+                        : const AlwaysStoppedAnimation<double>(1.0),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
+                      duration: AppAnimation.standard,
                       width: double.infinity,
                       padding: const EdgeInsets.all(26),
                       decoration: BoxDecoration(
                         color: _selectedMode == 0 ? _kYellow : _kRed,
+                        // 32, no AppRadius.xl (24): coincide con el radio de
+                        // las hojas inferiores de esta misma pantalla
+                        // (badges/pro/reto/añadir comensal), que ya usan 32
+                        // en su esquina superior. Es una superficie grande al
+                        // mismo nivel visual que esas hojas, así que comparte
+                        // su radio en vez del de "tarjeta". Pendiente:
+                        // formalizar un sexto paso en AppRadius si el patrón
+                        // se confirma en el resto de la app.
                         borderRadius: BorderRadius.circular(32),
                         border: Border.all(color: _kDark, width: 2),
                         boxShadow: const [
@@ -1106,16 +1400,28 @@ class _GamerPageState extends ConsumerState<GamerPage>
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
+                              color: AppColors.surface,
                               shape: BoxShape.circle,
                               border: Border.all(color: _kDark, width: 1.5),
                             ),
                             child: ClipOval(
+                              // `contain`, NO `cover`. El PNG mide 143x136:
+                              // no es cuadrado. `cover` escala hasta llenar
+                              // el círculo y RECORTA lo que sobra, así que el
+                              // tenedor salía descentrado. `contain` lo
+                              // muestra entero y centrado, que es lo que hay
+                              // que hacer siempre con un icono de marca.
+                              //
+                              // Es decorativo: al lado hay texto que dice lo
+                              // mismo, así que se excluye del lector de
+                              // pantalla en vez de repetirlo.
                               child: Image.asset(
                                 'assets/icons/IconoRedondoTenedor.png',
                                 width: 52,
                                 height: 52,
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.center,
+                                excludeFromSemantics: true,
                                 errorBuilder: (_, _, _) => Container(
                                   width: 52,
                                   height: 52,
@@ -1132,13 +1438,15 @@ class _GamerPageState extends ConsumerState<GamerPage>
                           Text(
                             _selectedWinner == null
                                 ? (_isSpinning
-                                      ? '⚡ Buscando comensal...'
-                                      : (_selectedMode == 0
-                                            ? '¡Gira para ver quién elige plato!'
-                                            : '¡El juicio picante va a empezar!'))
+                                      ? 'Buscando comensal…'
+                                      : (_players.length < 2
+                                            ? 'Todavía no hay con quién jugar'
+                                            : 'Sois ${_players.length} en la mesa'))
                                 : (_selectedMode == 0
-                                      ? '🍽️ ¡Le toca elegir plato a:'
-                                      : '🎉 ¡Veredicto Final:'),
+                                      ? (_isPalito(_selectedWinner!)
+                                            ? 'Palito elige por vosotros'
+                                            : 'Le toca elegir plato a')
+                                      : 'Veredicto final'),
                             style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1153,8 +1461,25 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             _selectedWinner != null
                                 ? _selectedWinner!['name'] as String
                                 : (_selectedMode == 0
-                                      ? 'Ruleta de Platos'
-                                      : 'Juicio Pendiente'),
+                                      // El titular repetía la línea de
+                                      // arriba ("¡Gira para ver quién elige
+                                      // plato!" / "Ruleta de Platos"): dos
+                                      // frases para decir lo mismo, en el
+                                      // elemento más grande de la pantalla.
+                                      // Ahora arriba va cuántos sois y aquí
+                                      // la pregunta que el juego responde.
+                                      // Con un solo comensal, el titular
+                                      // preguntaba "¿Quién elige?" encima de
+                                      // un "¿quién está en la mesa?": dos
+                                      // preguntas apiladas, y la grande sin
+                                      // respuesta posible. El elemento mayor
+                                      // de la pantalla dice ahora qué hacer.
+                                      ? (_players.length < 2
+                                            ? 'Añade a los comensales'
+                                            : '¿Quién elige?')
+                                      : (_players.length < 2
+                                            ? 'Añade a los comensales'
+                                            : '¿A quién le cae?')),
                             style: GoogleFonts.outfit(
                               fontSize: 32,
                               fontWeight: FontWeight.w900,
@@ -1162,6 +1487,60 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             ),
                             textAlign: TextAlign.center,
                           ),
+
+                          // LO QUE ELIGE PALITO.
+                          //
+                          // Si el comensal que ha salido es la app, aquí va
+                          // el plato, sacado de vuestro propio diario. Sin
+                          // esto, la ruleta anunciaba que elegía la app y no
+                          // elegía nada: el chiste se quedaba a medias.
+                          if (_selectedWinner != null &&
+                              _isPalito(_selectedWinner!) &&
+                              _selectedMode == 0) ...<Widget>[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                                border: Border.all(color: _kDark, width: 2),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(
+                                    _palitoPick == null
+                                        ? 'TODAVÍA NO OS CONOZCO'
+                                        : 'ESTA NOCHE, ESTO',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.2,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _palitoPick ??
+                                        'Apuntad algún plato y os propongo '
+                                            'uno de los vuestros',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: _palitoPick == null ? 14 : 17,
+                                      height: 1.25,
+                                      fontWeight: FontWeight.w800,
+                                      color: _kDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           if (_selectedMode == 1 &&
                               _currentChallenge != null) ...[
                             const SizedBox(height: 14),
@@ -1178,7 +1557,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(AppRadius.lg),
                                   border: Border.all(color: _kDark, width: 1.5),
                                   boxShadow: const [
                                     BoxShadow(
@@ -1250,10 +1629,15 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             Flexible(
                               child: Text(
                                 _isSpinning
-                                    ? 'Girando Ruleta...'
+                                    ? 'Girando la ruleta…'
+                                    // En español solo va en mayúscula la
+                                    // primera palabra. "Girar Ruleta" y
+                                    // "Juicio Picante" son mayúsculas a la
+                                    // inglesa: en un botón español se leen
+                                    // como un error, no como énfasis.
                                     : (_selectedMode == 0
-                                          ? '¡Girar Ruleta!'
-                                          : '¡Lanzar Juicio Picante!'),
+                                          ? '¡Girar la ruleta!'
+                                          : '¡Lanzar el juicio picante!'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
@@ -1269,6 +1653,26 @@ class _GamerPageState extends ConsumerState<GamerPage>
                       ),
                     ),
                   ),
+                  // ── El siguiente logro ────────────────────────────────────────
+                  //
+                  // Lo que faltaba para que esto fuera un juego y no un
+                  // sorteo. Los logros existían pero solo se veían entrando
+                  // en un panel, dentro de otro panel: quien no los buscaba
+                  // no sabía que estaban, y quien los veía se encontraba una
+                  // lista de candados sin decir cuánto faltaba.
+                  //
+                  // Aquí sale uno solo —el más cerca de conseguirse— con su
+                  // barra, justo debajo del botón de girar. "Te falta 1" al
+                  // lado del botón es la diferencia entre una tirada y otra
+                  // más.
+                  if (_nextAchievement != null) ...<Widget>[
+                    const SizedBox(height: 18),
+                    _NextAchievementStrip(
+                      achievement: _nextAchievement!,
+                      onTap: _showBadgesModal,
+                    ),
+                  ],
+
                   const SizedBox(height: 28),
 
                   // ── Comensales ────────────────────────────────────────────────
@@ -1277,7 +1681,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                     children: [
                       Expanded(
                         child: Text(
-                          'Comensales en la Mesa (${_players.length})',
+                          'Comensales en la mesa (${_players.length})',
                           style: GoogleFonts.outfit(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -1306,8 +1710,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   Text(
                     'Toca tu comensal para vincular tus puntos a tu cuenta',
                     style: GoogleFonts.inter(
-                      fontSize: 11.5,
-                      color: const Color(0xFF5A6572),
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1336,13 +1740,13 @@ class _GamerPageState extends ConsumerState<GamerPage>
                           padding: const EdgeInsets.only(right: 12),
                           child: Material(
                             color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
                               onTap: () => _toggleLinkedToMe(index),
                               onLongPress: () => _confirmRemovePlayer(index),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
+                                duration: AppAnimation.fast,
                                 width: 76,
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 10,
@@ -1357,10 +1761,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                   color: isHighlighted
                                       ? _kYellow
                                       : Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(AppRadius.lg),
                                   border: Border.all(
                                     color: isHighlighted || isWinner
-                                        ? const Color(0xFFFF9F1C)
+                                        ? _kBadgeOrange
                                         : _kDark,
                                     width: isHighlighted || isWinner ? 2 : 1.5,
                                   ),
@@ -1378,14 +1782,51 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                     Stack(
                                       clipBehavior: Clip.none,
                                       children: [
+                                        // Cuando la tarjeta está
+                                        // seleccionada su fondo es amarillo,
+                                        // y el círculo del comensal se
+                                        // pintaba con SU color al 20 % y el
+                                        // icono en ese mismo color. Para
+                                        // quien tuviera el amarillo de marca
+                                        // —el primer comensal de la mesa,
+                                        // siempre— el resultado era amarillo
+                                        // sobre amarillo: el icono
+                                        // desaparecía justo en el momento en
+                                        // que la ruleta lo elegía, que es
+                                        // cuando más hay que verlo.
+                                        //
+                                        // Seleccionado: círculo blanco y
+                                        // icono navy, con borde. Contraste
+                                        // garantizado sea cual sea el color
+                                        // del comensal.
                                         CircleAvatar(
                                           radius: 20,
-                                          backgroundColor: playerColor
-                                              .withValues(alpha: 0.2),
-                                          child: Icon(
-                                            player['icon'] as IconData,
-                                            color: playerColor,
-                                            size: 18,
+                                          backgroundColor: isHighlighted
+                                              ? Colors.white
+                                              : playerColor.withValues(
+                                                  alpha: 0.2,
+                                                ),
+                                          child: Container(
+                                            decoration: isHighlighted
+                                                ? const BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    border:
+                                                        Border.fromBorderSide(
+                                                          BorderSide(
+                                                            color: _kDark,
+                                                            width: 1.5,
+                                                          ),
+                                                        ),
+                                                  )
+                                                : null,
+                                            alignment: Alignment.center,
+                                            child: Icon(
+                                              player['icon'] as IconData,
+                                              color: isHighlighted
+                                                  ? _kDark
+                                                  : playerColor,
+                                              size: 18,
+                                            ),
                                           ),
                                         ),
                                         if (isLinkedToMe)
@@ -1437,10 +1878,16 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   const SizedBox(height: 28),
 
                   // ── Zona Gamer Pro ────────────────────────────────────────────
+                  // Ponía "Zona Gamer / Experiencia Pro" —el nombre de la
+                  // pantalla en la que ya estás— en un morado que no aparece
+                  // en ningún otro sitio de la app. Lo que abre de verdad es
+                  // el resumen de la partida: cuántos sois, cuántas
+                  // decisiones lleváis, el historial, las insignias y el
+                  // botón de empezar de cero. Ahora lo dice.
                   ZonaGamerCard(
-                    title: 'Zona Gamer',
-                    subtitle: 'Experiencia Pro',
-                    backgroundColor: Colors.deepPurple,
+                    title: 'Resumen de la partida',
+                    subtitle: 'Insignias, historial y empezar de cero',
+                    backgroundColor: _kDark,
                     onTap: _showZonaGamerProModal,
                   ),
                   const SizedBox(height: 28),
@@ -1464,7 +1911,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             'Limpiar',
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: Colors.red.shade400,
+                              // `Colors.red.shade400` medía 3,49:1 sobre
+                              // blanco: por debajo del 4,5:1 que pide un
+                              // texto. El rojo de error de la app mide 5,44.
+                              color: AppColors.error,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1479,7 +1929,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(color: _kDark, width: 1.5),
                         boxShadow: const [
                           BoxShadow(
@@ -1493,7 +1943,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                         'Todavía no hay registros en esta sesión. ¡Gira la ruleta para empezar!',
                         style: GoogleFonts.inter(
                           fontSize: 13,
-                          color: const Color(0xFF5A6572),
+                          color: AppColors.textSecondary,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -1505,7 +1955,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                           border: Border.all(color: _kDark, width: 1.5),
                           boxShadow: const [
                             BoxShadow(
@@ -1524,7 +1974,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                   const Icon(
                                     Icons.history_rounded,
                                     size: 18,
-                                    color: Color(0xFFFF9F1C),
+                                    color: _kBadgeOrange,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
@@ -1545,7 +1995,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                           record['detail']!,
                                           style: GoogleFonts.inter(
                                             fontSize: 12,
-                                            color: Colors.grey.shade600,
+                                            color: AppColors.textSecondary,
                                           ),
                                         ),
                                       ],
@@ -1559,7 +2009,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                               record['time']!,
                               style: GoogleFonts.inter(
                                 fontSize: 11,
-                                color: const Color(0xFF5A6572),
+                                color: AppColors.textSecondary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1577,7 +2027,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: _kRed.withValues(alpha: 0.5)),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                       ),
                       onPressed: _showAddChallengeDialog,
@@ -1602,6 +2052,257 @@ class _GamerPageState extends ConsumerState<GamerPage>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// La tira del siguiente logro: qué es, cuánto llevas y cuánto falta.
+class _NextAchievementStrip extends StatelessWidget {
+  const _NextAchievementStrip({
+    required this.achievement,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> achievement;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final String title = achievement['title']?.toString() ?? '';
+    final int goal = achievement['goal'] as int? ?? 1;
+    final int current = (achievement['progress'] as int? ?? 0).clamp(0, goal);
+    final int missing = goal - current;
+
+    return Semantics(
+      button: true,
+      label:
+          'Siguiente logro: $title. Llevas $current de $goal. '
+          'Toca para ver todos los logros',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: onTap,
+          child: ExcludeSemantics(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceWarm,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: _kDark, width: AppBorder.thin),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    achievement['icon'] as IconData? ?? Icons.star_rounded,
+                    size: 22,
+                    color: _kDark,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                  color: _kDark,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              missing == 1 ? 'te falta 1' : 'te faltan $missing',
+                              style: GoogleFonts.inter(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.accentText,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        ProgressTrack(
+                          value: current / goal,
+                          color: AppColors.primary,
+                          height: 9,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Qué es Zona Gamer, en cuatro líneas y una vez.
+class _GamerIntroCard extends StatelessWidget {
+  const _GamerIntroCard({required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 16, 12, 18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWarm,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: _kDark, width: AppBorder.normal),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: _kDark, offset: Offset(3, 3), blurRadius: 0),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '¿Quién elige hoy?',
+                  style: GoogleFonts.outfit(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
+                    color: _kDark,
+                  ),
+                ),
+              ),
+              Semantics(
+                button: true,
+                label: 'Cerrar la explicación',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  onTap: onDismiss,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Para la discusión de todas las comidas. Sentáis a la mesa a '
+            'quien esté, giráis, y la ruleta decide.',
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              height: 1.5,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _IntroLine(
+            icon: Icons.casino_rounded,
+            title: 'Ruleta',
+            text: 'Señala a quién le toca elegir plato.',
+          ),
+          const SizedBox(height: 10),
+          const _IntroLine(
+            icon: Icons.local_fire_department_rounded,
+            title: 'Juicio picante',
+            text: 'Al señalado le cae un reto. Vale medalla.',
+          ),
+          const SizedBox(height: 10),
+          const _IntroLine(
+            icon: Icons.restaurant_rounded,
+            title: 'Palito',
+            text: 'Siéntalo a la mesa y, si le toca, elige él '
+                'de vuestro diario.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroLine extends StatelessWidget {
+  const _IntroLine({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.tintPrimary,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: _kDark, width: 1.5),
+          ),
+          child: Icon(icon, size: 16, color: _kDark),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Text.rich(
+              TextSpan(
+                children: <TextSpan>[
+                  TextSpan(
+                    text: '$title. ',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: _kDark,
+                    ),
+                  ),
+                  TextSpan(
+                    text: text,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

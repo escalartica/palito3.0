@@ -6,6 +6,8 @@ import '../../../core/models/memory_model.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import 'animated_card.dart';
 import 'icon_box.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
 
 /// Card de puntuación del recuerdo: barra de progreso animada sobre la escala
 /// real de la app (0 a 5 — ver [RatingScale]) con su etiqueta cualitativa.
@@ -69,18 +71,20 @@ class RatingCard extends StatelessWidget {
                 : 'Este recuerdo no tiene puntuación',
             child: ExcludeSemantics(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 child: TweenAnimationBuilder<double>(
                   tween: Tween<double>(begin: 0, end: progress),
                   duration: reduceMotion
                       ? Duration.zero
-                      : const Duration(milliseconds: 900),
-                  curve: Curves.easeOutCubic,
+                      : AppAnimation.reveal,
+                  curve: AppAnimation.enter,
                   builder: (BuildContext context, double value, Widget? child) {
                     return LinearProgressIndicator(
                       value: value,
                       minHeight: 10,
-                      backgroundColor: const Color(0xFFE5E7EB),
+                      backgroundColor: AppColors.textPrimary.withValues(
+                        alpha: 0.10,
+                      ),
                       valueColor: const AlwaysStoppedAnimation<Color>(
                         AppColors.primary,
                       ),
@@ -134,8 +138,11 @@ class _RatingBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
-        color: isRated ? AppColors.primary : const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(12),
+        // Opaco. Con `alpha: 0.10` pasaba el 90 % de la sombra navy y el
+        // fondo acababa siendo EXACTAMENTE el mismo navy del texto: 1,00:1.
+        // La pastilla "sin nota" no se leía en absoluto.
+        color: isRated ? AppColors.primary : AppColors.tintMuted,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const <BoxShadow>[
           BoxShadow(

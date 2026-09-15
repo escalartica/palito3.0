@@ -5,6 +5,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
 
 /// Pantalla de inicio de sesión — único método: Sign in with Apple. Se
 /// muestra cuando `GoRouter`'s `redirect` detecta que no hay sesión
@@ -83,17 +84,26 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                   // ese fondo blanco como un borde feo. Solo una sombra,
                   // sin relleno ni borde propios, para que se note que
                   // "flota" sin duplicar el marco que ya trae la imagen.
+                  // Sombra DURA, sin difuminar: es el lenguaje de toda la
+                  // app (bordes negros y sombras sólidas desplazadas). La
+                  // sombra difuminada anterior era el único elemento de
+                  // estilo "material" en una interfaz neobrutalista, y se
+                  // notaba: parecía un logo pegado encima de otra app.
                   child: DecoratedBox(
                     decoration: const BoxDecoration(
-                      boxShadow: [
+                      boxShadow: <BoxShadow>[
                         BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 18,
-                          offset: Offset(0, 8),
+                          color: AppColors.textPrimary,
+                          offset: Offset(6, 6),
+                          blurRadius: 0,
                         ),
                       ],
                     ),
-                    child: Image.asset('assets/images/logo.png', width: 116),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      width: 124,
+                      semanticLabel: 'Logotipo de Palito de Sabores',
+                    ),
                   ),
                 ),
               ),
@@ -104,7 +114,13 @@ class _SignInPageState extends ConsumerState<SignInPage> {
             flex: 5,
             child: SafeArea(
               top: false,
-              child: Padding(
+              // `SingleChildScrollView`, no un `Column` a pelo: el panel de
+              // marca de arriba se lleva un `flex` fijo, así que en un
+              // teléfono bajo (o con la letra del sistema ampliada) este
+              // contenido puede no caber. Antes de este cambio eso
+              // reventaba el layout (`RenderFlex overflowed`); ahora
+              // simplemente se desplaza, sin perder nada.
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -113,8 +129,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       'Palito de Sabores',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
-                        fontSize: 26,
+                        fontSize: 28,
                         fontWeight: FontWeight.w900,
+                        letterSpacing: -0.6,
+                        height: 1.15,
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -124,9 +142,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       'con quien tú elijas.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        fontSize: 14,
+                        fontSize: 15,
                         color: AppColors.textSecondary,
-                        height: 1.4,
+                        height: 1.45,
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -139,17 +157,22 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       icon: Icons.restaurant_menu_rounded,
                       text: 'Registra tus platos y experiencias favoritas',
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _ValuePoint(
                       icon: Icons.group_rounded,
                       text: 'Comparte tu diario con quien tú invites',
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _ValuePoint(
                       icon: Icons.map_rounded,
                       text: 'Ved juntos el mapa de todo lo que habéis probado',
                     ),
-                    const Spacer(),
+                    // `SizedBox`, no `Spacer()`: un hijo con flex necesita
+                    // una altura acotada, y el `SingleChildScrollView` de
+                    // más arriba le da altura infinita a propósito (ver su
+                    // comentario). El hueco fijo se ve igual en pantallas
+                    // normales y sigue sin romper el layout en las bajas.
+                    const SizedBox(height: 32),
                     if (_errorMessage != null) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -158,10 +181,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.error.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                           border: Border.all(
                             color: AppColors.error,
-                            width: 1.5,
+                            width: AppBorder.thin,
                           ),
                         ),
                         child: Text(
@@ -191,6 +214,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                           : SignInWithAppleButton(
                               onPressed: _handleSignIn,
                               style: SignInWithAppleButtonStyle.black,
+                              // El botón oficial de Apple, no un componente de
+                              // marca: se deja fuera de AppRadius a propósito.
                               borderRadius: BorderRadius.circular(14),
                             ),
                     ),
@@ -210,8 +235,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         'disponible en palito-de-sabores.web.app/privacy.html',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
-                          fontSize: 11,
-                          height: 1.4,
+                          fontSize: 12,
+                          height: 1.45,
                           color: AppColors.textSecondary,
                         ),
                       ),
@@ -237,25 +262,42 @@ class _ValuePoint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        // Amarillo solido con borde negro y sombra dura, igual que las
+        // tarjetas del resto de la app. El amarillo al 35 % de opacidad
+        // que habia antes no es un color de la paleta: era el unico sitio
+        // de la app con un color "aguado", y hacia que la pantalla de
+        // entrada —la primera que ve alguien que se descarga la app— no
+        // se pareciera a lo que hay dentro.
         Container(
-          width: 34,
-          height: 34,
+          width: 40,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(10),
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppBorder.normal,
+            ),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: AppColors.textPrimary,
+                offset: Offset(2, 2),
+                blurRadius: 0,
+              ),
+            ],
           ),
-          child: Icon(icon, size: 18, color: AppColors.textPrimary),
+          child: Icon(icon, size: 20, color: AppColors.textPrimary),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 14),
         Expanded(
           child: Text(
             text,
             style: GoogleFonts.inter(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
-              height: 1.3,
+              height: 1.35,
             ),
           ),
         ),

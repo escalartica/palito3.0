@@ -10,11 +10,28 @@ import '../../providers/household_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_log.dart';
 import '../tokens/app_colors.dart';
+import '../tokens/app_shape.dart';
+import 'marker_highlight.dart';
+import '../../providers/memory_provider.dart';
 
 /// Selector del grupo activo: qué grupo se está viendo/usando ahora mismo en
 /// Inicio/Mapa/Gamer/Perfil. Un toque abre la lista de todos los grupos del
 /// usuario (empezando siempre por su diario personal) para cambiar de uno a
 /// otro, gestionar sus miembros, o crear/unirse a uno nuevo.
+/// Cabecera de Inicio: DE QUÉ DIARIO estás viendo el contenido, y el control
+/// para cambiarlo.
+///
+/// La versión anterior era una pastilla de unos 30 píxeles de alto, debajo de
+/// un titular enorme que ponía "Palito de Sabores". Es decir: el elemento más
+/// grande de la pantalla repetía el nombre de la app —que el usuario ya sabe,
+/// y que además está en el logotipo de al lado— mientras que el dato que de
+/// verdad cambia lo que estás viendo iba en letra pequeña y con aspecto de
+/// etiqueta, no de botón. Ese es el origen directo de "no entiendo los
+/// grupos": la app nunca decía, con todas sus letras y en el sitio donde se
+/// mira primero, en qué diario estás ni que puedes cambiarlo.
+///
+/// Ahora el nombre del diario ES el titular, con su galón y su flecha, y
+/// debajo dice quién lo ve.
 class GroupSwitcher extends ConsumerWidget {
   const GroupSwitcher({super.key});
 
@@ -25,6 +42,11 @@ class GroupSwitcher extends ConsumerWidget {
     );
     final String? activeGroupId = ref.watch(activeGroupIdProvider);
     final String? personalGroupId = ref.watch(personalGroupIdProvider);
+    final List<String> members = ref.watch(activeGroupMembersProvider);
+    final int groupCount = ref.watch(userGroupIdsProvider).length;
+
+    final bool isPersonal =
+        activeGroupId != null && activeGroupId == personalGroupId;
 
     // Antes, un error del stream se mostraba como "Cargando…" para siempre.
     final String label;
@@ -32,60 +54,121 @@ class GroupSwitcher extends ConsumerWidget {
       label = 'Sin grupo';
     } else if (activeGroupAsync.isLoading && !activeGroupAsync.hasValue) {
       label = 'Cargando…';
-    } else if (activeGroupId == personalGroupId) {
+    } else if (isPersonal) {
       label = 'Mi diario';
     } else {
       label = (activeGroupAsync.valueOrNull?['name'] as String?) ?? 'Grupo';
     }
 
+    final String subtitle;
+    if (activeGroupAsync.hasError) {
+      subtitle = 'No se pudo cargar';
+    } else if (isPersonal) {
+      subtitle = 'Privado — solo tú';
+    } else if (members.length <= 1) {
+      subtitle = 'Solo tú de momento';
+    } else {
+      subtitle = 'Tú y ${members.length - 1} '
+          '${members.length - 1 == 1 ? 'persona' : 'personas'}';
+    }
+
     return Semantics(
       button: true,
-      label: 'Grupo activo: $label. Toca para cambiar de grupo',
+      label: 'Estás viendo el diario $label. $subtitle. '
+          'Toca para cambiar de diario',
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         onTap: () => openGroupSwitcher(context, ref),
         child: ExcludeSemantics(
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.textPrimary.withValues(alpha: 0.10),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Row(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const Icon(
-                  Icons.groups_rounded,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 140),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                Text(
+                  'ESTÁS VIENDO',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(width: 2),
-                const Icon(
-                  Icons.expand_more_rounded,
-                  size: 18,
-                  color: AppColors.textSecondary,
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Flexible(
+                      // El rotulador va AQUÍ y en ningún otro sitio de la
+                      // app. Señalar a mano funciona porque dice "esto de
+                      // aquí": con un solo trazo, el nombre del diario es lo
+                      // primero que ve el ojo al abrir. Con tres trazos por
+                      // pantalla no diría nada.
+                      //
+                      // Navy sobre el amarillo de marca mide 12,47:1 — el
+                      // contraste más alto de toda la app.
+                      child: MarkerHighlight(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.6,
+                            height: 1.1,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // El galón amarillo con la flecha: sin él, un titular
+                    // grande no se lee como algo pulsable.
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
+                        border: Border.all(
+                          color: AppColors.textPrimary,
+                          width: AppBorder.normal,
+                        ),
+                        boxShadow: const <BoxShadow>[
+                          BoxShadow(
+                            color: AppColors.textPrimary,
+                            offset: Offset(2, 2),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.unfold_more_rounded,
+                        size: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  // La hoja ya no solo cambia de diario: también es donde
+                  // se ve quién está en cada uno, se invita, se entra con un
+                  // código y se crea uno nuevo. Con un solo diario todavía
+                  // no hay nada que "cambiar", pero sí hay dónde compartir.
+                  groupCount > 1
+                      ? '$subtitle · Diarios y gente'
+                      : '$subtitle · Compartir con alguien',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -163,11 +246,50 @@ Future<void> openGroupSwitcher(BuildContext context, WidgetRef ref) async {
     }
 
     if (toForget.contains(ref.read(activeGroupIdOverrideProvider))) {
-      ref.read(activeGroupIdOverrideProvider.notifier).state = null;
+      switchActiveGroup(ref, null);
     }
   }
 
   if (!context.mounted) return;
+
+  String nameOf(DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (snap.id == personalGroupId) return 'Mi diario';
+    final String raw = (snap.data()?['name'] as String?)?.trim() ?? '';
+    return raw.isEmpty ? 'Diario' : raw;
+  }
+
+  // ORDEN FIJO.
+  //
+  // La lista se pintaba en el orden en que iban contestando las lecturas de
+  // Firestore, que depende de la red: los mismos cinco diarios salían en un
+  // orden distinto en cada apertura, y "Mi diario" tan pronto era el primero
+  // como el último. Una lista que se recoloca sola no se puede aprender: hay
+  // que leerla entera cada vez, y eso es exactamente la sensación de "no me
+  // aclaro con los grupos".
+  //
+  // Ahora: el diario personal primero —lo tiene todo el mundo y es el único
+  // que no se puede perder— y el resto por orden alfabético.
+  valid.sort((
+    DocumentSnapshot<Map<String, dynamic>> a,
+    DocumentSnapshot<Map<String, dynamic>> b,
+  ) {
+    final bool aPersonal = a.id == personalGroupId;
+    final bool bPersonal = b.id == personalGroupId;
+    if (aPersonal != bPersonal) return aPersonal ? -1 : 1;
+    return nameOf(a).toLowerCase().compareTo(nameOf(b).toLowerCase());
+  });
+
+  // El que estás viendo sale arriba del todo y en su propia tarjeta; los
+  // demás, debajo, bajo un rótulo que dice literalmente qué pasa si los
+  // tocas. Antes todos eran la misma fila gris con un punto, y el activo se
+  // distinguía por un círculo relleno de 20 píxeles: la respuesta a "¿dónde
+  // estoy?" no puede depender de comparar dos iconos casi iguales.
+  final List<DocumentSnapshot<Map<String, dynamic>>> others = valid
+      .where((DocumentSnapshot<Map<String, dynamic>> s) => s.id != activeGroupId)
+      .toList();
+  final int activeIndex = valid.indexWhere(
+    (DocumentSnapshot<Map<String, dynamic>> s) => s.id == activeGroupId,
+  );
 
   await showModalBottomSheet<void>(
     context: context,
@@ -177,69 +299,136 @@ Future<void> openGroupSwitcher(BuildContext context, WidgetRef ref) async {
     useRootNavigator: true,
     backgroundColor: AppColors.surface,
     showDragHandle: true,
+    // DESPLAZABLE Y ACOTADO. La lista no cabía: con cinco diarios el panel se
+    // desbordaba por abajo —la cinta amarilla y negra de Flutter— y las
+    // acciones del final quedaban fuera de la pantalla, sin forma de llegar a
+    // ellas porque la columna no se podía desplazar. El número de grupos de
+    // un usuario no tiene techo, así que la altura tampoco puede darse por
+    // supuesta.
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (BuildContext sheetContext) {
+      void openPeople(DocumentSnapshot<Map<String, dynamic>> snap) {
+        Navigator.pop(sheetContext);
+        openGroupMembersSheet(
+          context,
+          ref,
+          groupId: snap.id,
+          groupData: snap.data() ?? const <String, dynamic>{},
+        );
+      }
+
       return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Tus grupos',
-                style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  // "Diarios" en todas partes. La app los llamaba "grupos"
+                  // aquí y "diarios" en el resto de pantallas: dos palabras
+                  // para la misma cosa obligan a deducir que son la misma.
+                  'Tus diarios',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              for (final DocumentSnapshot<Map<String, dynamic>> snap in valid)
-                _GroupTile(
-                  name: snap.id == personalGroupId
-                      ? 'Mi diario'
-                      : (snap.data()?['name'] as String?) ?? 'Grupo',
-                  memberCount:
-                      (snap.data()?['members'] as List<dynamic>?)?.length ?? 1,
-                  isPersonal:
-                      snap.id == personalGroupId ||
-                      snap.data()?['isPersonal'] == true,
-                  isActive: snap.id == activeGroupId,
+                const SizedBox(height: 4),
+                Text(
+                  // Una frase. Ningún sitio de la app explicaba qué es un
+                  // diario, así que la palabra había que deducirla del
+                  // contexto —y el contexto era una lista de nombres—.
+                  'Cada diario guarda sus propios platos, su mapa y su ruleta. '
+                  'Cambias de uno a otro cuando quieras.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (activeIndex >= 0) ...<Widget>[
+                  const _SheetLabel('Estás viendo'),
+                  const SizedBox(height: 8),
+                  _ActiveGroupCard(
+                    name: nameOf(valid[activeIndex]),
+                    memberCount:
+                        (valid[activeIndex].data()?['members'] as List<dynamic>?)
+                            ?.length ??
+                        1,
+                    isPersonal:
+                        valid[activeIndex].id == personalGroupId ||
+                        valid[activeIndex].data()?['isPersonal'] == true,
+                    onManage: () => openPeople(valid[activeIndex]),
+                  ),
+                ],
+                if (others.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 22),
+                  // El rótulo dice qué hace tocar una fila. Sin él, una lista
+                  // de nombres podía ser un menú, un informe o un selector:
+                  // el usuario no tenía forma de saberlo antes de pulsar.
+                  const _SheetLabel('Cambiar a'),
+                  const SizedBox(height: 4),
+                  for (final DocumentSnapshot<Map<String, dynamic>> snap
+                      in others)
+                    _GroupTile(
+                      name: nameOf(snap),
+                      memberCount:
+                          (snap.data()?['members'] as List<dynamic>?)?.length ??
+                          1,
+                      isPersonal:
+                          snap.id == personalGroupId ||
+                          snap.data()?['isPersonal'] == true,
+                      onTap: () {
+                        switchActiveGroup(ref, snap.id);
+                        Navigator.pop(sheetContext);
+                      },
+                      onManage: () => openPeople(snap),
+                    ),
+                ],
+                const SizedBox(height: 22),
+                // Dos filas, no una. "Compartir con alguien más" mezclaba tres
+                // acciones distintas —invitar a tu grupo, entrar en el de otro
+                // y crear uno nuevo— bajo una etiqueta que no es ninguna de
+                // las tres. Quien había recibido un código no se le ocurría
+                // que "compartir" fuera el sitio donde meterlo.
+                //
+                // Y ya no se pintan con la misma fila que los diarios: antes
+                // "Entrar con un código" era un `_GroupTile` con el contador
+                // de personas a cero, así que se leía como un diario más de
+                // la lista. Un botón de acción no puede parecer un dato.
+                const _SheetLabel('Añadir un diario'),
+                const SizedBox(height: 8),
+                _ActionTile(
+                  icon: Icons.login_rounded,
+                  title: 'Entrar con un código',
+                  subtitle: 'Si alguien te ha pasado uno para entrar en su diario',
                   onTap: () {
-                    ref.read(activeGroupIdOverrideProvider.notifier).state =
-                        snap.id;
                     Navigator.pop(sheetContext);
-                  },
-                  onInvite: () {
-                    Navigator.pop(sheetContext);
-                    context.push('/invite-partner', extra: snap.id);
-                  },
-                  onManage: () {
-                    Navigator.pop(sheetContext);
-                    openGroupMembersSheet(
-                      context,
-                      ref,
-                      groupId: snap.id,
-                      groupData: snap.data() ?? const <String, dynamic>{},
-                    );
+                    context.push('/household-setup?mode=join');
                   },
                 ),
-              const Divider(height: 28),
-              _GroupTile(
-                icon: Icons.group_add_rounded,
-                name: 'Compartir con alguien más',
-                isActive: false,
-                isPersonal: true,
-                memberCount: 0,
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  context.push('/household-setup');
-                },
-              ),
-            ],
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.group_add_rounded,
+                  title: 'Crear un diario compartido',
+                  subtitle: 'Para apuntar platos junto a quien tú invites',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    context.push('/household-setup');
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -309,10 +498,80 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
   final List<String> _members = <String>[];
   String? _busyUid;
 
+  /// El nombre vive en el estado para que un cambio se vea al instante en
+  /// esta misma hoja, sin cerrarla y volver a abrirla.
+  late String _name;
+
   @override
   void initState() {
     super.initState();
     _members.addAll(widget.initialMembers);
+    _name = widget.groupName;
+  }
+
+  /// Cambiar el nombre del diario.
+  ///
+  /// No se podía. Un diario se llamaba para siempre como lo hubieras escrito
+  /// el día que lo creaste —«Prueba», «Prueba grupo»— y la única salida era
+  /// salirte y crear otro, perdiendo por el camino a la gente que ya estaba
+  /// dentro. Las reglas de Firestore ya permitían el cambio; lo que faltaba
+  /// era el sitio donde pedirlo.
+  Future<void> _promptRename() async {
+    final TextEditingController controller = TextEditingController(text: _name);
+
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Nombre del diario'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 60,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            hintText: 'Cenas con los amigos',
+            counterText: '',
+          ),
+          onSubmitted: (String v) =>
+              Navigator.pop(dialogContext, v.trim()),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: Text(
+              'Guardar',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (newName == null || newName.isEmpty || newName == _name) return;
+
+    // Optimista: el nombre nuevo se ve ya. Si el servidor lo rechaza se
+    // vuelve atrás y se dice por qué, en vez de dejar la hoja congelada.
+    final String previous = _name;
+    setState(() => _name = newName);
+
+    try {
+      await ref
+          .read(householdServiceProvider)
+          .renameGroup(groupId: widget.groupId, name: newName);
+    } catch (e, st) {
+      AppLog.e('No se pudo renombrar el diario', e, st);
+      if (!mounted) return;
+      setState(() => _name = previous);
+      _showError('No se pudo cambiar el nombre. Inténtalo de nuevo.');
+    }
   }
 
   String _nameFor(String uid) {
@@ -370,7 +629,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
       // `permission-denied` y la app se quedaba en blanco cargando para
       // siempre.
       if (isLeaving && ref.read(activeGroupIdProvider) == widget.groupId) {
-        ref.read(activeGroupIdOverrideProvider.notifier).state = null;
+        switchActiveGroup(ref, null);
       }
 
       if (isLeaving && mounted) Navigator.of(context).pop();
@@ -422,14 +681,15 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            // El nombre del diario, tal cual y en grande. Antes ponía
+            // «Miembros de «X»»: tres palabras de andamiaje delante del
+            // único dato que importa, y comillas dentro de comillas.
             Text(
-              widget.isPersonal
-                  ? 'Mi diario'
-                  : 'Miembros de «${widget.groupName}»',
+              widget.isPersonal ? 'Mi diario' : _name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.outfit(
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w900,
                 color: AppColors.textPrimary,
               ),
@@ -524,7 +784,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                                 title: 'Salir del grupo',
                                 content:
                                     'Dejarás de ver y compartir contenido con '
-                                    '«${widget.groupName}». Podrás volver a '
+                                    '«$_name». Podrás volver a '
                                     'unirte si alguien te invita de nuevo.',
                                 confirmLabel: 'Salir',
                                 action: () => householdService.leaveGroup(
@@ -546,7 +806,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                                 title: 'Quitar a $name',
                                 content:
                                     '$name dejará de tener acceso a '
-                                    '«${widget.groupName}» y a su contenido '
+                                    '«$_name» y a su contenido '
                                     'compartido.',
                                 confirmLabel: 'Quitar',
                                 action: () => householdService.removeMember(
@@ -568,6 +828,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 48),
                   foregroundColor: AppColors.textPrimary,
+                  alignment: Alignment.centerLeft,
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -575,6 +836,16 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                 },
                 icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                 label: const Text('Invitar a alguien con un código'),
+              ),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  foregroundColor: AppColors.textPrimary,
+                  alignment: Alignment.centerLeft,
+                ),
+                onPressed: _promptRename,
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                label: const Text('Cambiar el nombre del diario'),
               ),
             ],
           ],
@@ -584,102 +855,341 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
   }
 }
 
-class _GroupTile extends StatelessWidget {
-  const _GroupTile({
-    required this.name,
-    required this.isActive,
-    required this.isPersonal,
-    required this.memberCount,
-    required this.onTap,
-    this.icon,
-    this.onInvite,
-    this.onManage,
-  });
+/// Rótulo de sección de la hoja. Existe para que cada bloque diga en voz
+/// alta qué es, en vez de dejar que se deduzca del orden.
+class _SheetLabel extends StatelessWidget {
+  const _SheetLabel(this.text);
 
-  final String name;
-  final bool isActive;
-  final bool isPersonal;
-  final int memberCount;
-  final VoidCallback onTap;
-  final IconData? icon;
-  final VoidCallback? onInvite;
-  final VoidCallback? onManage;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final bool hasMenu = onManage != null || onInvite != null;
+    return Text(
+      text.toUpperCase(),
+      style: GoogleFonts.inter(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.0,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+}
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              icon ??
-                  (isActive
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_unchecked_rounded),
-              size: 20,
-              color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                      color: AppColors.textPrimary,
-                    ),
+/// El diario que estás viendo ahora mismo, en su propia tarjeta.
+///
+/// No es pulsable a propósito: ya estás dentro, y una fila que no hace nada
+/// al tocarla es peor que una que no invita a tocarse. Lo único accionable
+/// es «Personas».
+class _ActiveGroupCard extends StatelessWidget {
+  const _ActiveGroupCard({
+    required this.name,
+    required this.memberCount,
+    required this.isPersonal,
+    required this.onManage,
+  });
+
+  final String name;
+  final int memberCount;
+  final bool isPersonal;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final String who = isPersonal
+        ? 'Privado — solo tú'
+        : memberCount <= 1
+        ? 'Solo tú de momento'
+        : 'Tú y ${memberCount - 1} '
+              '${memberCount - 1 == 1 ? 'persona' : 'personas'}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        // Tinte opaco, no `primary.withValues(...)`: la sombra dura se pinta
+        // ANTES del fondo, así que cualquier transparencia deja subir el
+        // navy por debajo y el texto se queda ilegible (ver `AppColors`).
+        color: AppColors.tintPrimary,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.textPrimary,
+          width: AppBorder.normal,
+        ),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: AppColors.textPrimary,
+            offset: Offset(3, 3),
+            blurRadius: 0,
+          ),
+        ],
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    height: 1.15,
+                    letterSpacing: -0.3,
+                    color: AppColors.textPrimary,
                   ),
-                  if (memberCount > 0)
-                    Text(
-                      isPersonal
-                          ? 'Privado'
-                          : '$memberCount ${memberCount == 1 ? 'persona' : 'personas'}',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  who,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Igual que en la lista: el diario personal no tiene personas
+          // que gestionar.
+          if (!isPersonal) _PeopleButton(groupName: name, onTap: onManage),
+        ],
+      ),
+    );
+  }
+}
+
+/// Botón «Personas» con su nombre escrito, no un menú de tres puntos.
+///
+/// El "..." era exactamente lo que la gente no encontraba: para ver quién
+/// está en un diario —o para quitar a alguien, o para cambiarle el nombre—
+/// había que adivinar que se escondía ahí dentro. Un icono de tres puntos no
+/// promete nada, así que nadie lo pulsa.
+class _PeopleButton extends StatelessWidget {
+  const _PeopleButton({required this.groupName, required this.onTap});
+
+  final String groupName;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Personas de $groupName',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: onTap,
+        child: Container(
+          // 44x44 reales, el mínimo táctil de iOS.
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: ExcludeSemantics(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(
+                  Icons.group_rounded,
+                  size: 18,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Personas',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Una fila de la lista «Cambiar a».
+///
+/// Ya no lleva radio button. El círculo relleno/vacío es el control de un
+/// formulario: promete que hay que elegir uno y confirmar después. Aquí no
+/// hay confirmación —tocar cambia el diario y cierra la hoja— así que la
+/// flecha es más honesta, y además el activo ya no está en esta lista.
+class _GroupTile extends StatelessWidget {
+  const _GroupTile({
+    required this.name,
+    required this.isPersonal,
+    required this.memberCount,
+    required this.onTap,
+    required this.onManage,
+  });
+
+  final String name;
+  final bool isPersonal;
+  final int memberCount;
+  final VoidCallback onTap;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Semantics(
+            button: true,
+            label: 'Cambiar al diario $name',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              onTap: onTap,
+              child: ExcludeSemantics(
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 52),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 4,
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        isPersonal
+                            ? Icons.lock_outline_rounded
+                            : Icons.menu_book_rounded,
+                        size: 18,
                         color: AppColors.textSecondary,
                       ),
-                    ),
-                ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              isPersonal
+                                  ? 'Privado'
+                                  : '$memberCount '
+                                        '${memberCount == 1 ? 'persona' : 'personas'}',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            // Un solo menú en vez de dos IconButton de 19 px pegados dentro de
-            // una fila que también es pulsable: acertar en "gestionar" y
-            // acabar cambiando de grupo activo era facilísimo.
-            if (hasMenu)
-              PopupMenuButton<String>(
-                tooltip: 'Opciones del grupo',
-                icon: const Icon(
-                  Icons.more_horiz_rounded,
+          ),
+        ),
+        // El diario personal no tiene a nadie más dentro: un botón de
+        // «Personas» ahí solo sirve para abrir una hoja que dice que no se
+        // puede compartir.
+        if (!isPersonal) _PeopleButton(groupName: name, onTap: onManage),
+      ],
+    );
+  }
+}
+
+/// Fila de acción: entrar con un código, crear un diario. Con su explicación
+/// de una línea, porque «entrar con un código» no dice de dónde sale el
+/// código ni quién lo tiene.
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$title. $subtitle',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceWarm,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppBorder.thin,
+              ),
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 20, color: AppColors.textPrimary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          height: 1.3,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
                   color: AppColors.textSecondary,
                 ),
-                onSelected: (String value) {
-                  if (value == 'invite') onInvite?.call();
-                  if (value == 'manage') onManage?.call();
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  if (!isPersonal && onInvite != null)
-                    const PopupMenuItem<String>(
-                      value: 'invite',
-                      child: Text('Invitar con un código'),
-                    ),
-                  if (onManage != null)
-                    const PopupMenuItem<String>(
-                      value: 'manage',
-                      child: Text('Ver miembros'),
-                    ),
-                ],
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

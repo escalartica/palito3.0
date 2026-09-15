@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
 
-const _kDark = Color(0xFF0F172A);
+const _kDark = AppColors.textPrimary;
 
 /// Pestaña individual dentro de [ModeSelector] (p.ej. "Ruleta Pro" o
 /// "Juicio Picante"). Extraído de gamer_page.dart.
@@ -29,13 +32,13 @@ class ModeTab extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () => onTap(index),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
+            duration: AppAnimation.standard,
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: isSelected ? activeColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               border: isSelected ? Border.all(color: _kDark, width: 2) : null,
               boxShadow: isSelected
                   ? const [
@@ -55,7 +58,7 @@ class ModeTab extends StatelessWidget {
                 fontSize: 14,
                 color: isSelected
                     ? (activeTextColor ?? _kDark)
-                    : Colors.grey.shade500,
+                    : AppColors.textSecondary,
               ),
             ),
           ),

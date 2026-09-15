@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/smart_image.dart';
 import 'circle_button.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Cabecera hero del detalle de recuerdo: foto a pantalla completa con
 /// gradiente, botón de volver, botón de editar y título superpuesto.
@@ -11,7 +14,6 @@ class HeroHeader extends StatelessWidget {
   final MemoryModel memory;
   final String? firstImageUrl;
   final VoidCallback onBack;
-  final VoidCallback onEdit;
   final VoidCallback? onImageTap;
 
   const HeroHeader({
@@ -19,7 +21,6 @@ class HeroHeader extends StatelessWidget {
     required this.memory,
     required this.firstImageUrl,
     required this.onBack,
-    required this.onEdit,
     required this.onImageTap,
   });
 
@@ -29,7 +30,7 @@ class HeroHeader extends StatelessWidget {
       expandedHeight: 360,
       pinned: true,
       stretch: true,
-      backgroundColor: const Color(0xFFFFFDF5),
+      backgroundColor: AppColors.background,
       elevation: 0,
       automaticallyImplyLeading: false,
 
@@ -46,16 +47,13 @@ class HeroHeader extends StatelessWidget {
         ),
       ),
 
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: CircleButton(
-            icon: Icons.edit_rounded,
-            tooltip: 'Editar recuerdo',
-            onTap: onEdit,
-          ),
-        ),
-      ],
+      // AQUÍ HABÍA UN SEGUNDO BOTÓN DE EDITAR.
+      //
+      // Un `CircleButton` con un lápiz, que llamaba exactamente a la misma
+      // función que el botón flotante "Editar" de abajo. Dos controles para
+      // una acción no dan el doble de acceso: obligan a preguntarse en qué
+      // se diferencian. Se queda el de abajo, que es el que lleva la palabra
+      // escrita y tiene tamaño táctil de sobra.
 
       flexibleSpace: FlexibleSpaceBar(
         stretchModes: const [
@@ -70,24 +68,38 @@ class HeroHeader extends StatelessWidget {
               Hero(
                 tag: 'memory-image-${memory.id}',
                 child: firstImageUrl != null && firstImageUrl!.isNotEmpty
-                    ? SmartImage(imagePath: firstImageUrl, fit: BoxFit.cover)
+                    ? SmartImage(
+                        imagePath: firstImageUrl,
+                        fit: BoxFit.cover,
+                        // SIN `width` SE PEDÍA LA FOTO ORIGINAL.
+                        //
+                        // `SmartImage` solo pide a Cloudinary una versión
+                        // redimensionada cuando recibe un ancho; sin él
+                        // descargaba el JPEG tal como salió de la cámara.
+                        // Una foto de móvil de 4032×3024 ocupa **46,5 MB**
+                        // descomprimida, y el caché de imágenes de Flutter
+                        // tiene 100 MB: dos recuerdos vistos seguidos y el
+                        // sistema empieza a tirar cosas; en un iPhone
+                        // antiguo, a cerrar la app. Y todo para pintarlo en
+                        // una cabecera de 390 dp de ancho.
+                        width: 400,
+                        semanticLabel: 'Foto de ${memory.title}',
+                      )
                     : _buildImagePlaceholder(),
               ),
 
               _buildImageGradient(),
 
-              if (firstImageUrl != null && firstImageUrl!.isNotEmpty)
-                Positioned(
-                  right: 18,
-                  bottom: 48,
-                  child: _buildImagePreviewBadge(),
-                ),
-
+              // La pastilla de "Ver foto" estaba en un `Positioned` a
+              // `bottom: 48` y el título a `bottom: 46`: la misma banda.
+              // Como el título se pintaba después, un nombre de plato largo
+              // se dibujaba ENCIMA de la pastilla. Ahora van en la misma
+              // columna y no pueden pisarse.
               Positioned(
-                left: 24,
-                right: 24,
-                bottom: 46,
-                child: _buildHeroTitle(memory),
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildTitleBand(memory),
               ),
             ],
           ),
@@ -98,12 +110,12 @@ class HeroHeader extends StatelessWidget {
 
   Widget _buildImagePlaceholder() {
     return Container(
-      color: Colors.grey.shade200,
+      color: AppColors.textPrimary.withValues(alpha: 0.08),
       child: const Center(
         child: Icon(
           Icons.restaurant_rounded,
           size: 70,
-          color: Color(0xFF0F172A),
+          color: AppColors.textPrimary,
         ),
       ),
     );
@@ -115,10 +127,16 @@ class HeroHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          // Este degradado es ambiente, no legibilidad: oscurece un poco
+          // arriba para que se lean los botones y funde la foto hacia abajo.
+          // De que el título se lea se encarga la banda que lo envuelve (ver
+          // `_buildTitleBand`), porque un degradado sobre el alto total no
+          // puede garantizar nada: el texto cae a una altura u otra según
+          // ocupe una línea o dos.
           colors: [
-            Colors.black.withValues(alpha: 0.12),
+            AppColors.textPrimary.withValues(alpha: 0.12),
             Colors.transparent,
-            Colors.black.withValues(alpha: 0.78),
+            AppColors.textPrimary.withValues(alpha: 0.35),
           ],
           stops: const [0.0, 0.42, 1.0],
         ),
@@ -130,12 +148,14 @@ class HeroHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        // Blanco entero. Ese 0.94 dejaba pasar un 6 % de la sombra navy
+        // y ensuciaba la pastilla sin ganar nada a cambio.
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 3),
           ),
@@ -147,7 +167,7 @@ class HeroHeader extends StatelessWidget {
           const Icon(
             Icons.fullscreen_rounded,
             size: 16,
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
           ),
           const SizedBox(width: 6),
           Text(
@@ -155,9 +175,50 @@ class HeroHeader extends StatelessWidget {
             style: GoogleFonts.outfit(
               fontSize: 12,
               fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// La banda inferior: velo garantizado, pastilla de "Ver foto" y título.
+  ///
+  /// Envuelve al texto en vez de estar pintada a una altura fija, que es la
+  /// única forma de que el contraste no dependa de si el nombre del plato
+  /// ocupa una línea o dos. Con el degradado anterior, un título de dos
+  /// líneas sobre una foto clara se quedaba en 2,4:1; dentro de la banda,
+  /// el texto se apoya siempre sobre navy al 86 % o más — por encima de
+  /// 12:1 en el peor caso.
+  Widget _buildTitleBand(MemoryModel memory) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 30, 24, 44),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Color(0x000F172A),
+            Color(0xDB0F172A),
+            Color(0xF00F172A),
+          ],
+          stops: <double>[0.0, 0.34, 1.0],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (firstImageUrl != null && firstImageUrl!.isNotEmpty) ...<Widget>[
+            Align(
+              alignment: Alignment.centerRight,
+              child: _buildImagePreviewBadge(),
+            ),
+            const SizedBox(height: 12),
+          ],
+          _buildHeroTitle(memory),
         ],
       ),
     );
@@ -193,7 +254,7 @@ class HeroHeader extends StatelessWidget {
               const Icon(
                 Icons.storefront_rounded,
                 size: 16,
-                color: Color(0xFFFFD400),
+                color: AppColors.primary,
               ),
               const SizedBox(width: 7),
               Expanded(
@@ -247,8 +308,8 @@ class _PressableHeroImageState extends State<_PressableHeroImage> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.985 : 1.0,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
+        duration: AppAnimation.fast,
+        curve: AppAnimation.enter,
         child: widget.child,
       ),
     );

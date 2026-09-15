@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 
 import '../tokens/app_colors.dart';
 
+/// Gris frío neutro para el hueco de una foto que aún no ha llegado o que no
+/// existe. Deliberadamente distinto de `AppColors.surface`/`surfaceWarm`
+/// (blancos cálidos de marca): aquí se necesita leerse como "placeholder",
+/// no como parte del fondo cálido de la app.
+const Color _kPlaceholderBg = Color(0xFFF1F2F4);
+
 /// Las fotos de la app viven en Cloudinary (URLs `https://`), nunca en el
 /// almacenamiento local del dispositivo — así son visibles en todos los
 /// móviles del grupo y en la PWA, que no tiene acceso al disco del teléfono.
@@ -36,6 +42,12 @@ class SmartImage extends StatefulWidget {
   /// Inserta una transformación de Cloudinary (`w_...,c_limit,q_auto,f_auto`)
   /// justo después de `/image/upload/`. Si [url] no tiene esa forma, o ya
   /// trae una transformación propia, se devuelve tal cual.
+  /// [targetWidth] son **píxeles reales**, no dp: quien llama multiplica por
+  /// la densidad de la pantalla. Aquí había un `* 2` fijo, y un factor fijo
+  /// se equivoca en los dos sentidos a la vez: en un iPhone moderno (×3) las
+  /// miniaturas de 60 dp pedían 120 px para un hueco de 180 y se veían
+  /// blandas, mientras que la portada de Inicio pedía 1600 px para pintarse
+  /// a 918 — tres veces el área necesaria, descargada y decodificada.
   static String _withCloudinaryResize(String url, int targetWidth) {
     const String uploadMarker = '/image/upload/';
     final int markerIndex = url.indexOf(uploadMarker);
@@ -57,12 +69,8 @@ class SmartImage extends StatefulWidget {
 
     if (alreadyTransformed) return url;
 
-    // *2 pensando en pantallas de alta densidad; tope superior para no pedir
-    // una transformación absurda por un uso incorrecto del parámetro.
-    final int requestedWidth = (targetWidth * 2).clamp(50, 1600).toInt();
-
     return '${url.substring(0, insertAt)}'
-        'w_$requestedWidth,c_limit,q_auto,f_auto/'
+        'w_$targetWidth,c_limit,q_auto,f_auto/'
         '$rest';
   }
 
@@ -96,8 +104,17 @@ class _SmartImageState extends State<SmartImage> {
       );
     }
 
-    final String url = widget.width != null
-        ? SmartImage._withCloudinaryResize(rawUrl, widget.width!)
+    // Píxeles reales que va a ocupar la imagen en esta pantalla concreta.
+    //
+    // El tope de 1600 no es un número bonito: por encima de eso, la
+    // diferencia no se ve en un móvil y sí se paga en descarga y en RAM.
+    final double dpr = MediaQuery.devicePixelRatioOf(context);
+    final int? targetPx = widget.width == null
+        ? null
+        : (widget.width! * dpr).round().clamp(50, 1600);
+
+    final String url = targetPx != null
+        ? SmartImage._withCloudinaryResize(rawUrl, targetPx)
         : rawUrl;
 
     return Semantics(
@@ -107,8 +124,17 @@ class _SmartImageState extends State<SmartImage> {
         key: ValueKey<String>('$url#$_retryToken'),
         imageUrl: url,
         fit: widget.fit,
+        // TOPE DE DECODIFICACIÓN.
+        //
+        // Sin esto, el mapa de bits vive en memoria al tamaño en que venga
+        // el JPEG, no al tamaño al que se pinta. Una foto de móvil de
+        // 4032×3024 ocupa **46,5 MB** descomprimida (ancho × alto × 4
+        // bytes), y el caché de imágenes de Flutter tiene 100 MB: dos fotos
+        // seguidas y empieza a tirar cosas; en un iPhone antiguo, a
+        // cerrarse. Con el tope, esa misma foto ocupa 1,8 MB.
+        memCacheWidth: targetPx,
         placeholder: (BuildContext context, String url) => Container(
-          color: const Color(0xFFF1F2F4),
+          color: _kPlaceholderBg,
           child: const Center(
             child: SizedBox(
               width: 20,
@@ -151,7 +177,7 @@ class _Placeholder extends StatelessWidget {
       label: semanticLabel ?? message,
       child: ExcludeSemantics(
         child: Container(
-          color: const Color(0xFFF1F2F4),
+          color: _kPlaceholderBg,
           alignment: Alignment.center,
           padding: const EdgeInsets.all(6),
           child: LayoutBuilder(

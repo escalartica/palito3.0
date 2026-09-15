@@ -10,6 +10,8 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/household_service.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/providers/memory_provider.dart';
 
 /// Pantalla para compartir el diario con alguien más: crear un grupo nuevo (y
 /// a continuación compartir su código de invitación) o unirse a uno existente
@@ -74,7 +76,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
 
       // El grupo recién creado pasa a ser el activo: si no, lo creabas y la
       // app seguía mostrando "Mi diario" como si no hubiera pasado nada.
-      ref.read(activeGroupIdOverrideProvider.notifier).state = groupId;
+      switchActiveGroup(ref, groupId);
 
       context.pushReplacement('/invite-partner', extra: groupId);
     } catch (_) {
@@ -114,7 +116,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       // Activar el grupo al que acabas de entrar y DECIRLO. Antes la pantalla
       // se cerraba en silencio y seguías viendo tu diario personal, así que
       // parecía que el código no había funcionado.
-      ref.read(activeGroupIdOverrideProvider.notifier).state = result.groupId;
+      switchActiveGroup(ref, result.groupId);
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -236,7 +238,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
         const SizedBox(height: 14),
         _ActionCard(
           icon: Icons.key_rounded,
-          title: 'Unirme con un código',
+          title: 'Entrar con un código',
           subtitle: 'Alguien ya te ha invitado a su grupo.',
           onTap: () => setState(() {
             _errorMessage = null;
@@ -338,7 +340,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
 
   OutlineInputBorder _border(double width, {Color? color}) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(
         color: color ?? AppColors.textPrimary,
         width: width,
@@ -377,14 +379,17 @@ class _ActionCard extends StatelessWidget {
       label: '$title. $subtitle',
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.textPrimary, width: 2),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppBorder.normal,
+            ),
             boxShadow: const <BoxShadow>[
               BoxShadow(
                 color: AppColors.textPrimary,
@@ -402,10 +407,10 @@ class _ActionCard extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
                       color: AppColors.textPrimary,
-                      width: 1.5,
+                      width: AppBorder.thin,
                     ),
                   ),
                   child: Icon(icon, color: AppColors.textPrimary),

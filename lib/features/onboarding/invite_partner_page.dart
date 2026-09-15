@@ -10,6 +10,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
 
 /// Muestra un código de invitación recién generado para el grupo [groupId].
 /// Se llega aquí justo después de crear un grupo, o desde Perfil para invitar
@@ -80,16 +81,21 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
     }
   }
 
-  /// Mensaje completo, con las instrucciones REALES incluidas. El texto
-  /// anterior decía que el invitado introduciría el código "al abrir la app
-  /// por primera vez" — ese sitio no existe: hay que ir a Perfil → Grupos →
-  /// Unirme con un código. Quien invitaba creía haber hecho su parte y el
-  /// invitado no encontraba dónde meterlo.
+  /// Mensaje completo, con las instrucciones REALES incluidas. Una versión
+  /// anterior decía que el invitado metería el código "al abrir la app por
+  /// primera vez" — ese sitio no existe. Quien invitaba creía haber hecho su
+  /// parte y el invitado no encontraba dónde meterlo.
+  ///
+  /// El camino que se nombra aquí tiene que coincidir PALABRA POR PALABRA con
+  /// lo que pone en pantalla (ver `ProfileGroupsSection`): si se renombra la
+  /// sección del Perfil y no se actualiza este texto, el invitado se queda
+  /// buscando un menú que no existe.
   String get _shareMessage =>
       'Te invito a mi grupo en Palito de Sabores 🍽️\n\n'
       'Código: $_code\n\n'
-      'Descarga la app, inicia sesión con Apple y ve a '
-      'Perfil → Grupos → "Unirme con un código".\n'
+      'Descarga la app, inicia sesión con Apple y ve a la pestaña Perfil. '
+      'Ahí toca "Ver tus diarios y quién está en cada uno" y luego '
+      '"Entrar con un código".\n'
       'El código caduca en ${_validFor.inDays} días.';
 
   void _copy({required bool full}) {
@@ -134,7 +140,8 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
               const SizedBox(height: 8),
               Text(
                 'Pásale este código. Para usarlo tendrá que abrir la app, '
-                'iniciar sesión y entrar en Perfil → Grupos → "Unirme con un '
+                'iniciar sesión, ir a la pestaña Perfil, tocar "Ver tus '
+                'diarios y quién está en cada uno" y ahí "Entrar con un '
                 'código". Caduca en ${_validFor.inDays} días.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
@@ -200,8 +207,11 @@ class _CodeBlock extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.textPrimary, width: 2.5),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: AppBorder.normal,
+          ),
           boxShadow: const <BoxShadow>[
             BoxShadow(
               color: AppColors.textPrimary,

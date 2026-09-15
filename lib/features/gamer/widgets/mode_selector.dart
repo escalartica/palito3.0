@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'mode_tab.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
-const _kDark = Color(0xFF0F172A);
-const _kYellow = Color(0xFFFFD400);
-const _kRed = Color(0xFFFF4D29);
+const _kDark = AppColors.textPrimary;
+const _kYellow = AppColors.primary;
+const _kRed = AppColors.accent;
 
 /// Selector de modo de juego (Ruleta Pro / Juicio Picante) de Zona Gamer.
 /// Extraído de gamer_page.dart.
@@ -22,7 +24,7 @@ class ModeSelector extends StatelessWidget {
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       border: Border.all(color: _kDark, width: 2),
       boxShadow: const [
         BoxShadow(color: _kDark, offset: Offset(3, 3), blurRadius: 0),
@@ -31,14 +33,14 @@ class ModeSelector extends StatelessWidget {
     child: Row(
       children: [
         ModeTab(
-          label: '🎯 Ruleta Pro',
+          label: 'Ruleta',
           index: 0,
           selectedMode: selectedMode,
           activeColor: _kYellow,
           onTap: onSelect,
         ),
         ModeTab(
-          label: '🔥 Juicio Picante',
+          label: 'Juicio picante',
           index: 1,
           selectedMode: selectedMode,
           activeColor: _kRed,

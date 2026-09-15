@@ -15,6 +15,9 @@ import 'widgets/location_section.dart';
 import 'widgets/rating_card.dart';
 import 'widgets/section_title.dart';
 import 'widgets/variedades_card.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
 
 class MemoryDetailPage extends ConsumerStatefulWidget {
   final MemoryModel memory;
@@ -44,19 +47,19 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: AppAnimation.slow,
     );
 
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOutCubic,
+      curve: AppAnimation.enter,
     );
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _animationController,
-            curve: Curves.easeOutCubic,
+            curve: AppAnimation.enter,
           ),
         );
 
@@ -65,6 +68,23 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         _animationController.forward();
       }
     });
+  }
+
+  // ── "Reducir movimiento" ──
+  //
+  // Esta pantalla montaba su coreografía de entrada pasara lo que pasara.
+  // Quien lleva activada esa opción del sistema —a menudo por vértigo o por
+  // migraña— seguía viendo entrar los bloques uno detrás de otro.
+  //
+  // Va aquí y no en `initState` porque el `MediaQuery` todavía no existe en
+  // ese momento; y se resuelve poniendo el controlador directamente en su
+  // valor final, que es la pantalla ya montada, sin recorrido.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _animationController.value = 1.0;
+    }
   }
 
   @override
@@ -101,7 +121,25 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           ..remove('nota')
           ..remove('otro_sabor')
           ..remove('es_surtido')
-          ..remove('variedades');
+          ..remove('variedades')
+          // FUERA LOS HUECOS.
+          //
+          // Al desmarcar un chip, el formulario no borra la clave: la pone
+          // a `null`, y así viaja a Firestore. Aquí eso hacía que
+          // `extraFields.isNotEmpty` fuera cierto, se pintara la cabecera
+          // "DETALLES DE LA EXPERIENCIA" con su icono... y debajo no hubiera
+          // nada, porque cada fila devuelve un widget vacío. Una sección
+          // entera anunciando contenido que no existe.
+          //
+          // Lo mismo con una selección múltiple que se ha vaciado (`[]`) o
+          // con un texto que quedó en blanco.
+          ..removeWhere(
+            (String key, dynamic value) =>
+                value == null ||
+                (value is String && value.trim().isEmpty) ||
+                (value is Iterable && value.isEmpty) ||
+                (value is Map && value.isEmpty),
+          );
 
     final String? otroSabor = currentMemory.specificFields['otro_sabor']
         ?.toString();
@@ -119,7 +157,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         : const <Map<String, dynamic>>[];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDF5),
+      backgroundColor: AppColors.background,
       floatingActionButtonLocation: const ConstrainedEndFloatLocation(),
       floatingActionButton: _buildFloatingEditButton(context, currentMemory),
       body: Center(
@@ -132,7 +170,6 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                 memory: currentMemory,
                 firstImageUrl: firstImageUrl,
                 onBack: () => Navigator.pop(context),
-                onEdit: () => _openEditPage(context, currentMemory),
                 onImageTap: firstImageUrl != null
                     ? () => _openFullScreenImage(context, firstImageUrl)
                     : null,
@@ -180,7 +217,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   ) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFFFFFDF5),
+        color: AppColors.surfaceWarm,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 26, 20, 100),
@@ -253,12 +290,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        color: AppColors.textPrimary,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 3),
           ),
@@ -280,17 +317,32 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
   Widget _buildReturnMiniBadge(bool wouldReturn) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 350),
+      duration: AppAnimation.slow,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: wouldReturn ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        // Tinte de `success` para "sí volvería"; el naranja de "no" no
+        // tiene un token equivalente (no es un error, es una preferencia)
+        // así que se queda como valor propio, documentado, a la espera de
+        // que aparezca un segundo caso que justifique un token nuevo.
+        // Opaco. Ver AppColors.tintSuccess: con alpha, la sombra maciza
+        // se veía a través y esta tarjeta salía casi negra, con el texto
+        // encima a 1,11:1 — ilegible.
+        color: wouldReturn ? AppColors.tintSuccess : const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
       ),
-      child: Icon(
-        wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
-        size: 18,
-        color: const Color(0xFF0F172A),
+      // El pulgar era la única forma de saberlo: sin texto y sin
+      // `Semantics`, para un lector de pantalla este recuadro no existía.
+      // La tarjeta de puntuación de al lado sí lo hacía bien.
+      child: Semantics(
+        label: wouldReturn ? 'Volverías a este sitio' : 'No volverías',
+        child: ExcludeSemantics(
+          child: Icon(
+            wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
+            size: 18,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ),
     );
   }
@@ -301,7 +353,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         children: [
           const IconBox(
             icon: Icons.storefront_rounded,
-            backgroundColor: Color(0xFFFFD400),
+            backgroundColor: AppColors.primary,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -314,7 +366,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -323,7 +375,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -362,7 +414,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
             children: [
               const IconBox(
                 icon: Icons.tune_rounded,
-                backgroundColor: Color(0xFFFFD400),
+                backgroundColor: AppColors.primary,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -371,7 +423,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -386,8 +438,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
             return TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
-              duration: Duration(milliseconds: 300 + (index * 80)),
-              curve: Curves.easeOut,
+              duration: AppAnimation.stagger(index, stepMs: 55),
+              curve: AppAnimation.enter,
               builder: (context, value, child) {
                 return Opacity(
                   opacity: value,
@@ -418,10 +470,10 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF5),
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surfaceWarm,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(
-          color: const Color(0xFF0F172A).withValues(alpha: 0.12),
+          color: AppColors.textPrimary.withValues(alpha: 0.12),
         ),
       ),
       child: Row(
@@ -434,7 +486,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
+                color: AppColors.textSecondary,
               ),
             ),
           ),
@@ -447,7 +499,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -480,8 +532,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                 Icons.format_quote_rounded,
                 size: 26,
                 color: hasDescription
-                    ? const Color(0xFFFFD400)
-                    : Colors.grey.shade300,
+                    ? AppColors.primary
+                    : AppColors.textMuted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -492,8 +544,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: hasDescription
-                        ? const Color(0xFF0F172A)
-                        : Colors.grey.shade400,
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted,
                     height: 1.6,
                     fontStyle: hasDescription
                         ? FontStyle.normal
@@ -517,16 +569,19 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     final bool wouldReturn = memory.wouldReturn;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
+      duration: AppAnimation.slow,
+      curve: AppAnimation.enter,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: wouldReturn ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        // Opaco. Ver AppColors.tintSuccess: con alpha, la sombra maciza
+        // se veía a través y esta tarjeta salía casi negra, con el texto
+        // encima a 1,11:1 — ilegible.
+        color: wouldReturn ? AppColors.tintSuccess : const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 3),
           ),
@@ -535,19 +590,19 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
       child: Row(
         children: [
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
+            duration: AppAnimation.standard,
             child: Container(
               key: ValueKey(wouldReturn),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFD400),
+                color: AppColors.primary,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF0F172A), width: 2),
+                border: Border.all(color: AppColors.textPrimary, width: 2),
               ),
               child: Icon(
                 wouldReturn ? Icons.thumb_up_rounded : Icons.thumb_down_rounded,
                 size: 20,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -562,7 +617,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -576,7 +631,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -594,8 +649,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   Widget _buildFloatingEditButton(BuildContext context, MemoryModel memory) {
     return FloatingActionButton.extended(
       heroTag: 'edit-memory-${memory.id}',
-      backgroundColor: const Color(0xFFFFD400),
-      foregroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.primary,
+      foregroundColor: AppColors.textPrimary,
       elevation: 0,
       onPressed: () => _openEditPage(context, memory),
       icon: const Icon(Icons.edit_rounded, size: 19),
@@ -604,8 +659,8 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Color(0xFF0F172A), width: 2),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        side: const BorderSide(color: AppColors.textPrimary, width: 2),
       ),
     );
   }
@@ -613,15 +668,15 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   Widget _buildSectionDivider() {
     return Row(
       children: [
-        Expanded(child: Container(height: 2, color: const Color(0xFF0F172A))),
+        Expanded(child: Container(height: 2, color: AppColors.textPrimary)),
         const SizedBox(width: 12),
         const Icon(
           Icons.restaurant_rounded,
           size: 18,
-          color: Color(0xFF0F172A),
+          color: AppColors.textPrimary,
         ),
         const SizedBox(width: 12),
-        Expanded(child: Container(height: 2, color: const Color(0xFF0F172A))),
+        Expanded(child: Container(height: 2, color: AppColors.textPrimary)),
       ],
     );
   }
@@ -634,15 +689,15 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: AppAnimation.slow,
+        reverseTransitionDuration: AppAnimation.standard,
         pageBuilder: (context, animation, secondaryAnimation) {
           return MemoryFormPage(memory: memory);
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curvedAnimation = CurvedAnimation(
             parent: animation,
-            curve: Curves.easeOutCubic,
+            curve: AppAnimation.enter,
           );
 
           return FadeTransition(
@@ -664,7 +719,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        transitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: AppAnimation.slow,
         pageBuilder: (context, animation, secondaryAnimation) {
           return Scaffold(
             backgroundColor: Colors.black.withValues(alpha: 0.96),
@@ -680,6 +735,13 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                         child: SmartImage(
                           imagePath: imagePath,
                           fit: BoxFit.contain,
+                          // Aquí sí se amplía con los dedos, así que se
+                          // pide bastante más que en la cabecera — pero con
+                          // tope, no la foto original: `SmartImage` corta en
+                          // 1600 px, que es donde un móvil deja de notar la
+                          // diferencia.
+                          width: 800,
+                          semanticLabel: 'Foto de ${widget.memory.title}',
                         ),
                       ),
                     ),

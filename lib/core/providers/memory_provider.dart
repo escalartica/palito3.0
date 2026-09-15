@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/storage_service.dart';
 import '../models/memory_model.dart';
 import '../services/memory_map_firestore_service.dart';
+import 'household_provider.dart';
 import 'memory_map_provider.dart';
 
 /// ===========================================================================
@@ -563,6 +564,22 @@ final memoryProvider = StateNotifierProvider<MemoryNotifier, List<MemoryModel>>(
 // ============================================================================
 
 final selectedCategoryProvider = StateProvider<String>((ref) => 'Todos');
+
+/// Cambiar el diario que se está viendo. `null` vuelve al diario personal.
+///
+/// Existe para que el cambio de diario y el **borrado del filtro** ocurran
+/// siempre juntos. Antes eran dos cosas sueltas y el filtro se quedaba
+/// puesto: pasabas de un diario a otro con "Tortilla" marcada y el nuevo te
+/// enseñaba solo sus tortillas. Dos de tres recuerdos desaparecían de la
+/// vista sin ninguna explicación, y lo que un usuario concluye de eso no es
+/// "tengo un filtro puesto", es "he perdido cosas".
+///
+/// Las categorías además no son las mismas en cada diario: filtrar por una
+/// que el diario nuevo no tiene deja la pantalla vacía del todo.
+void switchActiveGroup(WidgetRef ref, String? groupId) {
+  ref.read(activeGroupIdOverrideProvider.notifier).state = groupId;
+  ref.read(selectedCategoryProvider.notifier).state = 'Todos';
+}
 
 // ===========================================================================
 // LOGS

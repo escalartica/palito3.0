@@ -69,8 +69,19 @@ a algo que ya hacéis: comer bien y acordaros de ello.
 ## Palabras clave (máx. 100 caracteres, separadas por comas)
 
 ```
-diario,gastronomia,restaurantes,recuerdos,comida,mapa,reseñas,ruleta,juego,parejas,amigos,platos
+reseñas,restaurantes,platos,comida,bares,tapas,foodie,cenas,mapa,ruleta,amigos,pareja,notas,viajes
 ```
+
+**Por qué cambian.** Apple indexa cada palabra UNA sola vez en el conjunto
+`nombre + subtítulo + claves`. La lista anterior repetía `diario` y `juego`,
+que ya están en el subtítulo: 13 de los 100 bytes tirados. Ojo, el límite es
+en **bytes**, no en caracteres — cada `ñ` o vocal acentuada cuenta doble.
+La lista nueva ocupa 99 de 100 y no repite nada.
+
+Fuera: `gastronomia` (ya está `gastronómico` en el subtítulo), `recuerdos`
+(nadie busca eso para encontrar una app de comida).
+Dentro: `bares`, `tapas`, `cenas`, `foodie` y `viajes`, que es como se busca
+de verdad en España.
 
 ## Categoría sugerida
 
@@ -131,9 +142,9 @@ Apple no lo muestra públicamente, solo queda registrado internamente.
   el equipo de revisión puede iniciar sesión con su propio Apple ID de
   prueba. Al iniciar sesión por primera vez se crea automáticamente un
   diario personal vacío y ya se puede usar la app entera. Para probar
-  la función de compartir con otra persona: Perfil → "Compartir con
-  alguien más" → "Crear un grupo nuevo" (genera un código de
-  invitación de un solo uso).
+  la función de compartir con otra persona: Perfil → "Ver tus diarios
+  y quién está en cada uno" → "Crear un diario compartido" (genera un
+  código de invitación de un solo uso).
   ```
 - **Datos de contacto** (nombre, apellidos, teléfono, correo) → estos
   son tuyos, los rellenas tú directamente — no los invento por ti. Para

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../widgets/memory_text_field.dart';
 
 class PlatoEstrellaFields implements DynamicFieldGenerator {
   @override
@@ -39,11 +41,19 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
         ],
         data,
         onUpdate,
-        isMulti: false,
+        // VARIOS TIPOS A LA VEZ.
+        //
+        // Estaba en uno solo, y la mitad de los platos que come la gente no
+        // caben en una sola casilla: un arroz con marisco es arroz *y*
+        // marisco, un chuletón a la brasa es carne *y* brasa. Obligar a
+        // elegir uno convierte un dato en una renuncia, y además rompe el
+        // filtro de después: quien busque "Marisco" no encuentra su arroz.
+        // La técnica ya permitía varias desde el principio.
+        isMulti: true,
       ),
 
       // Campo dinámico para "Otro tipo de plato"
-      if (data['tipo_plato'] == 'Otro')
+      if (_containsValue(data['tipo_plato'], 'Otro'))
         _buildCustomTextField(
           'otro_tipo_plato',
           'Otro tipo de plato',
@@ -267,7 +277,7 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -321,9 +331,17 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
                         if (isSelected) {
                           newList.remove(option);
 
-                          // Si se desmarca "Otro", limpiamos el campo personalizado.
+                          // Al desmarcar "Otro" se limpia el campo de texto
+                          // que lo acompaña.
+                          //
+                          // Aquí estaba escrito `'otra_tecnica'` a pelo,
+                          // porque cuando se escribió esto la técnica era el
+                          // único grupo de selección múltiple. Desde que el
+                          // tipo de plato también lo es, ese literal borraba
+                          // la técnica de alguien que estaba tocando el tipo
+                          // de plato, y dejaba sin borrar lo que sí tocaba.
                           if (option == 'Otro') {
-                            onUpdate('otra_tecnica', null);
+                            onUpdate(_customFieldFor(key), null);
                           }
                         } else {
                           newList.add(option);
@@ -337,13 +355,7 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
                           onUpdate(key, null);
 
                           // Limpiamos los datos personalizados asociados.
-                          if (key == 'tipo_plato') {
-                            onUpdate('otro_tipo_plato', null);
-                          }
-
-                          if (key == 'equilibrio') {
-                            onUpdate('otro_equilibrio', null);
-                          }
+                          onUpdate(_customFieldFor(key), null);
                         } else {
                           onUpdate(key, option);
                         }
@@ -363,6 +375,27 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
   // CAMPO DE TEXTO PERSONALIZADO
   // =============================================================
 
+  /// Campo de texto libre que acompaña a la opción "Otro" de cada grupo.
+  ///
+  /// Un único sitio donde está escrita esa correspondencia, en vez de
+  /// repartida en literales por los dos caminos del `onTap`.
+  static String _customFieldFor(String key) {
+    switch (key) {
+      case 'tipo_plato':
+        return 'otro_tipo_plato';
+      case 'tecnica':
+        return 'otra_tecnica';
+      case 'equilibrio':
+        return 'otro_equilibrio';
+      default:
+        return 'otro_$key';
+    }
+  }
+
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -370,65 +403,11 @@ class PlatoEstrellaFields implements DynamicFieldGenerator {
     Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0xFF0F172A),
-                    blurRadius: 0,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TextFormField(
-                key: ValueKey('${key}_${data[key] ?? ''}'),
-                initialValue: data[key]?.toString() ?? '',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF0F172A),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-                decoration: InputDecoration(
-                  hintText: hint,
-                  hintStyle: GoogleFonts.inter(
-                    color: Colors.grey.shade400,
-                    fontSize: 12,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                ),
-                onChanged: (value) {
-                  onUpdate(key, value.trim().isEmpty ? null : value);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
     );
   }
 }

@@ -6,17 +6,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/providers/memory_map_provider.dart';
 import '../../../../../core/models/memory_model.dart';
 import 'services/memory_geocoding_service.dart';
+import 'map_fit.dart';
 import 'widgets/map_marker_builder.dart';
 import 'widgets/memory_bottom_sheet.dart';
 import 'widgets/memory_group_picker.dart';
 import '../../core/utils/app_log.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
+import '../../core/theme/components/app_dock.dart';
+import '../../core/theme/components/neo_pressable.dart';
+import '../../core/theme/components/category_chip.dart';
+
+/// Paleta de categorías de los marcadores del mapa.
+///
+/// Excepción deliberada al sistema de tokens de marca: navy/amarillo/coral
+/// son tres colores y aquí hacen falta ocho, uno por categoría, más un color
+/// de reserva — no hay forma de expresar "ocho colores distintos entre sí"
+/// con una paleta de marca de tres. Cada valor está medido en contraste
+/// contra el texto e iconos BLANCOS que dibuja [MapMarkerBuilder] encima
+/// (WCAG AA, texto pequeño y en negrita: mínimo 4,5:1); tres de los ocho
+/// originales no llegaban (croqueta 3,79:1, tortilla 2,65:1, atención
+/// 4,44:1) y se han oscurecido manteniendo el matiz.
+abstract final class _MapCategoryColors {
+  static const Color croqueta = Color(0xFFBF360C); // 5,60:1
+  static const Color ensaladilla = Color(0xFF00838F); // 4,52:1
+  static const Color tortilla = Color(0xFF8D5300); // 6,23:1
+  static const Color menu = Color(0xFF6A1B9A); // 9,39:1
+  static const Color plato = Color(0xFFC2185B); // 5,87:1
+  static const Color postre = Color(0xFF00695C); // 6,61:1
+  static const Color decoracion = Color(0xFF283593); // 10,39:1
+  static const Color atencion = Color(0xFFC23C13); // 5,32:1
+  static const Color fallback = Color(0xFF1E293B); // 14,63:1
+}
 
 class MapPage extends ConsumerStatefulWidget {
   final String? initialCategory;
@@ -27,17 +55,55 @@ class MapPage extends ConsumerStatefulWidget {
   ConsumerState<MapPage> createState() => _MapPageState();
 }
 
+
+/// A qué altura tienen que flotar los controles del Mapa para no quedar
+/// debajo del dock.
+///
+/// El dock vive en un `Stack` por delante del contenido (ver main.dart) y
+/// ocupa desde `área segura + 12` hasta `+ AppDock.height`. Cualquier cosa
+/// que se pinte por debajo de esa línea existe pero no se puede tocar.
+double _kOverlayBottom(BuildContext context) =>
+    AppDock.height + 28 + MediaQuery.viewPaddingOf(context).bottom;
+
 class _MapPageState extends ConsumerState<MapPage>
     with TickerProviderStateMixin {
   // ============================================================
   // CONSTANTES
   // ============================================================
 
-  static const LatLng _peninsulaCenter = LatLng(40.4168, -3.7038);
+  /// ENCUADRE DE ARRANQUE: EL MUNDO, NO MADRID.
+  ///
+  /// El mapa abría siempre en la Puerta del Sol con zoom 6,2, es decir, con
+  /// la península ocupando la pantalla entera. Para quien tiene sus platos
+  /// en Sevilla eso parece un detalle bonito; para quien acaba de instalar
+  /// la app en Ciudad de México, en Tokio o en Buenos Aires, el mapa de su
+  /// diario de comidas se abre en otro continente. Y la app no es española
+  /// por dentro: las coordenadas, el geocodificador y las teselas de OSM
+  /// funcionan igual en los cinco continentes. Lo único que era español
+  /// era esta constante.
+  ///
+  /// Ahora el arranque es el mundo, y encima se cumple una de estas tres,
+  /// por orden:
+  ///
+  /// 1. Si hay recuerdos con coordenadas, la cámara **salta** —sin volar—
+  ///    al encuadre que los contiene a todos. Es lo que pasa siempre que
+  ///    el diario tiene algo dentro, así que el mundo casi nunca se llega
+  ///    a ver.
+  /// 2. Si el diario está vacío pero ya nos habían dado permiso de
+  ///    ubicación, se va a la última posición conocida. Sin pedir permiso
+  ///    y sin encender el GPS: `getLastKnownPosition()` es instantáneo y
+  ///    no muestra ningún diálogo.
+  /// 3. Si no, se queda el mundo. Que es la respuesta honesta a "todavía
+  ///    no sé nada de ti".
+  static const LatLng _worldCenter = LatLng(20.0, 0.0);
 
-  static const double _peninsulaZoom = 6.2;
+  static const double _worldZoom = 1.2;
 
-  static const Duration _cameraAnimationDuration = Duration(milliseconds: 750);
+  /// Zoom para la ubicación del propio dispositivo cuando el diario está
+  /// vacío: ciudad, no calle. No sabemos aún dónde come esta persona.
+  static const double _aroundMeZoom = 10.5;
+
+  static const Duration _cameraAnimationDuration = AppAnimation.camera;
 
   static const Duration _spiderfyAnimationDuration = Duration(
     milliseconds: 280,
@@ -77,6 +143,16 @@ class _MapPageState extends ConsumerState<MapPage>
 
   /// Evita múltiples ajustes de cámara simultáneos.
   bool _isFittingCamera = false;
+
+  /// El primer encuadre no vuela: salta.
+  ///
+  /// La cámara arranca mirando al mundo entero, así que animar el primer
+  /// ajuste sería un vuelo de dos continentes cada vez que se abre el mapa
+  /// —bonito la primera vez, cansino la vigésima, y encima con las teselas
+  /// cargándose a medio camino—. Los ajustes siguientes (cambiar de filtro,
+  /// añadir un plato) sí se animan: ahí el movimiento explica qué ha
+  /// cambiado.
+  bool _hasFittedOnce = false;
 
   /// Control de ciclo de vida.
   bool _isDisposed = false;
@@ -122,6 +198,49 @@ class _MapPageState extends ConsumerState<MapPage>
 
     _log('🗺️ MAP PAGE INIT');
     _log('🗺️ Categoría inicial: $_selectedCategory');
+
+    _centerOnMeIfDiaryIsEmpty();
+  }
+
+  /// Si el diario todavía no tiene ningún plato en el mapa, colocar la
+  /// cámara alrededor de quien lo está mirando.
+  ///
+  /// Con reglas estrictas, porque abrir una pestaña no es motivo para pedir
+  /// nada:
+  ///
+  /// - **No pide permiso.** `checkPermission()` solo consulta lo que ya hay
+  ///   decidido; si no está concedido, no pasa nada y se queda el mundo.
+  /// - **No enciende el GPS.** `getLastKnownPosition()` devuelve la última
+  ///   posición que el sistema ya tenía guardada, al instante y sin gastar
+  ///   batería. Si no hay ninguna, no pasa nada.
+  /// - **Cede siempre.** Si para cuando contesta ya se ha encuadrado el
+  ///   diario ([_hasFittedOnce]) o la persona ha tocado el mapa, no se mueve
+  ///   nada: los platos mandan sobre la ubicación, y la persona sobre todo.
+  Future<void> _centerOnMeIfDiaryIsEmpty() async {
+    try {
+      final LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return;
+      }
+
+      final Position? last = await Geolocator.getLastKnownPosition();
+
+      if (last == null || _isDisposed || !mounted) return;
+      if (_hasFittedOnce || _isUserInteractingWithMap) return;
+      if (!_isValidCoordinate(last.latitude, last.longitude)) return;
+
+      _animatedMove(
+        LatLng(last.latitude, last.longitude),
+        _aroundMeZoom,
+        false,
+      );
+    } catch (e) {
+      // Que no haya ubicación disponible no es un error que contar: el
+      // mapa del mundo es una respuesta perfectamente válida.
+      _log('🗺️ Sin ubicación previa para centrar: $e');
+    }
   }
 
   // ============================================================
@@ -263,13 +382,25 @@ class _MapPageState extends ConsumerState<MapPage>
   // ============================================================
 
   /// Zoom mínimo utilizado por la aplicación.
-  static const double _mapMinZoom = 3.0;
+  // 3.0 no dejaba ver el mundo entero: en una pantalla de móvil el planeta
+  // no cabe por debajo de zoom ~1,5. Con el tope en 3 era **imposible**
+  // encuadrar a la vez un plato de Sevilla y uno de Tokio: el cálculo de
+  // encuadre pedía zoom 1,1 y este `clamp` lo subía a 3, dejando la mitad
+  // de los marcadores fuera de pantalla sin ninguna pista de que estaban
+  // ahí. OSM sirve teselas desde zoom 0.
+  static const double _mapMinZoom = 1.0;
 
   /// Zoom máximo utilizado por la aplicación.
   static const double _mapMaxZoom = 18.0;
 
   /// Zoom utilizado cuando solo existe un recuerdo.
-  static const double _singleMemoryZoom = 13.5;
+  /// Con un solo recuerdo, la cámara se plantaba en 13,5: la calle, con el
+  /// marcador flotando sobre un plano de portales sin nada alrededor. Un
+  /// mapa así no dice "aquí comiste", dice "estás perdido": no se reconoce
+  /// el barrio, ni la ciudad, ni si eso está cerca de casa. A 11,0 se ve la
+  /// ciudad entera con el punto dentro, que es la respuesta a la pregunta
+  /// que se hace al abrir el mapa. Para el portal exacto está el zoom.
+  static const double _singleMemoryZoom = 11.0;
 
   /// Padding visual utilizado para el cálculo del encuadre.
   /// No depende de CameraFit.
@@ -293,11 +424,14 @@ class _MapPageState extends ConsumerState<MapPage>
   void _fitMapToFilteredMemories(
     List<MemoryModel> memories, {
     bool animated = true,
+    bool force = false,
   }) {
-    if (_isDisposed ||
-        !mounted ||
-        _isFittingCamera ||
-        _isUserInteractingWithMap) {
+    if (_isDisposed || !mounted) return;
+
+    // Los ajustes automáticos ceden el paso mientras alguien está tocando
+    // el mapa: nada peor que una cámara que te corrige la mano. Pero cuando
+    // el ajuste lo ha pedido la persona ([force]), manda ella.
+    if (!force && (_isFittingCamera || _isUserInteractingWithMap)) {
       return;
     }
 
@@ -341,8 +475,11 @@ class _MapPageState extends ConsumerState<MapPage>
       // UN SOLO PUNTO
       // ==========================================================
 
+      final bool fly = animated && _hasFittedOnce;
+      _hasFittedOnce = true;
+
       if (points.length == 1) {
-        _animatedMove(points.first, _singleMemoryZoom, animated);
+        _animatedMove(points.first, _singleMemoryZoom, fly);
 
         _releaseCameraFitLock();
 
@@ -353,21 +490,19 @@ class _MapPageState extends ConsumerState<MapPage>
       // VARIOS PUNTOS
       // ==========================================================
 
-      final bounds = LatLngBounds.fromPoints(points);
+      final GeoFit fit = computeGeoFit(points);
 
-      final center = bounds.center;
+      final center = fit.center;
 
-      final targetZoom = _calculateBoundsZoom(bounds);
+      final targetZoom = _calculateBoundsZoom(fit);
 
-      _log('🎯 Bounds calculados');
+      _log('🎯 Encuadre calculado');
 
-      _log('🎯 Norte: ${bounds.north}');
+      _log('🎯 Norte: ${fit.north}');
 
-      _log('🎯 Sur: ${bounds.south}');
+      _log('🎯 Sur: ${fit.south}');
 
-      _log('🎯 Este: ${bounds.east}');
-
-      _log('🎯 Oeste: ${bounds.west}');
+      _log('🎯 Ancho en grados: ${fit.longitudeSpan}');
 
       _log(
         '🎯 Centro: '
@@ -381,7 +516,7 @@ class _MapPageState extends ConsumerState<MapPage>
       // MOVER CÁMARA
       // ==========================================================
 
-      _animatedMove(center, targetZoom, animated);
+      _animatedMove(center, targetZoom, fly);
 
       _releaseCameraFitLock();
     } catch (e, stack) {
@@ -402,7 +537,7 @@ class _MapPageState extends ConsumerState<MapPage>
   ///
   /// Esto hace que el código sea compatible con distintas
   /// versiones de flutter_map.
-  double _calculateBoundsZoom(LatLngBounds bounds) {
+  double _calculateBoundsZoom(GeoFit fit) {
     try {
       final size = MediaQuery.of(context).size;
 
@@ -417,7 +552,7 @@ class _MapPageState extends ConsumerState<MapPage>
       // EXTENSIÓN LONGITUDINAL
       // ==========================================================
 
-      double longitudeSpan = (bounds.east - bounds.west).abs();
+      double longitudeSpan = fit.longitudeSpan;
 
       // Evitamos división por cero.
       if (longitudeSpan < 0.000001) {
@@ -427,12 +562,6 @@ class _MapPageState extends ConsumerState<MapPage>
       // ==========================================================
       // EXTENSIÓN LATITUDINAL
       // ==========================================================
-
-      double latitudeSpan = (bounds.north - bounds.south).abs();
-
-      if (latitudeSpan < 0.000001) {
-        latitudeSpan = 0.000001;
-      }
 
       // ==========================================================
       // WEB MERCATOR
@@ -447,9 +576,9 @@ class _MapPageState extends ConsumerState<MapPage>
         return log(tan(pi / 4 + latRad / 2));
       }
 
-      final northY = mercatorY(bounds.north);
+      final northY = mercatorY(fit.north);
 
-      final southY = mercatorY(bounds.south);
+      final southY = mercatorY(fit.south);
 
       var mercatorSpan = (northY - southY).abs();
 
@@ -602,7 +731,7 @@ class _MapPageState extends ConsumerState<MapPage>
 
       final animation = CurvedAnimation(
         parent: controller,
-        curve: Curves.easeInOutCubic,
+        curve: AppAnimation.inOut,
       );
 
       controller.addListener(() {
@@ -727,38 +856,38 @@ class _MapPageState extends ConsumerState<MapPage>
     final cat = _normalize(category);
 
     if (cat.contains('croqueta')) {
-      return const Color(0xFFE65100);
+      return _MapCategoryColors.croqueta;
     }
 
     if (cat.contains('ensaladilla')) {
-      return const Color(0xFF00838F);
+      return _MapCategoryColors.ensaladilla;
     }
 
     if (cat.contains('tortilla')) {
-      return const Color(0xFFF57F17);
+      return _MapCategoryColors.tortilla;
     }
 
     if (cat.contains('menu')) {
-      return const Color(0xFF6A1B9A);
+      return _MapCategoryColors.menu;
     }
 
     if (cat.contains('plato')) {
-      return const Color(0xFFC2185B);
+      return _MapCategoryColors.plato;
     }
 
     if (cat.contains('postre') || cat.contains('helado')) {
-      return const Color(0xFF00695C);
+      return _MapCategoryColors.postre;
     }
 
     if (cat.contains('decoracion') || cat.contains('espacio')) {
-      return const Color(0xFF283593);
+      return _MapCategoryColors.decoracion;
     }
 
     if (cat.contains('atencion')) {
-      return const Color(0xFFD84315);
+      return _MapCategoryColors.atencion;
     }
 
-    return const Color(0xFF1E293B);
+    return _MapCategoryColors.fallback;
   }
 
   // ============================================================
@@ -781,12 +910,56 @@ class _MapPageState extends ConsumerState<MapPage>
 
           _logStack(stackTrace: stack);
 
+          // Antes esto pintaba `'Error al cargar recuerdos:\n$error'`, así
+          // que quien solo quería ver dónde había comido se encontraba con
+          // `[cloud_firestore/permission-denied] The caller does not have
+          // permission to execute the specified operation.` centrado en la
+          // pantalla, sin reintentar, sin volver y sin explicación. La
+          // pestaña Mapa se quedaba inservible hasta reiniciar la app.
+          //
+          // Inicio ya resolvía bien este mismo caso; el Mapa se quedó sin
+          // hacer.
           return Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Error al cargar recuerdos:\n$error',
-                textAlign: TextAlign.center,
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 44,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No hemos podido cargar el mapa',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Suele ser la conexión. Tus recuerdos siguen guardados: '
+                    'no se ha perdido nada.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  NeoActionButton(
+                    label: 'Volver a intentarlo',
+                    icon: Icons.refresh_rounded,
+                    background: AppColors.primary,
+                    expand: false,
+                    onTap: () => ref.invalidate(memoryModelsStreamProvider),
+                  ),
+                ],
               ),
             ),
           );
@@ -982,10 +1155,10 @@ class _MapPageState extends ConsumerState<MapPage>
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
-                  initialCenter: _peninsulaCenter,
-                  initialZoom: _peninsulaZoom,
-                  minZoom: 3.0,
-                  maxZoom: 18.0,
+                  initialCenter: _worldCenter,
+                  initialZoom: _worldZoom,
+                  minZoom: _mapMinZoom,
+                  maxZoom: _mapMaxZoom,
 
                   // ------------------------------------------------
                   // INTERACCIÓN MAPA
@@ -1050,35 +1223,21 @@ class _MapPageState extends ConsumerState<MapPage>
                   ),
                   child: Row(
                     children: [
-                      IconButton(
-                        tooltip: 'Volver al inicio',
-                        onPressed: () {
-                          _closeAllSpiderfyGroups();
-
-                          context.go('/');
-                        },
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back,
-                            color: Color(0xFF0F172A),
-                            size: 22,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
+                      // AQUÍ HABÍA UNA FLECHA DE "VOLVER AL INICIO".
+                      //
+                      // El Mapa es una pestaña raíz, igual que Inicio, Zona
+                      // Gamer y Perfil: de una pestaña no se "vuelve", se
+                      // cambia. Una flecha atrás en la barra superior dice
+                      // que estás dentro de algo, y no lo estás — el dock ya
+                      // te lleva a donde quieras con un toque.
+                      //
+                      // Perfil y Zona Gamer ya la tenían quitada; el Mapa se
+                      // quedó sin igualar. Además hacía `context.go('/')`,
+                      // que es exactamente lo que hace el botón de Inicio
+                      // del dock, treinta píxeles más abajo.
+                      //
+                      // Los chips de categoría se quedan con todo el ancho,
+                      // que en esta pantalla iban apretados.
 
                       Expanded(
                         child: SizedBox(
@@ -1086,27 +1245,28 @@ class _MapPageState extends ConsumerState<MapPage>
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: _filterCategories.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 8),
+                            // Sin hueco AQUÍ: `CategoryChip` ya trae el
+                            // suyo de 8. Con los dos, el Mapa separaba el
+                            // doble que Inicio con el mismo componente.
+                            separatorBuilder: (_, _) => const SizedBox.shrink(),
                             itemBuilder: (context, index) {
                               final cat = _filterCategories[index];
 
                               final isSelected =
                                   (_selectedCategory ?? 'Todas') == cat;
 
-                              return FilterChip(
-                                label: Text(
-                                  cat,
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  if (!selected && cat != 'Todas') {
-                                    return;
-                                  }
+                              // Mismo chip que Inicio. Antes esto era un `FilterChip` de
+                              // Material: pastilla perfecta, palomita del
+                              // catálogo y tipografía del sistema, dentro de
+                              // una app con lenguaje propio. Nadie distingue
+                              // dos implementaciones, pero sí nota que el
+                              // filtro de Inicio y el del Mapa "no son el
+                              // mismo control".
+                              return CategoryChip(
+                                label: cat,
+                                isSelected: isSelected,
+                                onTap: () {
+                                  if (isSelected && cat != 'Todas') return;
 
                                   _closeAllSpiderfyGroups();
 
@@ -1119,9 +1279,7 @@ class _MapPageState extends ConsumerState<MapPage>
                                   WidgetsBinding.instance.addPostFrameCallback((
                                     _,
                                   ) {
-                                    if (_isDisposed || !mounted) {
-                                      return;
-                                    }
+                                    if (_isDisposed || !mounted) return;
 
                                     _fitMapToFilteredMemories(
                                       allMemories,
@@ -1129,18 +1287,6 @@ class _MapPageState extends ConsumerState<MapPage>
                                     );
                                   });
                                 },
-                                backgroundColor: Colors.white,
-                                selectedColor: const Color(0xFFFFD400),
-                                checkmarkColor: const Color(0xFF0F172A),
-                                elevation: 3,
-                                shadowColor: Colors.black26,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
                               );
                             },
                           ),
@@ -1152,49 +1298,210 @@ class _MapPageState extends ConsumerState<MapPage>
               ),
 
               // ==================================================
+              // ==================================================
+              // SIN NADA QUE ENSEÑAR
+              // ==================================================
+              //
+              // Antes, un mapa sin chinchetas era un mapa de España y nada
+              // más: ni qué es esta pantalla, ni por qué está vacía, ni qué
+              // hacer. Y hay dos motivos distintos para que lo esté —no has
+              // guardado nada todavía, o el filtro no encuentra nada—, que
+              // piden respuestas distintas.
+              if (filteredMemories.isEmpty)
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 18,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          border: Border.all(
+                            color: AppColors.textPrimary,
+                            width: 2,
+                          ),
+                          boxShadow: const <BoxShadow>[
+                            BoxShadow(
+                              color: AppColors.textPrimary,
+                              blurRadius: 0,
+                              offset: Offset(3, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.push_pin_outlined,
+                              size: 32,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _selectedCategory == null
+                                  ? 'Aquí aparecerán tus sitios'
+                                  : 'Ninguno de $_selectedCategory por aquí',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _selectedCategory == null
+                                  ? 'Cada recuerdo que guardes con una '
+                                        'dirección se planta aquí como una '
+                                        'chincheta.'
+                                  : 'Prueba con "Todas" para ver el resto.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               // CONTADOR
               // ==================================================
               Positioned(
-                // Sin sumar el área segura, el contador quedaba justo encima
-                // del indicador de inicio del iPhone, donde el gesto del
-                // sistema se come el toque.
-                bottom: 30 + MediaQuery.viewPaddingOf(context).bottom,
+                // Mismo cálculo que el botón de ubicación: por encima del
+                // dock, no solo por encima del área segura. Antes quedaba
+                // tapado igual que él.
+                bottom: _kOverlayBottom(context),
                 left: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.place_rounded,
-                        size: 18,
-                        color: Color(0xFFFF4D29),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${filteredMemories.length} '
-                        '${filteredMemories.length == 1 ? 'recuerdo' : 'recuerdos'}',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: const Color(0xFF0F172A),
+                // EL CONTADOR AHORA ES EL BOTÓN DE "VÉRLOS TODOS".
+                //
+                // El encuadre automático se aparta en cuanto tocas el mapa,
+                // que es lo correcto. El problema era que no había vuelta:
+                // te alejabas arrastrando, perdías de vista los marcadores y
+                // no existía ningún control para recuperarlos — con platos
+                // en dos países, encontrarlos a mano es imposible. La
+                // pastilla que ya decía cuántos hay es el sitio evidente
+                // para "enséñamelos".
+                child: Semantics(
+                  button: true,
+                  label:
+                      '${filteredMemories.length} '
+                      '${filteredMemories.length == 1 ? 'recuerdo' : 'recuerdos'} '
+                      'en el mapa. Toca para verlos todos',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      onTap: filteredMemories.isEmpty
+                          ? null
+                          : () => _fitMapToFilteredMemories(
+                              allMemories,
+                              force: true,
+                            ),
+                      child: ExcludeSemantics(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              const Icon(
+                                Icons.place_rounded,
+                                size: 18,
+                                color: AppColors.accent,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${filteredMemories.length} '
+                                '${filteredMemories.length == 1 ? 'recuerdo' : 'recuerdos'}',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              if (filteredMemories.isNotEmpty) ...<Widget>[
+                                const SizedBox(width: 8),
+                                Container(
+                                  width: 1,
+                                  height: 16,
+                                  color: AppColors.tintMuted,
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.zoom_out_map_rounded,
+                                  size: 17,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
-                    ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ==================================================
+              // ATRIBUCIÓN DE OPENSTREETMAP
+              // ==================================================
+              //
+              // No estaba, y no es opcional.
+              //
+              // Las teselas son de OpenStreetMap, cuyos datos van bajo la
+              // licencia ODbL: usarlos **obliga** a decir de dónde salen, a
+              // la vista, en la propia pantalla del mapa. Además la política
+              // de uso de sus servidores lo exige por escrito, y quien la
+              // incumple se expone a que le corten las teselas — es decir,
+              // a que el mapa de la app deje de cargar de un día para otro,
+              // sin aviso y sin nada que tocar en el código.
+              //
+              // Justo antes de gastar dinero en publicidad, ese riesgo no
+              // merece la pena por ahorrarse una línea de ocho píxeles.
+              Positioned(
+                bottom: _kOverlayBottom(context) + 62,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                  ),
+                  child: Text(
+                    '© OpenStreetMap',
+                    style: GoogleFonts.inter(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -1203,14 +1510,27 @@ class _MapPageState extends ConsumerState<MapPage>
               // BOTÓN UBICACIÓN
               // ==================================================
               Positioned(
-                bottom: 30 + MediaQuery.viewPaddingOf(context).bottom,
+                // POR ENCIMA DEL DOCK.
+                //
+                // Estaba a `30 + área segura`. El dock ocupa desde
+                // `área segura + 12` hasta `+ 88` (ver main.dart y
+                // AppDock.height) y va en un Stack por delante del
+                // contenido: el botón caía entero debajo y **no se podía
+                // pulsar**. Es la función principal de esta pantalla.
+                //
+                // `_kOverlayBottom` lo deriva del alto real del dock en vez
+                // de un número a ojo, para que no se vuelva a descuadrar si
+                // el dock cambia de tamaño.
+                bottom: _kOverlayBottom(context),
                 right: 20,
                 child: FloatingActionButton(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF0F172A),
+                  foregroundColor: AppColors.textPrimary,
                   elevation: 6,
+                  // Sin esto VoiceOver anunciaba "botón" y nada más.
+                  tooltip: 'Centrar el mapa en dónde estás',
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   onPressed: _goToCurrentLocation,
                   child: const Icon(Icons.my_location_rounded, size: 24),

@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
 import 'package:flutter/services.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 class EnsaladillaFields implements DynamicFieldGenerator {
   @override
@@ -286,7 +289,7 @@ class EnsaladillaFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -365,9 +368,9 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           // CAMPO "OTRA"
           // =================================================================
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            duration: AppAnimation.standard,
+            switchInCurve: AppAnimation.enter,
+            switchOutCurve: AppAnimation.exit,
             transitionBuilder: (child, animation) {
               return SizeTransition(
                 sizeFactor: animation,
@@ -381,15 +384,15 @@ class EnsaladillaFields implements DynamicFieldGenerator {
                     padding: const EdgeInsets.only(top: 10),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                         border: Border.all(
-                          color: const Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                           width: 1.5,
                         ),
                         boxShadow: const [
                           BoxShadow(
-                            color: Color(0xFF0F172A),
+                            color: AppColors.textPrimary,
                             blurRadius: 0,
                             offset: Offset(0, 2),
                           ),
@@ -398,19 +401,19 @@ class EnsaladillaFields implements DynamicFieldGenerator {
                       child: TextField(
                         controller: otroController,
                         style: GoogleFonts.inter(
-                          color: const Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
                         decoration: InputDecoration(
                           labelText: 'Añade otro ingrediente',
                           labelStyle: GoogleFonts.inter(
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                             fontSize: 12,
                           ),
-                          hintText: 'Ej. huevo de codorniz...',
+                          hintText: 'Ej. huevo de codorniz…',
                           hintStyle: GoogleFonts.inter(
-                            color: Colors.grey.shade400,
+                            color: AppColors.textMuted,
                             fontSize: 12,
                           ),
                           border: InputBorder.none,

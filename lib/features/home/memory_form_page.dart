@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 // `show kDebugMode`: foundation exporta una clase `Category` (anotación de
@@ -26,6 +25,9 @@ import '../../features/memory_form/widgets/rating_section.dart';
 import '../../features/memory_form/widgets/dialog_helpers.dart';
 import '../../features/memory_form/widgets/form_field_containers.dart';
 import '../../features/memory_form/controllers/memory_save_controller.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
 
 class MemoryFormPage extends ConsumerStatefulWidget {
   final Category? initialCategory;
@@ -43,6 +45,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   final _locationController = TextEditingController();
   final _descController = TextEditingController();
   final _otroSaborController = TextEditingController();
+  final _dishController = TextEditingController();
+
+  /// Para poder llevar al usuario hasta el campo que le falta
+  /// aunque esté fuera de pantalla. Ver [_showError].
+  final ScrollController _formScroll = ScrollController();
 
   // Claves para poder hacer scroll automático hasta el campo que falla
   // la validación al guardar — en un formulario largo, el aviso por
@@ -66,6 +73,10 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // primero es una puntuación de 0 deliberada.
   bool _hasInteractedWithRating = false;
 
+  /// Ya has confirmado que el 0 es a propósito. Se olvida en cuanto tocas el
+  /// deslizador otra vez, porque entonces la puntuación vuelve a estar en
+  /// duda.
+
   late String _selectedCategory;
 
   Map<String, dynamic> _dynamicData = {};
@@ -73,6 +84,34 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   LocationData? _currentLocation;
 
   bool get _isEditing => widget.memory != null;
+
+  /// Cómo estaba el formulario al abrirlo. Ver [_hasUnsavedChanges].
+  String _initialSignature = '';
+
+  /// Todo lo que el usuario puede cambiar, en una sola cadena.
+  ///
+  /// Las claves de `_dynamicData` se ordenan a propósito: un `Map` de Dart
+  /// conserva el orden de inserción, así que marcar dos chips en distinto
+  /// orden daría dos cadenas distintas para el mismo contenido y el
+  /// formulario se creería sucio sin serlo.
+  String _currentSignature() {
+    final List<String> dyn = _dynamicData.entries
+        .map((MapEntry<String, dynamic> e) => '${e.key}=${e.value}')
+        .toList()
+      ..sort();
+    return <String>[
+      _selectedCategory,
+      _restaurantController.text.trim(),
+      _locationController.text.trim(),
+      _descController.text.trim(),
+      _otroSaborController.text.trim(),
+      _dishController.text.trim(),
+      _rating.toString(),
+      _wouldReturnState.toString(),
+      (_tempMediaBytes?.length ?? 0).toString(),
+      dyn.join('&'),
+    ].join('|');
+  }
 
   // ============================================================
   // ANIMACIONES
@@ -93,39 +132,39 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
     _pageAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: AppAnimation.slow,
     );
 
     _photoAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration: AppAnimation.slow,
     );
 
     _gpsAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: AppAnimation.spinner,
     );
 
     _saveAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: AppAnimation.spinner,
     );
 
     _ratingAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: AppAnimation.slow,
     );
 
     _pageFadeAnimation = CurvedAnimation(
       parent: _pageAnimationController,
-      curve: Curves.easeOutCubic,
+      curve: AppAnimation.enter,
     );
 
     _pageSlideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _pageAnimationController,
-            curve: Curves.easeOutCubic,
+            curve: AppAnimation.enter,
           ),
         );
 
@@ -165,6 +204,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
       _otroSaborController.text = _dynamicData['otro_sabor']?.toString() ?? '';
 
+      // Los recuerdos de antes tienen `title` == `restaurantName`, porque el
+      // controlador copiaba uno en otro. En esos, el campo del plato sale
+      // vacío en vez de repetir el nombre del bar.
+      _dishController.text = m.title.trim() == m.restaurantName.trim()
+          ? ''
+          : m.title;
+
       if (m.imageUrls.isNotEmpty) {
         _existingImagePath = m.imageUrls.first;
       }
@@ -177,6 +223,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       );
     }
 
+    // Huella de cómo llega el formulario, para poder saber después si el
+    // usuario ha tocado algo. Se toma AQUÍ, justo tras rellenar: antes
+    // estaría vacía y después ya tendría los cambios dentro.
+    _initialSignature = _currentSignature();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _pageAnimationController.forward();
@@ -184,8 +235,39 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     });
   }
 
+  // ── "Reducir movimiento" ──
+  //
+  // Esta pantalla montaba su coreografía de entrada pasara lo que pasara.
+  // Quien lleva activada esa opción del sistema —a menudo por vértigo o por
+  // migraña— seguía viendo entrar los bloques uno detrás de otro.
+  //
+  // Va aquí y no en `initState` porque el `MediaQuery` todavía no existe en
+  // ese momento; y se resuelve poniendo el controlador directamente en su
+  // valor final, que es la pantalla ya montada, sin recorrido.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pageAnimationController.value = 1.0;
+    }
+  }
+
   @override
   void dispose() {
+    // EL DOCK VUELVE.
+    //
+    // Al entrar se apaga (ver initState) para que la barra de pestañas no
+    // tape el formulario. No volvía a encenderse nunca: al salir, quien
+    // estaba en Inicio se quedaba sin barra hasta que hacía scroll hacia
+    // arriba. Y en un diario vacío casi no hay nada que desplazar, así que
+    // el usuario quedaba encerrado en Inicio, sin acceso a Mapa, Zona Gamer
+    // ni Perfil. El comentario de main.dart ya describía este fallo.
+    //
+    // Va en `dispose` y no en el botón de atrás porque de aquí se sale por
+    // cuatro sitios: la flecha, el gesto de deslizar, guardar, y el botón
+    // del sistema. `dispose` es el único punto por el que pasan los cuatro.
+    ref.read(dockVisibleProvider.notifier).state = true;
+
     _pageAnimationController.dispose();
     _photoAnimationController.dispose();
     _gpsAnimationController.dispose();
@@ -196,6 +278,8 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     _locationController.dispose();
     _descController.dispose();
     _otroSaborController.dispose();
+    _dishController.dispose();
+    _formScroll.dispose();
 
     super.dispose();
   }
@@ -213,7 +297,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       _isGettingLocation = true;
     });
 
-    _gpsAnimationController.repeat();
+    // El giro del icono de GPS solo si el sistema no pide reducir el
+    // movimiento; el estado de "buscando" lo comunica igual el texto.
+    if (mounted && !MediaQuery.disableAnimationsOf(context)) {
+      _gpsAnimationController.repeat();
+    }
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -323,8 +411,22 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         );
       }
     } finally {
-      _gpsAnimationController.stop();
-      _gpsAnimationController.reset();
+      // `mounted` ANTES de tocar el controlador, no después.
+      //
+      // `AnimationController.stop()` hace `_ticker!.stop()`. Si la pantalla
+      // ya se cerró, `dispose()` dejó ese ticker en null: en debug salta un
+      // assert, pero en una build de la App Store es un
+      // "Null check operator used on a null value" — un cierre inesperado.
+      //
+      // El camino es de lo más normal: abres "Nuevo recuerdo", pulsas el
+      // botón de ubicación y te vuelves atrás sin haber escrito nada (como
+      // no hay cambios, la app te deja salir sin preguntar). En un local con
+      // mala cobertura el GPS tarda varios segundos, y cuando por fin
+      // responde, esto se ejecuta sobre un controlador ya liberado.
+      if (mounted) {
+        _gpsAnimationController.stop();
+        _gpsAnimationController.reset();
+      }
 
       if (mounted) {
         setState(() {
@@ -364,7 +466,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   void _showImageSourceDialog() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFFFDFBF7),
+      // Por encima del dock (ver gamer_page.dart).
+      useRootNavigator: true,
+      backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -380,7 +484,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -483,20 +587,24 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         if (didPop) return;
         if (_isSaving) return;
         final bool discard = await _confirmDiscard();
-        if (discard && mounted) context.pop();
+        // `context.mounted`, no `mounted`: el `context` que se usa aquí es el
+        // parámetro de `build`, no el `State.context`. Comprobar el del State
+        // no garantiza que ESTE siga siendo válido después del `await`, que
+        // es justo lo que avisaba el analizador.
+        if (discard && context.mounted) context.pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFFDFBF7),
+        backgroundColor: AppColors.background,
         appBar: AppBar(
           title: Text(
-            _isEditing ? "Editar Recuerdo" : "Nuevo Recuerdo",
+            _isEditing ? "Editar recuerdo" : "Nuevo recuerdo",
             style: GoogleFonts.outfit(
               fontWeight: FontWeight.w900,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               fontSize: 22,
             ),
           ),
-          backgroundColor: const Color(0xFFFDFBF7),
+          backgroundColor: AppColors.background,
           elevation: 0,
           centerTitle: true,
           leading: _buildAnimatedIconButton(
@@ -512,6 +620,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           child: SlideTransition(
             position: _pageSlideAnimation,
             child: CustomScrollView(
+              controller: _formScroll,
               // Arrastrar la lista cierra el teclado: en un formulario de ocho
               // secciones había que cerrarlo a mano entre campo y campo.
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -558,7 +667,10 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                                   ],
                                 ),
                               );
-                              if (ok != true || !mounted) return;
+                              // `context.mounted`, no `mounted`: aquí
+                              // `context` es el parámetro de build(), no
+                              // el del State.
+                              if (ok != true || !context.mounted) return;
                             }
 
                             setState(() {
@@ -580,6 +692,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                           key: _restaurantSectionKey,
                           child: _buildRestaurantSection(),
                         ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Detrás del sitio y antes de la ubicación: primero
+                      // dónde, luego qué. Es el orden en que se cuenta.
+                      _buildAnimatedSection(
+                        index: 1,
+                        child: _buildDishSection(),
                       ),
                       const SizedBox(height: 20),
 
@@ -609,9 +729,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                       const SizedBox(height: 8),
 
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 450),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
+                        duration: AppAnimation.slow,
+                        switchInCurve: AppAnimation.enter,
+                        switchOutCurve: AppAnimation.exit,
                         transitionBuilder: (child, animation) {
                           return FadeTransition(
                             opacity: animation,
@@ -649,6 +769,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                         child: RatingSection(
                           key: _ratingSectionKey,
                           rating: _rating,
+                          hasInteracted: _hasInteractedWithRating,
                           ratingAnimationController: _ratingAnimationController,
                           onChanged: (v) {
                             setState(() {
@@ -675,18 +796,48 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                         index: 6,
                         child: _buildDescriptionSection(),
                       ),
-                      const SizedBox(height: 32),
-
-                      _buildAnimatedSection(
-                        index: 7,
-                        child: _buildSaveButton(),
-                      ),
-
-                      const SizedBox(height: 40),
+                      // El botón de guardar ya no vive aquí: está fijo en
+                      // la parte de abajo de la pantalla (ver
+                      // `bottomNavigationBar`). Este hueco es el que ocupa,
+                      // para que la última sección del formulario no quede
+                      // debajo de él.
+                      const SizedBox(height: 24),
                     ]),
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+        // ─────────────────────────────────────────────────────────────────
+        // BARRA DE GUARDADO FIJA
+        // ─────────────────────────────────────────────────────────────────
+        //
+        // El botón estaba al final de un formulario de ocho secciones: para
+        // guardar había que recorrerlo entero hacia abajo, aunque solo
+        // hubieras cambiado el nombre del sitio. Y al editar un recuerdo ya
+        // existente era peor todavía — el usuario no tenía forma de saber, a
+        // media pantalla, si sus cambios se estaban guardando solos o no.
+        //
+        // Ahora está siempre a la vista, sobre un fondo opaco con una línea
+        // de separación para que no parezca que flota sobre el contenido.
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            border: Border(
+              top: BorderSide(color: Color(0x1A0F172A), width: 1),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                12,
+                AppSpacing.lg,
+                12,
+              ),
+              child: _buildSaveButton(),
             ),
           ),
         ),
@@ -698,6 +849,46 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // SECCIONES
   // ============================================================
 
+  /// ¿Qué comiste?
+  ///
+  /// El modelo siempre ha tenido `title` separado de `restaurantName`, y la
+  /// ficha de detalle tiene una tarjeta "LUGAR" entera escrita y
+  /// condicionada a que los dos sean distintos. No se pintaba nunca: el
+  /// formulario solo preguntaba el sitio y el controlador copiaba ese texto
+  /// a los dos campos. Por eso en el detalle salía "casa Esteban" como
+  /// titular y otra vez "casa Esteban" justo debajo, como si fuera un fallo
+  /// de dibujado.
+  ///
+  /// Con este campo la app pasa de ser una lista de nombres de bares a ser
+  /// lo que dice ser: un diario de lo que comes. Es opcional a propósito —
+  /// a veces lo que recuerdas es el sitio, no el plato— y cuando se deja en
+  /// blanco todo sigue funcionando exactamente igual que antes.
+  Widget _buildDishSection() {
+    return MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const SectionLabel("¿Qué probaste?"),
+          const SizedBox(height: 8),
+          NeoContainer(
+            child: TextField(
+              controller: _dishController,
+              textCapitalization: TextCapitalization.sentences,
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              decoration: memoryFormInputDecoration(
+                "Ej. croquetas de rabo de toro — opcional",
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRestaurantSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -708,7 +899,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           child: TextField(
             controller: _restaurantController,
             style: GoogleFonts.inter(
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
@@ -737,7 +928,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 label: "Sí",
                 icon: Icons.check_circle_rounded,
                 isSelected: _wouldReturnState == true,
-                selectedColor: const Color(0xFFFFD400),
+                selectedColor: AppColors.primary,
                 onTap: () => setState(() => _wouldReturnState = true),
               ),
             ),
@@ -747,7 +938,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 label: "No",
                 icon: Icons.cancel_rounded,
                 isSelected: _wouldReturnState == false,
-                selectedColor: const Color(0xFFFFCDBD),
+                selectedColor: AppColors.tintAccent,
                 onTap: () => setState(() => _wouldReturnState = false),
               ),
             ),
@@ -766,22 +957,22 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
+        duration: AppAnimation.fast,
+        curve: AppAnimation.enter,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: isSelected ? selectedColor : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             width: isSelected ? 2.5 : 1.5,
           ),
           boxShadow: isSelected
               ? const [
                   BoxShadow(
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     blurRadius: 0,
                     offset: Offset(0, 3),
                   ),
@@ -791,13 +982,13 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: const Color(0xFF0F172A)),
+            Icon(icon, size: 18, color: AppColors.textPrimary),
             const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.inter(
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontSize: 14,
               ),
             ),
@@ -818,7 +1009,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
             controller: _descController,
             maxLines: 3,
             style: GoogleFonts.inter(
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w500,
               fontSize: 14,
             ),
@@ -834,14 +1025,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildSaveButton() {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: AppAnimation.standard,
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: _isSaving ? 2 : 0,
             offset: _isSaving ? const Offset(0, 2) : const Offset(0, 4),
           ),
@@ -849,26 +1040,34 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       ),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
+          // Opaco (Color.lerp, no alpha): este botón puede quedar sobre
+          // superficies distintas y una `withValues(alpha:)` dejaría
+          // traslucir lo que hay detrás en vez de verse como un amarillo
+          // apagado y sólido.
           backgroundColor: _isSaving
-              ? const Color(0xFFFFE77A)
-              : const Color(0xFFFFD400),
-          foregroundColor: const Color(0xFF0F172A),
+              ? Color.lerp(AppColors.primary, Colors.white, 0.45)
+              : AppColors.primary,
+          foregroundColor: AppColors.textPrimary,
           // Sin esto, al deshabilitar el botón (onPressed: null mientras
           // se guarda) Material aplicaba su color de "disabled" por
           // defecto en vez del amarillo que se le pasaba arriba — el
           // botón se veía completamente oscuro y el texto "Guardando..."
           // ilegible sobre ese fondo.
-          disabledBackgroundColor: const Color(0xFFFFE77A),
-          disabledForegroundColor: const Color(0xFF0F172A),
+          disabledBackgroundColor: Color.lerp(
+            AppColors.primary,
+            Colors.white,
+            0.45,
+          ),
+          disabledForegroundColor: AppColors.textPrimary,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: Color(0xFF0F172A), width: 2.5),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            side: const BorderSide(color: AppColors.textPrimary, width: 2.5),
           ),
         ),
         onPressed: _isSaving ? null : _saveMemory,
         child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
+          duration: AppAnimation.standard,
           child: _isSaving
               ? Row(
                   key: const ValueKey('saving'),
@@ -889,7 +1088,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                   ],
                 )
               : Text(
-                  _isEditing ? "Guardar Cambios" : "Guardar Recuerdo",
+                  _isEditing ? "Guardar cambios" : "Guardar recuerdo",
                   key: const ValueKey('idle'),
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.w900,
@@ -908,8 +1107,8 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Widget _buildAnimatedSection({required int index, required Widget child}) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 500 + (index * 50)),
-      curve: Curves.easeOutCubic,
+      duration: AppAnimation.stagger(index, base: AppAnimation.slow),
+      curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -940,7 +1139,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF0F172A), width: 2),
+              border: Border.all(color: AppColors.textPrimary, width: 2),
               boxShadow: const [
                 BoxShadow(
                   color: Colors.black12,
@@ -949,7 +1148,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 ),
               ],
             ),
-            child: Icon(icon, color: const Color(0xFF0F172A), size: 16),
+            child: Icon(icon, color: AppColors.textPrimary, size: 16),
           ),
         ),
       ),
@@ -968,7 +1167,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Future<void> _saveMemory() async {
     if (_restaurantController.text.trim().isEmpty) {
-      _showError("Nombre de restaurante", key: _restaurantSectionKey);
+      _showError("Restaurante / Lugar", key: _restaurantSectionKey);
       return;
     }
 
@@ -977,23 +1176,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       return;
     }
 
-    if (_rating <= 0.0) {
-      if (!_hasInteractedWithRating) {
-        // El slider sigue en su valor inicial: probablemente se olvidó
-        // de puntuar, no quiere dar un 0 a propósito.
-        _showError("Puntuación", key: _ratingSectionKey);
-        return;
-      }
-
-      // Sí ha movido el slider hasta 0: puede ser intencional (una
-      // experiencia realmente mala), así que se confirma en vez de
-      // bloquear o guardar sin preguntar.
-      final bool confirmedZero = await _confirmZeroRating();
-      if (!confirmedZero) return;
+    // El slider sigue en su valor inicial: probablemente se olvidó de
+    // puntuar, no quiere dar un 0 a propósito. Esto sí es un error de campo
+    // obligatorio y va con los demás.
+    if (_rating <= 0.0 && !_hasInteractedWithRating) {
+      _showError("Puntuación general", key: _ratingSectionKey);
+      return;
     }
 
     if (_wouldReturnState == null) {
-      _showError("¿Volverías?", key: _wouldReturnSectionKey);
+      _showError("¿Volverías a este lugar?", key: _wouldReturnSectionKey);
       return;
     }
 
@@ -1001,16 +1193,37 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       return;
     }
 
+    // ── Por qué ya no se pregunta nada sobre el 0 ──────────────────────
+    //
+    // Aquí había un diálogo: "has dejado la nota en 0, ¿seguro?". Era el
+    // fallo nº2 que reportaron los usuarios de la App Store, y arreglar el
+    // orden de las validaciones solo quitó el síntoma.
+    //
+    // La causa es que preguntaba a la persona equivocada. Arriba ya hay una
+    // comprobación que distingue los dos casos:
+    //
+    //   • Deslizador sin tocar → "te falta la puntuación", como cualquier
+    //     otro campo obligatorio, y te lleva hasta él.
+    //   • Deslizador arrastrado hasta el 0 → eso es una decisión.
+    //
+    // Es decir: el diálogo solo le salía a quien había puesto un 0 **a
+    // propósito**, para preguntarle si de verdad quería lo que acababa de
+    // hacer. A veces se come uno algo horrible y quiere dejarlo escrito.
+    // Ahora se guarda y ya está.
+
     setState(() {
       _isSaving = true;
     });
 
-    _saveAnimationController.repeat();
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _saveAnimationController.repeat();
+    }
 
     try {
       final MemorySaveResult result = await MemorySaveController(ref).save(
         existingMemory: widget.memory,
         restaurantName: _restaurantController.text.trim(),
+        dishName: _dishController.text.trim(),
         addressText: _locationController.text.trim(),
         currentGpsLocation: _currentLocation,
         wouldReturn: _wouldReturnState ?? false,
@@ -1057,9 +1270,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           SnackBar(
             content: Text(
               isPermissionDenied
-                  ? "Este dispositivo no tiene acceso todavía. No es un "
-                        "problema de conexión — avisa para añadirlo a la "
-                        "lista autorizada."
+                  // Ver home_page.dart: no hay ninguna "lista autorizada".
+                  ? "Ya no tienes acceso a este diario. Puede que te hayan "
+                        "quitado de él. Cambia de diario desde Inicio."
                   : "No se pudo guardar el recuerdo. Comprueba tu conexión "
                         "e inténtalo de nuevo.",
             ),
@@ -1089,15 +1302,20 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // ============================================================
 
   /// ¿Hay algo que se perdería al salir?
-  bool get _hasUnsavedChanges {
-    if (_isEditing) return false;
-    return _tempMediaBytes != null ||
-        _restaurantController.text.trim().isNotEmpty ||
-        _locationController.text.trim().isNotEmpty ||
-        _descController.text.trim().isNotEmpty ||
-        _dynamicData.isNotEmpty ||
-        _rating > 0;
-  }
+  /// ¿Hay algo escrito que se perdería al salir?
+  ///
+  /// Antes esto empezaba con `if (_isEditing) return false;`, así que
+  /// **editar un recuerdo no protegía nada**: cambiabas la nota, escribías la
+  /// opinión, hacías una foto nueva, deslizabas para volver, y se perdía todo
+  /// sin un solo aviso. Crear sí preguntaba. La foto, que es lo que más
+  /// cuesta recuperar, era justo lo que más se perdía.
+  ///
+  /// Ahora se compara con la huella tomada al abrir, así que funciona igual
+  /// en los dos casos: al crear, la huella de partida es la de un formulario
+  /// vacío; al editar, la del recuerdo guardado. Y como es una comparación y
+  /// no una lista de "hay algo escrito", deshacer un cambio a mano vuelve a
+  /// dejar el formulario limpio y no pregunta de más.
+  bool get _hasUnsavedChanges => _currentSignature() != _initialSignature;
 
   /// Manejador del botón atrás. Síncrono a propósito: `_buildAnimatedIconButton`
   /// recibe un `VoidCallback`, y un closure `async` tiene tipo
@@ -1162,7 +1380,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text("Por favor, completa: $field"),
+        // El texto nombra el rótulo EXACTO que se ve en pantalla. Decía
+        // "Por favor, completa: Nombre de restaurante" cuando el campo se
+        // llama "Restaurante / Lugar": dos nombres para lo mismo obligan a
+        // deducir cuál es. Y "Por favor, completa:" con dos puntos es una
+        // cadena de programador, no una frase.
+        content: Text('Para guardar, rellena «$field»'),
       ),
     );
 
@@ -1171,104 +1394,37 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     // scroll automático hasta él.
     final BuildContext? fieldContext = key?.currentContext;
 
-    if (fieldContext != null) {
+    if (fieldContext == null) {
+      // El campo está tan arriba que ni siquiera se ha construido: el
+      // formulario es un `CustomScrollView` y lo que queda fuera de
+      // pantalla no existe todavía, así que `ensureVisible` no tiene a
+      // dónde ir. Pasaba justo en el caso peor —pulsar "Guardar" desde
+      // abajo del todo con el nombre del sitio sin rellenar— y el usuario
+      // se quedaba leyendo un aviso sobre un campo que no veía.
+      //
+      // Los campos obligatorios están todos en la mitad de arriba y la
+      // validación corta en el PRIMERO que falta, así que subir del todo
+      // siempre deja a la vista el que se pide.
+      if (_formScroll.hasClients) {
+        _formScroll.animateTo(
+          0,
+          duration: AppAnimation.slow,
+          curve: AppAnimation.enter,
+        );
+      }
+      return;
+    }
+
+    {
       Scrollable.ensureVisible(
         fieldContext,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
+        duration: AppAnimation.slow,
+        curve: AppAnimation.enter,
         alignment: 0.1,
       );
     }
   }
 
-  Future<bool> _confirmZeroRating() async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.55),
-      builder: (dialogContext) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFBF0),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0xFF0F172A),
-                blurRadius: 0,
-                offset: Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF6D6),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF0F172A), width: 2),
-                ),
-                child: const Icon(
-                  Icons.star_border_rounded,
-                  color: Color(0xFF0F172A),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '¿Guardar con puntuación 0?',
-                style: GoogleFonts.outfit(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Has dejado el slider en 0. Confirma que es la '
-                'puntuación que quieres darle, no que se te ha '
-                'olvidado moverlo.',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  height: 1.4,
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.75),
-                ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: DialogButton(
-                      label: 'Volver a puntuar',
-                      backgroundColor: Colors.white,
-                      onTap: () => Navigator.of(dialogContext).pop(false),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DialogButton(
-                      label: 'Guardar con 0',
-                      backgroundColor: const Color(0xFFFFD400),
-                      onTap: () => Navigator.of(dialogContext).pop(true),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    return confirmed ?? false;
-  }
 }
 
 // ===========================================================================

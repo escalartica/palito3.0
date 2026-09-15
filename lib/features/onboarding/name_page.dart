@@ -7,6 +7,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
 
 /// ===========================================================================
 /// ¿CÓMO TE LLAMAS?
@@ -138,24 +139,28 @@ class _NamePageState extends ConsumerState<NamePage> {
                     vertical: 18,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: const BorderSide(
                       color: AppColors.textPrimary,
-                      width: 2,
+                      width: AppBorder.normal,
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: const BorderSide(
                       color: AppColors.textPrimary,
-                      width: 2,
+                      width: AppBorder.normal,
                     ),
                   ),
+                  // El borde enfocado usaba 2.5 — un quinto grosor que el
+                  // propio sistema de tokens dice haber eliminado. El foco ya
+                  // se distingue por el color/estado del campo, no hace falta
+                  // un tercer grosor.
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: const BorderSide(
                       color: AppColors.textPrimary,
-                      width: 2.5,
+                      width: AppBorder.normal,
                     ),
                   ),
                 ),

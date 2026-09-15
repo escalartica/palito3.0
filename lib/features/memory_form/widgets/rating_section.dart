@@ -2,19 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'form_field_containers.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_typography.dart';
 
-/// Slider de puntuación general (0-5) del formulario de recuerdo. El
-/// diálogo de confirmación al guardar con puntuación 0 sigue viviendo en
-/// `_MemoryFormPageState`, ya que solo se dispara al guardar, no al mover
-/// el slider.
+/// Deslizador de puntuación general (0-5) del formulario de recuerdo.
 class RatingSection extends StatelessWidget {
   final double rating;
+
+  /// ¿Ha movido ya el deslizador?
+  ///
+  /// Sin esto, un formulario recién abierto enseñaba **0.0** en la pastilla
+  /// amarilla. Y "0.0" no se lee como "todavía no has puntuado", se lee como
+  /// "le has puesto un cero" — que en una app de comida es una acusación.
+  /// Mientras no se toca, aparece un guion.
+  final bool hasInteracted;
+
   final AnimationController ratingAnimationController;
   final ValueChanged<double> onChanged;
 
   const RatingSection({
     super.key,
     required this.rating,
+    required this.hasInteracted,
     required this.ratingAnimationController,
     required this.onChanged,
   });
@@ -33,12 +44,12 @@ class RatingSection extends StatelessWidget {
               Expanded(
                 child: SliderTheme(
                   data: SliderThemeData(
-                    activeTrackColor: const Color(0xFF0F172A),
-                    inactiveTrackColor: Colors.grey.shade300,
-                    thumbColor: const Color(0xFFFFD400),
-                    overlayColor: const Color(
-                      0xFFFFD400,
-                    ).withValues(alpha: 0.2),
+                    activeTrackColor: AppColors.textPrimary,
+                    inactiveTrackColor: AppColors.textPrimary.withValues(
+                      alpha: 0.15,
+                    ),
+                    thumbColor: AppColors.primary,
+                    overlayColor: AppColors.primary.withValues(alpha: 0.2),
                     trackHeight: 6,
                   ),
                   child: Slider(
@@ -59,7 +70,7 @@ class RatingSection extends StatelessWidget {
                 scale: Tween<double>(begin: 0.85, end: 1.0).animate(
                   CurvedAnimation(
                     parent: ratingAnimationController,
-                    curve: Curves.easeOutBack,
+                    curve: AppAnimation.pop,
                   ),
                 ),
                 child: Container(
@@ -68,19 +79,20 @@ class RatingSection extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD400),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       width: 2,
                     ),
                   ),
                   child: Text(
-                    rating.toStringAsFixed(1),
+                    hasInteracted ? rating.toStringAsFixed(1) : '—',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       fontSize: 16,
+                      fontFeatures: AppTypography.tabular,
                     ),
                   ),
                 ),

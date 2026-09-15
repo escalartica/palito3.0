@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Card blanca con borde grueso y sombra "dura" — el contenedor base
 /// reutilizado por casi todas las secciones del detalle de recuerdo
@@ -20,11 +22,11 @@ class AnimatedCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 3),
           ),

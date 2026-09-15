@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_typography.dart';
+
 class MemoryHeroCard extends StatelessWidget {
   final String nombreRestaurante;
   final double score;
@@ -15,16 +19,17 @@ class MemoryHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
+      // Borde grueso + sombra maciza sin difuminar: la misma superficie
+      // "sticker" que el resto de tarjetas de la app, en vez de la sombra
+      // difuminada de Material que traía esta pantalla.
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(
+          color: AppColors.textPrimary,
+          width: AppBorder.normal,
+        ),
+        boxShadow: AppShadow.md,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -33,28 +38,13 @@ class MemoryHeroCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "RESTAURANTE",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                Text("RESTAURANTE", style: AppTypography.labelSmall),
                 const SizedBox(height: 4),
-                Text(
-                  nombreRestaurante,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
+                Text(nombreRestaurante, style: AppTypography.headlineSmall),
                 const SizedBox(height: 12),
                 _indicatorChip(
                   volverias ? "Volvería sin duda" : "No repetiría",
-                  volverias ? Colors.green : Colors.red,
+                  volverias ? AppColors.success : AppColors.error,
                 ),
               ],
             ),
@@ -62,26 +52,25 @@ class MemoryHeroCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppBorder.thin,
+              ),
             ),
             child: Column(
               children: [
                 Text(
                   score.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.orange,
+                  style: AppTypography.headlineMedium.copyWith(
+                    color: AppColors.onPrimary,
                   ),
                 ),
-                const Text(
+                Text(
                   "SCORE",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.orange,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.onPrimary,
                   ),
                 ),
               ],
@@ -96,16 +85,13 @@ class MemoryHeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        border: Border.all(color: color, width: AppBorder.thin),
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
+        style: AppTypography.labelMedium.copyWith(color: color),
       ),
     );
   }

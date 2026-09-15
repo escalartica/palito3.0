@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../tokens/app_colors.dart';
+import '../tokens/app_shape.dart';
 
 /// Botón circular neobrutalista. Antes existía una copia privada en
 /// `profile_page.dart` y las pantallas de grupo usaban un `IconButton` pelado
@@ -27,7 +28,7 @@ class NeoCircleButton extends StatelessWidget {
         enabled: onTap != null,
         label: tooltip,
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
           onTap: onTap == null
               ? null
               : () {
@@ -43,7 +44,10 @@ class NeoCircleButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.textPrimary, width: 2),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppBorder.normal,
+              ),
               boxShadow: const <BoxShadow>[
                 BoxShadow(
                   color: AppColors.textPrimary,
@@ -118,8 +122,11 @@ class NeoHeader extends StatelessWidget implements PreferredSizeWidget {
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.textPrimary, width: 2),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: AppColors.textPrimary,
+                    width: AppBorder.normal,
+                  ),
                   boxShadow: const <BoxShadow>[
                     BoxShadow(
                       color: AppColors.textPrimary,
@@ -129,9 +136,10 @@ class NeoHeader extends StatelessWidget implements PreferredSizeWidget {
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
                   child: Image.asset(
                     'assets/images/logo.png',
+                  semanticLabel: 'Logotipo de Palito de Sabores',
                     fit: BoxFit.contain,
                     cacheWidth: 120,
                     excludeFromSemantics: true,
@@ -175,17 +183,20 @@ class NeoPrimaryButton extends StatelessWidget {
         opacity: enabled ? 1 : 0.55,
         child: Material(
           color: AppColors.accent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             onTap: enabled ? onPressed : null,
             child: Container(
               constraints: const BoxConstraints(minHeight: 52),
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.textPrimary, width: 2),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppBorder.normal,
+                ),
               ),
               child: isBusy
                   ? const SizedBox(

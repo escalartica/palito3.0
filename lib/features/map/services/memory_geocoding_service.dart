@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/memory_model.dart';
@@ -29,7 +30,12 @@ import '../../../core/services/memory_map_firestore_service.dart';
 /// para actualizar la UI (comprobar si sigue montado, reconstruir,
 /// reencuadrar la cámara).
 class MemoryGeocodingService {
+  // El analizador propone usar un parámetro-campo (`this._firestoreService`),
+  // pero Dart PROHÍBE que un parámetro con nombre empiece por guion bajo, así
+  // que esa propuesta no compila. Es un falso positivo conocido de la regla;
+  // se silencia aquí en vez de dejar un aviso permanente que enmascare otros.
   MemoryGeocodingService({required MemoryMapFirestoreService firestoreService})
+    // ignore: prefer_initializing_formals
     : _firestoreService = firestoreService;
 
   /// Inyectable para tests; en producción, la misma instancia compartida
@@ -154,15 +160,53 @@ class MemoryGeocodingService {
   // UTILIDADES
   // ============================================================
 
-  String _normalize(String text) {
-    return text
-        .toLowerCase()
-        .replaceAll(RegExp(r'[áàäâ]'), 'a')
-        .replaceAll(RegExp(r'[éèëê]'), 'e')
-        .replaceAll(RegExp(r'[íìïî]'), 'i')
-        .replaceAll(RegExp(r'[óòöô]'), 'o')
-        .replaceAll(RegExp(r'[úùüû]'), 'u')
-        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+  /// País de quien está usando la app, para completar direcciones sueltas.
+  ///
+  /// Se resuelve **una vez** por sesión y se guarda: son dos llamadas al
+  /// sistema y el país de alguien no cambia entre dos recuerdos.
+  ///
+  /// Nada de esto pide permisos ni enciende el GPS:
+  /// `getLastKnownPosition()` devuelve lo que el sistema ya tenía guardado,
+  /// y solo se llama si el permiso estaba concedido de antes. Si no hay
+  /// permiso, o no hay posición previa, o la geocodificación inversa falla,
+  /// devuelve `null` y la dirección se manda tal cual — que es exactamente
+  /// lo que hay que hacer cuando no se sabe algo: no inventarlo.
+  String? _cachedCountry;
+  bool _countryResolved = false;
+
+  Future<String?> _userCountry() async {
+    if (_countryResolved) return _cachedCountry;
+    _countryResolved = true;
+
+    try {
+      final LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return null;
+      }
+
+      final Position? last = await Geolocator.getLastKnownPosition();
+      if (last == null) return null;
+
+      final List<Placemark> places = await placemarkFromCoordinates(
+        last.latitude,
+        last.longitude,
+      );
+
+      for (final Placemark place in places) {
+        final String? country = place.country?.trim();
+        if (country != null && country.isNotEmpty) {
+          _cachedCountry = country;
+          _log('🌍 País para completar direcciones: $country');
+          return _cachedCountry;
+        }
+      }
+    } catch (e) {
+      _log('🌍 No se pudo averiguar el país: $e');
+    }
+
+    return null;
   }
 
   String _normalizeAddress(String address) {
@@ -418,17 +462,49 @@ class MemoryGeocodingService {
 
           String query = address;
 
-          final normalizedAddress = _normalize(address);
+          // ------------------------------------------------------
+          // EL PAÍS NO ES ESPAÑA POR DECRETO
+          // ------------------------------------------------------
+          //
+          // Aquí había esto:
+          //
+          // ```dart
+          // if (_normalize(address) == 'medellin') {
+          //   query = 'Medellín, Badajoz, España';
+          // }
+          // if (!normalizedQuery.contains('espana') && ...) {
+          //   query = '$query, España';
+          // }
+          // ```
+          //
+          // Dos cosas, y las dos malas para cualquiera que no viva donde
+          // vive quien escribió el código:
+          //
+          // 1. **Un pueblo concreto, a mano.** Medellín es una ciudad de dos
+          //    millones y medio de habitantes en Colombia, y también una
+          //    aldea de Badajoz. La app mandaba a todo el mundo a la aldea.
+          //    Alguien que apunte una bandeja paisa en su ciudad vería su
+          //    recuerdo caer en Extremadura.
+          //
+          // 2. **", España" a todas las direcciones**, sin excepción. Un
+          //    plato apuntado en "Polanco" se geocodificaba como "Polanco,
+          //    España". Eso no es un fallo de encuadre como el del mapa: es
+          //    el dato guardado en el sitio equivocado, y el usuario no
+          //    tiene forma de saber por qué su marcador está en otro país.
+          //
+          // Lo que se hace ahora: se pregunta **dónde está quien usa la
+          // app** y se completa con SU país. En Sevilla sigue saliendo
+          // España y "zafra" sigue cayendo en Zafra; en Guadalajara sale
+          // México. Si no hay forma de saberlo, no se inventa nada: se
+          // manda la dirección tal cual y que decida el geocodificador.
+          //
+          // Solo se completa cuando la dirección no lleva ya una coma: quien
+          // escribe "Zafra, Badajoz" o "Lisboa, Portugal" ya ha dicho dónde
+          // es, y añadirle un país por detrás solo puede empeorarlo.
+          final String? country = await _userCountry();
 
-          if (normalizedAddress == 'medellin') {
-            query = 'Medellín, Badajoz, España';
-          }
-
-          final normalizedQuery = _normalize(query);
-
-          if (!normalizedQuery.contains('espana') &&
-              !normalizedQuery.contains('spain')) {
-            query = '$query, España';
+          if (country != null && !address.contains(',')) {
+            query = '$address, $country';
           }
 
           _log(

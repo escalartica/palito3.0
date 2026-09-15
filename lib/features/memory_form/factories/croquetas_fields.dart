@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
 
 class CroquetasFields implements DynamicFieldGenerator {
   // ===========================================================================
@@ -93,7 +96,7 @@ class CroquetasFields implements DynamicFieldGenerator {
       // =======================================================================
       _buildCompactChipGroup(
         'bechamel',
-        'La bechamel era...',
+        'La bechamel era…',
         [
           {'label': 'Demasiado líquida', 'icon': Icons.water_drop_outlined},
           {'label': 'Muy cremosa', 'icon': Icons.icecream_outlined},
@@ -166,16 +169,19 @@ class CroquetasFields implements DynamicFieldGenerator {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: InkWell(
         onTap: () => onUpdate('es_surtido', !esSurtido),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: esSurtido ? const Color(0xFFFFF6D6) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+            // Lavado de amarillo de marca al 15% cuando el toggle está
+            // activo, en vez de un tono suelto: mismo amarillo que el resto
+            // de la app, solo diluido.
+            color: esSurtido ? AppColors.tintPrimary : AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.textPrimary, width: 1.5),
             boxShadow: const [
               BoxShadow(
-                color: Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 blurRadius: 0,
                 offset: Offset(0, 2),
               ),
@@ -186,7 +192,7 @@ class CroquetasFields implements DynamicFieldGenerator {
               Icon(
                 Icons.dining_outlined,
                 size: 18,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -198,14 +204,14 @@ class CroquetasFields implements DynamicFieldGenerator {
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
                       'Actívalo si el surtido mezcla más de un sabor',
                       style: GoogleFonts.inter(
                         fontSize: 11,
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                        color: AppColors.textPrimary.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -213,7 +219,7 @@ class CroquetasFields implements DynamicFieldGenerator {
               ),
               Switch(
                 value: esSurtido,
-                activeTrackColor: const Color(0xFFFFD400),
+                activeTrackColor: AppColors.primary,
                 onChanged: (value) => onUpdate('es_surtido', value),
               ),
             ],
@@ -248,7 +254,7 @@ class CroquetasFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -317,8 +323,8 @@ class CroquetasFields implements DynamicFieldGenerator {
               (data['sabor']?.contains('Otro') ?? false) &&
               otroController != null)
             AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
+              duration: AppAnimation.standard,
+              curve: AppAnimation.enter,
               child: Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: _buildOtroField(otroController, onUpdate),
@@ -338,9 +344,9 @@ class CroquetasFields implements DynamicFieldGenerator {
     Function(String, dynamic) onUpdate,
   ) {
     return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
+      duration: AppAnimation.standard,
       tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutCubic,
+      curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -353,12 +359,12 @@ class CroquetasFields implements DynamicFieldGenerator {
       child: Container(
         height: 48,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.textPrimary, width: 1.5),
           boxShadow: const [
             BoxShadow(
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               blurRadius: 0,
               offset: Offset(0, 2),
             ),
@@ -367,7 +373,7 @@ class CroquetasFields implements DynamicFieldGenerator {
         child: TextField(
           controller: controller,
           style: GoogleFonts.inter(
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
@@ -375,11 +381,11 @@ class CroquetasFields implements DynamicFieldGenerator {
             prefixIcon: const Icon(
               Icons.edit_rounded,
               size: 18,
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
             labelText: 'Especifica el sabor',
             labelStyle: GoogleFonts.inter(
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               fontSize: 12,
             ),
             border: InputBorder.none,
@@ -477,7 +483,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
@@ -485,7 +491,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
             'Añade cada sabor con su propia valoración',
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+              color: AppColors.textPrimary.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 10),
@@ -505,15 +511,15 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD400),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
                     border: Border.all(
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       width: 1.5,
                     ),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         blurRadius: 0,
                         offset: Offset(0, 2),
                       ),
@@ -527,7 +533,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -536,7 +542,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                         child: const Icon(
                           Icons.close_rounded,
                           size: 15,
-                          color: Color(0xFF0F172A),
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ],
@@ -551,10 +557,10 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.35),
+                color: AppColors.textPrimary.withValues(alpha: 0.35),
                 width: 1.5,
               ),
             ),
@@ -566,7 +572,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                    color: AppColors.textPrimary.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -596,7 +602,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                         hintText: 'Especifica el sabor',
                         hintStyle: GoogleFonts.inter(fontSize: 12),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppRadius.xs),
                         ),
                       ),
                     ),
@@ -607,7 +613,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                    color: AppColors.textPrimary.withValues(alpha: 0.6),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -631,15 +637,15 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                   width: double.infinity,
                   child: InkWell(
                     onTap: puedeConfirmar ? _confirmarVariedad : null,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: Container(
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: puedeConfirmar
-                            ? const Color(0xFF0F172A)
-                            : const Color(0xFF0F172A).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
+                            ? AppColors.textPrimary
+                            : AppColors.textPrimary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -649,9 +655,9 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                             size: 16,
                             color: puedeConfirmar
                                 ? Colors.white
-                                : const Color(
-                                    0xFF0F172A,
-                                  ).withValues(alpha: 0.4),
+                                : AppColors.textPrimary.withValues(
+                                    alpha: 0.4,
+                                  ),
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -661,9 +667,9 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                               fontWeight: FontWeight.w700,
                               color: puedeConfirmar
                                   ? Colors.white
-                                  : const Color(
-                                      0xFF0F172A,
-                                    ).withValues(alpha: 0.4),
+                                  : AppColors.textPrimary.withValues(
+                                      alpha: 0.4,
+                                    ),
                             ),
                           ),
                         ],
@@ -687,31 +693,31 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.xs),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: AppAnimation.fast,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFFFD400) : const Color(0xFFF4F4F8),
-          borderRadius: BorderRadius.circular(8),
+          color: selected ? AppColors.primary : AppColors.background,
+          borderRadius: BorderRadius.circular(AppRadius.xs),
           border: Border.all(
             color: selected
-                ? const Color(0xFF0F172A)
-                : const Color(0xFF0F172A).withValues(alpha: 0.15),
+                ? AppColors.textPrimary
+                : AppColors.textPrimary.withValues(alpha: 0.15),
             width: 1.5,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: const Color(0xFF0F172A)),
+            Icon(icon, size: 13, color: AppColors.textPrimary),
             const SizedBox(width: 4),
             Text(
               label,
               style: GoogleFonts.inter(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
               ),
             ),
           ],

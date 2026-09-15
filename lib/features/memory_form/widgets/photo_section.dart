@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/components/smart_image.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
 
 /// Recuadro de foto del formulario de recuerdo: muestra la miniatura
 /// recién elegida, la foto ya guardada (vía [SmartImage]) o un estado
@@ -39,27 +42,30 @@ class PhotoSection extends StatelessWidget {
         scale: Tween<double>(begin: 0.96, end: 1.0).animate(
           CurvedAnimation(
             parent: photoAnimationController,
-            curve: Curves.easeOutBack,
+            curve: AppAnimation.pop,
           ),
         ),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 350),
+          duration: AppAnimation.slow,
           height: 180,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFAEB),
-            border: Border.all(color: const Color(0xFF0F172A), width: 2),
-            borderRadius: BorderRadius.circular(16),
+            color: AppColors.surfaceWarm,
+            border: Border.all(color: AppColors.textPrimary, width: 2),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             boxShadow: const [
               BoxShadow(
-                color: Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 blurRadius: 0,
                 offset: Offset(0, 3),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            // 2 pt menos que el radio exterior (AppRadius.md): con el mismo
+            // radio, el borde grueso deja una franja recta visible en las
+            // esquinas en vez de seguir la curva.
+            borderRadius: BorderRadius.circular(AppRadius.md - 2),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -96,20 +102,20 @@ class _EmptyPhotoState extends StatelessWidget {
       children: [
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.85, end: 1.0),
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeOutBack,
+          duration: AppAnimation.slow,
+          curve: AppAnimation.pop,
           builder: (context, scale, child) {
             return Transform.scale(scale: scale, child: child);
           },
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFD400),
+              color: AppColors.primary,
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF0F172A), width: 2),
+              border: Border.all(color: AppColors.textPrimary, width: 2),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -118,7 +124,7 @@ class _EmptyPhotoState extends StatelessWidget {
             child: const Icon(
               Icons.camera_alt_rounded,
               size: 24,
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -128,7 +134,7 @@ class _EmptyPhotoState extends StatelessWidget {
           style: GoogleFonts.outfit(
             fontWeight: FontWeight.bold,
             fontSize: 15,
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
           ),
         ),
       ],
@@ -144,12 +150,12 @@ class _ChangePhotoBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFD400),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF0F172A), width: 2),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             blurRadius: 0,
             offset: Offset(0, 2),
           ),
@@ -158,12 +164,12 @@ class _ChangePhotoBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.edit, size: 14, color: Color(0xFF0F172A)),
+          const Icon(Icons.edit, size: 14, color: AppColors.textPrimary),
           const SizedBox(width: 6),
           Text(
             "Cambiar foto",
             style: GoogleFonts.outfit(
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               fontSize: 12,
               fontWeight: FontWeight.bold,
             ),

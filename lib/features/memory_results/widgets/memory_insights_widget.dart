@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_typography.dart';
+
 class MemoryInsightsWidget extends StatelessWidget {
   final Map<String, dynamic> data;
 
@@ -10,10 +14,7 @@ class MemoryInsightsWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Joyas de la Experiencia",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        Text("Joyas de la Experiencia", style: AppTypography.titleMedium),
         const SizedBox(height: 15),
 
         // Fila de datos creativos
@@ -34,24 +35,25 @@ class MemoryInsightsWidget extends StatelessWidget {
         ),
 
         const SizedBox(height: 15),
-        const Text(
-          "Comentario General",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        Text("Comentario General", style: AppTypography.labelLarge),
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
+          // Relleno cálido + borde navy fino: la misma caja de "nota" que
+          // usa el resto de la app, en vez de un gris sin origen.
           decoration: BoxDecoration(
-            color: Colors.grey.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+            color: AppColors.surfaceWarm,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppBorder.thin,
+            ),
           ),
           child: Text(
             data['comentario_general'] ?? "Sin comentarios adicionales.",
-            style: const TextStyle(
+            style: AppTypography.bodyMedium.copyWith(
               fontStyle: FontStyle.italic,
-              color: Colors.black87,
             ),
           ),
         ),
@@ -64,11 +66,18 @@ class MemoryInsightsWidget extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.indigoAccent, size: 20),
+          // Coral: el color de marca reservado para rellenos e iconografía
+          // decorativa, nunca para texto (no cumple contraste AA).
+          Icon(icon, color: AppColors.accent, size: 20),
           const SizedBox(width: 10),
-          Text("$title: ", style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text("$title: ", style: AppTypography.labelLarge),
           Expanded(
-            child: Text(value, style: const TextStyle(color: Colors.black54)),
+            child: Text(
+              value,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
         ],
       ),

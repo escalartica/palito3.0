@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/tokens/app_colors.dart';
+
 /// Contenido estático de Zona Gamer: logros desbloqueables y retos de
 /// "Juicio Picante". Extraído de gamer_page.dart.
 ///
@@ -13,29 +15,78 @@ import 'package:flutter/material.dart';
 /// de una sesión a la siguiente, y en el caso de los logros (que son
 /// `Map`s) un literal `const` sería además inmutable y lanzaría en tiempo
 /// de ejecución al intentar marcarlo como desbloqueado.
+/// Los logros de la mesa.
+///
+/// Eran tres, con colores de la paleta de Material (`Colors.amber`,
+/// `Colors.deepOrange`, `Colors.purple`) que no salen de ningún sitio de la
+/// marca — el morado del panel era el color más saturado de toda la app y no
+/// significaba nada. Ahora son siete y usan los tres colores de Palito.
+///
+/// Siete y no tres porque tres se agotan en una cena: con dos conseguidos y
+/// uno bloqueado no queda nada por lo que volver. La escalera va de "esto lo
+/// consigues en el primer giro" a "esto es una sobremesa larga de verdad",
+/// que es lo que hace que la siguiente tirada apetezca.
+///
+/// `desc` describe exactamente lo que comprueba
+/// `GamerGameLogic.achievementProgress`. No es un detalle de estilo: "Alma de
+/// la Mesa · Interactuar con todos los comensales" estaba implementado como
+/// "cinco decisiones", así que se desbloqueaba sin haber interactuado con
+/// nadie más. Un logro que miente deja de ser un premio.
 List<Map<String, dynamic>> buildGamerAchievements() => [
   {
-    'id': 'king_flavor',
-    'title': 'Rey del Sabor',
-    'desc': 'Alcanzar los 40 puntos o más en la sesión.',
-    'icon': Icons.workspace_premium_rounded,
-    'color': Colors.amber,
-    'unlocked': false,
-  },
-  {
-    'id': 'spicy_streak',
-    'title': 'Racha Picante',
-    'desc': 'Acumular una racha de más de 10 decisiones.',
-    'icon': Icons.local_fire_department_rounded,
-    'color': Colors.deepOrange,
+    'id': 'first_spin',
+    'title': 'Se abre la veda',
+    'desc': 'Girar la ruleta por primera vez.',
+    'icon': Icons.celebration_rounded,
+    'color': AppColors.primary,
     'unlocked': false,
   },
   {
     'id': 'soul_table',
-    'title': 'Alma de la Mesa',
-    'desc': 'Interactuar con todos los comensales.',
+    'title': 'Alma de la mesa',
+    'desc': 'Que a la ruleta le toque todo el mundo al menos una vez.',
     'icon': Icons.groups_rounded,
-    'color': Colors.purple,
+    'color': AppColors.accent,
+    'unlocked': false,
+  },
+  {
+    'id': 'spicy_streak',
+    'title': 'Mesa en racha',
+    'desc': 'Llegar a 10 decisiones en la misma sesión.',
+    'icon': Icons.local_fire_department_rounded,
+    'color': AppColors.accent,
+    'unlocked': false,
+  },
+  {
+    'id': 'king_flavor',
+    'title': 'Rey del sabor',
+    'desc': 'Que alguien alcance los 40 puntos.',
+    'icon': Icons.workspace_premium_rounded,
+    'color': AppColors.primary,
+    'unlocked': false,
+  },
+  {
+    'id': 'full_table',
+    'title': 'Mesa llena',
+    'desc': 'Sentar a cinco comensales a la vez.',
+    'icon': Icons.table_restaurant_rounded,
+    'color': AppColors.textPrimary,
+    'unlocked': false,
+  },
+  {
+    'id': 'medal_hunter',
+    'title': 'Cazamedallas',
+    'desc': 'Que alguien reúna cinco medallas del Juicio Picante.',
+    'icon': Icons.military_tech_rounded,
+    'color': AppColors.primary,
+    'unlocked': false,
+  },
+  {
+    'id': 'marathon',
+    'title': 'Sobremesa larga',
+    'desc': 'Aguantar 25 decisiones sin levantarse de la mesa.',
+    'icon': Icons.nightlight_round,
+    'color': AppColors.textPrimary,
     'unlocked': false,
   },
 ];

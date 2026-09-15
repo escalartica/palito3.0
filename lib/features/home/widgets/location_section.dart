@@ -5,6 +5,8 @@ import '../../../core/models/memory_model.dart';
 import 'animated_card.dart';
 import 'icon_box.dart';
 import 'section_title.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Sección de ubicación del recuerdo: dirección y, si están disponibles,
 /// las coordenadas exactas.
@@ -34,16 +36,16 @@ class LocationSection extends StatelessWidget {
                 children: [
                   const IconBox(
                     icon: Icons.location_on_rounded,
-                    backgroundColor: Color(0xFFFFD400),
+                    backgroundColor: AppColors.primary,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      memory.location.address,
+                      memory.displayAddress,
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         height: 1.4,
                       ),
                     ),
@@ -57,10 +59,10 @@ class LocationSection extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFFDF5),
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.surfaceWarm,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.12),
+                      color: AppColors.textPrimary.withValues(alpha: 0.12),
                     ),
                   ),
                   child: Row(
@@ -68,7 +70,7 @@ class LocationSection extends StatelessWidget {
                       const Icon(
                         Icons.my_location_rounded,
                         size: 16,
-                        color: Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -78,14 +80,14 @@ class LocationSection extends StatelessWidget {
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ),
                       const Icon(
                         Icons.check_circle_rounded,
                         size: 17,
-                        color: Color(0xFF2E7D32),
+                        color: AppColors.success,
                       ),
                     ],
                   ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'tokens/app_colors.dart';
 import 'tokens/app_typography.dart';
+import 'tokens/app_shape.dart';
 
 class AppTheme {
   /// Grosor del borde neobrutalista. Los componentes usaban 1.5, 2, 2.5 y 3
@@ -47,9 +48,24 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
       ),
 
-      textTheme: TextTheme(
-        headlineLarge: AppTypography.headlineLarge,
-        bodyMedium: AppTypography.bodyMedium,
+      // La escala completa, no dos entradas sueltas: así los diálogos, los
+      // menús, los SnackBar y los mensajes de error de los formularios —todo
+      // lo que pinta Material por su cuenta— dejan de salir en Roboto.
+      textTheme: AppTypography.textTheme,
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(
+            color: AppColors.textPrimary,
+            width: borderWidth,
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        titleTextStyle: AppTypography.headlineSmall,
+        contentTextStyle: AppTypography.bodyMedium,
       ),
     );
   }

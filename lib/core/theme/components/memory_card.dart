@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../data/rating_scale.dart';
 import '../../models/memory_model.dart';
 import 'smart_image.dart';
+import '../../utils/relative_date.dart';
 import '../tokens/app_colors.dart';
 import 'neo_pressable.dart';
+import '../tokens/app_shape.dart';
 
 // Paleta de colores neo-brutalista (alias locales sobre AppColors, la
 // fuente única de verdad — ver core/theme/tokens/app_colors.dart).
@@ -40,11 +42,11 @@ class MemoryCardCompact extends StatelessWidget {
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
                     border: Border.all(color: palitoDark, width: 2),
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
                     child: firstImageUrl != null
                         ? Hero(
                             tag: 'memory-image-${memory.id}',
@@ -59,10 +61,15 @@ class MemoryCardCompact extends StatelessWidget {
                               ),
                             ),
                           )
+                        // Relleno "sin imagen": un tinte del propio navy de
+                        // marca en vez de un gris neutro suelto, para que el
+                        // hueco de foto no desentone con el resto del token.
                         : Container(
                             width: 60,
                             height: 60,
-                            color: Colors.grey.shade200,
+                            color: AppColors.textPrimary.withValues(
+                              alpha: 0.08,
+                            ),
                           ),
                   ),
                 ),
@@ -98,6 +105,45 @@ class MemoryCardCompact extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+
+                  // Dónde fue, cuando el titular ya dice qué se comió.
+                  //
+                  // Desde que el formulario pregunta el plato, `title` es el
+                  // plato y no el bar. Sin esta línea, Inicio pasaría a ser
+                  // una lista de platos sin sitio — y el sitio es justo lo
+                  // que uno busca cuando quiere volver.
+                  //
+                  // Solo aparece cuando los dos son distintos: en los
+                  // recuerdos guardados antes de este cambio son iguales, y
+                  // ahí sigue saliendo una sola línea, como siempre.
+                  if (memory.restaurantName.trim().isNotEmpty &&
+                      memory.restaurantName.trim().toLowerCase() !=
+                          memory.title.trim().toLowerCase()) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: <Widget>[
+                        const Icon(
+                          Icons.storefront_rounded,
+                          size: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            memory.restaurantName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
                   const SizedBox(height: 4),
                   // Sin `Flexible` ni `ellipsis`, una categoría larga
                   // ("Decoración / Espacio") desbordaba la fila con la
@@ -112,8 +158,8 @@ class MemoryCardCompact extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFFDF5),
-                            borderRadius: BorderRadius.circular(6),
+                            color: AppColors.surfaceWarm,
+                            borderRadius: BorderRadius.circular(AppRadius.xs),
                             border: Border.all(color: palitoDark, width: 1.5),
                           ),
                           child: Text(
@@ -133,6 +179,11 @@ class MemoryCardCompact extends StatelessWidget {
                         const Icon(
                           Icons.star_rounded,
                           size: 14,
+                          // Oro de estrella, deliberadamente distinto del
+                          // amarillo de marca: sobre `surfaceWarm` el
+                          // primary (#FFD400) casi desaparece por falta de
+                          // contraste con el fondo, así que la estrella
+                          // necesita su propio tono, más oscuro.
                           color: Color(0xFFB58100),
                         ),
                         const SizedBox(width: 2),
@@ -145,6 +196,29 @@ class MemoryCardCompact extends StatelessWidget {
                           ),
                         ),
                       ],
+
+                      // CUÁNDO FUE.
+                      //
+                      // No estaba en ninguna parte de la app. En un diario
+                      // de comidas, «¿fui la semana pasada o hace un año?»
+                      // es de las primeras cosas que uno quiere saber al
+                      // mirar la lista, y el único indicio de recencia era
+                      // un punto amarillo de 14 píxeles que solo dura cinco
+                      // minutos y no lleva etiqueta.
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          relativeDate(memory.date),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -187,8 +261,13 @@ class MemoryCardLarge extends StatelessWidget {
         child: SizedBox(
           width: 280,
           height: 180,
+          // Radio del recorte = radio del borde de NeoPressable (xl) menos
+          // su grosor (AppBorder.normal), para que la curva de la imagen
+          // quede concéntrica con el borde grueso que la envuelve.
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(21),
+            borderRadius: BorderRadius.circular(
+              AppRadius.xl - AppBorder.normal,
+            ),
             child: Stack(
               children: [
                 Positioned.fill(
@@ -202,12 +281,14 @@ class MemoryCardLarge extends StatelessWidget {
                           ),
                         )
                       : Container(
-                          color: Colors.grey.shade100,
+                          color: AppColors.textPrimary.withValues(
+                            alpha: 0.06,
+                          ),
                           child: const Center(
                             child: Icon(
                               Icons.image,
                               size: 40,
-                              color: Colors.grey,
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ),
@@ -215,10 +296,16 @@ class MemoryCardLarge extends StatelessWidget {
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(21),
+                      borderRadius: BorderRadius.circular(
+                        AppRadius.xl - AppBorder.normal,
+                      ),
+                      // Navy, no negro puro: la marca no usa negro en
+                      // ningún otro sitio (bordes y sombras son
+                      // `AppColors.textPrimary`), así que el scrim de
+                      // legibilidad tampoco debería.
                       gradient: LinearGradient(
                         colors: [
-                          Colors.black.withValues(alpha: 0.7),
+                          AppColors.textPrimary.withValues(alpha: 0.75),
                           Colors.transparent,
                         ],
                         begin: Alignment.bottomCenter,

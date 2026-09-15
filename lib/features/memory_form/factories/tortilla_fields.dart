@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../widgets/memory_text_field.dart';
 
 class TortillaFields implements DynamicFieldGenerator {
   @override
@@ -123,7 +127,7 @@ class TortillaFields implements DynamicFieldGenerator {
       // =======================================================================
       _buildCompactChipGroup(
         'personalidad',
-        'Personalidad: Esta tortilla es...',
+        'Personalidad: Esta tortilla es…',
         [
           {
             'label': 'La que haría tu abuela',
@@ -192,7 +196,7 @@ class TortillaFields implements DynamicFieldGenerator {
       _buildCustomTextField(
         'titular',
         'El titular',
-        'Describe esta tortilla en una frase...',
+        'Describe esta tortilla en una frase…',
         data,
         onUpdate,
       ),
@@ -245,7 +249,7 @@ class TortillaFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -341,8 +345,8 @@ class TortillaFields implements DynamicFieldGenerator {
           // =====================================================================
           if (hasCustomOption)
             AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
+              duration: AppAnimation.standard,
+              curve: AppAnimation.enter,
               child: isCustomSelected
                   ? Padding(
                       padding: const EdgeInsets.only(top: 10),
@@ -369,9 +373,9 @@ class TortillaFields implements DynamicFieldGenerator {
     required Function(String, dynamic) onUpdate,
   }) {
     return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
+      duration: AppAnimation.standard,
       tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutCubic,
+      curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
@@ -383,12 +387,12 @@ class TortillaFields implements DynamicFieldGenerator {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.textPrimary, width: 1.5),
           boxShadow: const [
             BoxShadow(
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               blurRadius: 0,
               offset: Offset(0, 2),
             ),
@@ -397,7 +401,7 @@ class TortillaFields implements DynamicFieldGenerator {
         child: TextFormField(
           controller: controller,
           style: GoogleFonts.inter(
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
@@ -405,11 +409,11 @@ class TortillaFields implements DynamicFieldGenerator {
             prefixIcon: const Icon(
               Icons.edit_rounded,
               size: 18,
-              color: Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
-            hintText: 'Escribe el ingrediente...',
+            hintText: 'Escribe el ingrediente…',
             hintStyle: GoogleFonts.inter(
-              color: Colors.grey.shade400,
+              color: AppColors.textMuted,
               fontSize: 12,
             ),
             border: InputBorder.none,
@@ -471,6 +475,10 @@ class TortillaFields implements DynamicFieldGenerator {
   // CAMPO DE TEXTO NORMAL
   // ===========================================================================
 
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -478,57 +486,11 @@ class TortillaFields implements DynamicFieldGenerator {
     Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextFormField(
-              initialValue: data[key],
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey.shade400,
-                  fontSize: 12,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (value) => onUpdate(key, value),
-            ),
-          ),
-        ],
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
     );
   }
 }

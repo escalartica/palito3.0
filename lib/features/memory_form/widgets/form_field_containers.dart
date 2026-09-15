@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Piezas de UI de bajo nivel compartidas por varias secciones del
 /// formulario de recuerdo (`memory_form_page.dart` y los widgets bajo
@@ -40,12 +42,12 @@ class NeoContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: AppAnimation.fast,
       padding:
           padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.textPrimary, width: 2),
         boxShadow: const [
           BoxShadow(
@@ -69,7 +71,7 @@ InputDecoration memoryFormInputDecoration(
   return InputDecoration(
     hintText: hint,
     hintStyle: GoogleFonts.inter(
-      color: Colors.grey.shade400,
+      color: AppColors.textMuted,
       fontWeight: FontWeight.w400,
       fontSize: 14,
     ),

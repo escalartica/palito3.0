@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
 import '../../../core/theme/components/neo_chip.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../widgets/memory_text_field.dart';
 
 class AmbienteFields implements DynamicFieldGenerator {
   @override
@@ -46,7 +50,7 @@ class AmbienteFields implements DynamicFieldGenerator {
 
       // Campo dinámico que aparece al seleccionar "Otra"
       AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
+        duration: AppAnimation.standard,
         transitionBuilder: (child, animation) {
           return SizeTransition(
             sizeFactor: animation,
@@ -58,7 +62,7 @@ class AmbienteFields implements DynamicFieldGenerator {
             ? _buildCustomTextField(
                 'otra_vista_exterior',
                 'Describe la vista',
-                'Añade más información sobre lo que ves...',
+                'Añade más información sobre lo que ves…',
                 data,
                 onUpdate,
               )
@@ -278,19 +282,19 @@ class AmbienteFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.textPrimary, width: 1.5),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -310,9 +314,9 @@ class AmbienteFields implements DynamicFieldGenerator {
                     onTap: () {
                       onUpdate(key, isSelected ? null : option);
                     },
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
+                      duration: AppAnimation.fast,
                       margin: const EdgeInsets.symmetric(vertical: 2),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -320,17 +324,17 @@ class AmbienteFields implements DynamicFieldGenerator {
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFFFD400)
+                            ? AppColors.primary
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Row(
                         children: [
                           Radio<String>(
                             value: option,
-                            activeColor: const Color(0xFF0F172A),
+                            activeColor: AppColors.textPrimary,
                           ),
-                          Icon(icon, size: 17, color: const Color(0xFF0F172A)),
+                          Icon(icon, size: 17, color: AppColors.textPrimary),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -339,7 +343,7 @@ class AmbienteFields implements DynamicFieldGenerator {
                                 fontWeight: isSelected
                                     ? FontWeight.w700
                                     : FontWeight.w500,
-                                color: const Color(0xFF0F172A),
+                                color: AppColors.textPrimary,
                                 fontSize: 13,
                               ),
                             ),
@@ -378,7 +382,7 @@ class AmbienteFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -452,6 +456,10 @@ class AmbienteFields implements DynamicFieldGenerator {
   // ================================================================
   // CUSTOM TEXT FIELD
   // ================================================================
+  // El campo de texto de las categorías vive ahora en un solo sitio:
+  // `widgets/memory_text_field.dart`. Este método se queda como puente para
+  // no tocar las decenas de llamadas de abajo; `onUpdate` ya no se usa
+  // porque escribir un texto no tiene por qué reconstruir el formulario.
   Widget _buildCustomTextField(
     String key,
     String label,
@@ -459,61 +467,12 @@ class AmbienteFields implements DynamicFieldGenerator {
     Map<String, dynamic> data,
     Function(String, dynamic) onUpdate,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 8),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0xFF0F172A),
-                  blurRadius: 0,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextFormField(
-              initialValue: data[key],
-              maxLines: key == 'otra_vista_exterior' ? 2 : 1,
-              style: GoogleFonts.inter(
-                color: const Color(0xFF0F172A),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey.shade400,
-                  fontSize: 12,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              onChanged: (value) {
-                onUpdate(key, value);
-              },
-            ),
-          ),
-        ],
-      ),
+    return MemoryTextField(
+      fieldKey: key,
+      label: label,
+      hint: hint,
+      data: data,
+      maxLines: key == 'otra_vista_exterior' ? 2 : 1,
     );
   }
 
@@ -540,19 +499,19 @@ class AmbienteFields implements DynamicFieldGenerator {
             style: GoogleFonts.outfit(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.textPrimary, width: 1.5),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0xFF0F172A),
+                  color: AppColors.textPrimary,
                   blurRadius: 0,
                   offset: Offset(0, 2),
                 ),
@@ -563,12 +522,16 @@ class AmbienteFields implements DynamicFieldGenerator {
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
-                      activeTrackColor: const Color(0xFF0F172A),
-                      inactiveTrackColor: Colors.grey.shade300,
-                      thumbColor: const Color(0xFFFFD400),
-                      overlayColor: const Color(
-                        0xFFFFD400,
-                      ).withValues(alpha: 0.2),
+                      activeTrackColor: AppColors.textPrimary,
+                      // Pista sin recorrer: tinte navy tenue, igual que el
+                      // resto de estados "apagados" del formulario (ver
+                      // croquetas_fields.dart), en vez de un gris de sistema
+                      // ajeno a la paleta.
+                      inactiveTrackColor: AppColors.textPrimary.withValues(
+                        alpha: 0.15,
+                      ),
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withValues(alpha: 0.2),
                       trackHeight: 6,
                     ),
                     child: Slider(
@@ -588,10 +551,10 @@ class AmbienteFields implements DynamicFieldGenerator {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFD400),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
                     border: Border.all(
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       width: 1.5,
                     ),
                   ),
@@ -599,7 +562,7 @@ class AmbienteFields implements DynamicFieldGenerator {
                     currentValue.toStringAsFixed(0),
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.textPrimary,
                       fontSize: 14,
                     ),
                   ),

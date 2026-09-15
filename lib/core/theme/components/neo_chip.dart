@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../tokens/app_colors.dart';
+import '../tokens/app_animation.dart';
+import '../tokens/app_shape.dart';
+import 'app_motion.dart';
 
 /// Chip de selección con el estilo neobrutalista de Palito (borde grueso,
 /// sombra dura, fondo amarillo si está seleccionado). Es el widget visual
@@ -76,7 +79,14 @@ class NeoChip extends StatelessWidget {
       return longest > 11 ? 2 : 3;
     }
 
-    final TextStyle style = GoogleFonts.inter(
+    // TextStyle plana, no `GoogleFonts.inter(...)`: esta función es lógica
+    // pura, invocada desde tests que no inicializan el binding de Flutter.
+    // `GoogleFonts` intenta comprobar/cargar la fuente vía el asset bundle en
+    // cuanto se construye el estilo, lo que revienta fuera de un widget test.
+    // Para una heurística de "cuántas columnas caben" la métrica de la
+    // fuente del sistema es suficiente — no hace falta el glifo exacto de
+    // Inter.
+    const TextStyle style = TextStyle(
       fontWeight: FontWeight.w700, // el más ancho de los dos estados
       fontSize: fontSize,
       height: 1.1,
@@ -110,33 +120,33 @@ class NeoChip extends StatelessWidget {
       scale: isSelected ? 1.02 : 1.0,
       duration: reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 180),
-      curve: Curves.easeOutBack,
+          : AppAnimation.fast,
+      curve: AppAnimation.pop,
       // Sin un Material propio, la onda del InkWell se pintaba por DETRÁS del
       // AnimatedContainer opaco: al tocar un chip no había ninguna
       // confirmación visual.
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.xs),
           child: AnimatedContainer(
             duration: reduceMotion
                 ? Duration.zero
-                : const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
+                : AppAnimation.fast,
+            curve: AppAnimation.enter,
             constraints: const BoxConstraints(minHeight: minHeight),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : Colors.white,
-              borderRadius: BorderRadius.circular(10),
+              color: isSelected ? AppColors.primary : AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
               border: Border.all(
                 color: isSelected
                     ? AppColors.textPrimary
                     : AppColors.textPrimary.withValues(alpha: 0.35),
-                width: 2.0,
+                width: AppBorder.normal,
               ),
               boxShadow: isSelected
                   ? const <BoxShadow>[
@@ -155,10 +165,10 @@ class NeoChip extends StatelessWidget {
                 AnimatedSwitcher(
                   duration: reduceMotion
                       ? Duration.zero
-                      : const Duration(milliseconds: 180),
+                      : AppAnimation.fast,
                   transitionBuilder:
                       (Widget child, Animation<double> animation) {
-                        return ScaleTransition(scale: animation, child: child);
+                        return AppMotion.popIn(animation, child);
                       },
                   child: Icon(
                     icon,

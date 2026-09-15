@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 class ProfessionalChoiceChip extends StatelessWidget {
   final String label;
@@ -19,23 +22,23 @@ class ProfessionalChoiceChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppAnimation.fast,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFD400) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           // Borde más grueso si está seleccionado
           border: Border.all(
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             width: isSelected ? 2.0 : 1.0,
           ),
           // Sombra dura estilo neobrutalista solo al seleccionar
           boxShadow: isSelected
               ? const [
                   BoxShadow(
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     blurRadius: 0,
                     offset: Offset(0, 3),
                   ),
@@ -46,14 +49,14 @@ class ProfessionalChoiceChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 18, color: const Color(0xFF0F172A)),
+              Icon(icon, size: 18, color: AppColors.textPrimary),
               const SizedBox(width: 8),
             ],
             Text(
               label,
               style: GoogleFonts.inter(
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
                 fontSize: 14,
               ),
             ),

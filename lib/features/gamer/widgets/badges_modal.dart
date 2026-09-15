@@ -1,17 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'badge_pill.dart';
+import '../../../core/theme/components/progress_track.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
-const _kDark = Color(0xFF0F172A);
-const _kYellow = Color(0xFFFFD400);
-const _kRed = Color(0xFFFF4D29);
+const _kDark = AppColors.textPrimary;
 
-/// Modal con el ranking de comensales (puntos y medallas) y los logros
-/// especiales globales de la sesión. Extraído de gamer_page.dart.
+/// ===========================================================================
+/// EL PODIO Y LOS LOGROS DE LA MESA
+/// ===========================================================================
 ///
-/// [players] debe llegar ya ordenado por puntuación (mayor a menor); el
-/// orden se calcula en el llamador para no duplicar esa lógica aquí.
+/// El botón que abre esta hoja dice "Ver Podio e Insignias" y lo que había
+/// dentro era una lista. Tres tarjetas beige idénticas, del mismo tamaño y
+/// con el mismo peso visual: quien llevaba 40 puntos y tres medallas se veía
+/// exactamente igual que quien llevaba 5 y ninguna, y para saber quién iba
+/// ganando había que leer los números uno por uno. Un podio en el que hay que
+/// leer para saber quién ha ganado no es un podio.
+///
+/// Lo que cambia:
+///
+/// - **Primero, segundo y tercero se ven distintos.** El primero ocupa su
+///   propia tarjeta ancha, con el amarillo de marca, borde y sombra dura; los
+///   demás van en filas con su número delante. La jerarquía se ve de un
+///   vistazo, antes de leer nada.
+/// - **Se acabaron los lavados.** Las pastillas usaban coral al 15 % con el
+///   texto también coral encima: **2,71:1**, por debajo del mínimo legible.
+///   Ahora el texto es navy sobre tintes opacos.
+/// - **Los logros bloqueados enseñan cuánto falta.** Antes eran un candado y
+///   una frase; ahora llevan su barra: "9 de 10" invita a una tirada más,
+///   "bloqueado" no invita a nada.
+///
+/// [players] llega ya ordenado por puntuación (mayor a menor); el orden se
+/// calcula en el llamador para no duplicar esa lógica aquí.
 class BadgesModal extends StatelessWidget {
   const BadgesModal({
     super.key,
@@ -23,186 +44,388 @@ class BadgesModal extends StatelessWidget {
   final List<Map<String, dynamic>> achievements;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(24),
-    constraints: BoxConstraints(
-      maxHeight: MediaQuery.of(context).size.height * 0.9,
-    ),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    child: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.military_tech_rounded,
-                      color: Color(0xFFFF9F1C),
-                      size: 28,
+  Widget build(BuildContext context) {
+    final int unlockedCount = achievements
+        .where((Map<String, dynamic> a) => a['unlocked'] == true)
+        .length;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'El podio',
+                    style: GoogleFonts.outfit(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                      color: _kDark,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Insignias y Logros de la Mesa',
-                        style: GoogleFonts.outfit(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: _kDark,
-                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Cerrar',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            Text(
+              players.isEmpty
+                  ? 'Todavía no hay nadie en la mesa.'
+                  : 'Cómo va la sesión ahora mismo.',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            if (players.isNotEmpty) ...<Widget>[
+              _WinnerCard(player: players.first),
+              const SizedBox(height: 10),
+              for (int i = 1; i < players.length; i++) ...<Widget>[
+                _RunnerUpRow(position: i + 1, player: players[i]),
+                if (i < players.length - 1) const SizedBox(height: 8),
+              ],
+            ],
+
+            const SizedBox(height: 26),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Logros de la mesa',
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: _kDark,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$unlockedCount de ${achievements.length}',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (final Map<String, dynamic> a in achievements) ...<Widget>[
+              _AchievementRow(achievement: a),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Quien va primero. Su tarjeta es la única con el amarillo de marca y la
+/// única con sombra dura: en una pantalla donde todo lo demás es blanco y
+/// beige, eso basta para que el ojo aterrice aquí antes de leer un número.
+class _WinnerCard extends StatelessWidget {
+  const _WinnerCard({required this.player});
+
+  final Map<String, dynamic> player;
+
+  @override
+  Widget build(BuildContext context) {
+    final int points = player['points'] as int? ?? 0;
+    final int medals = player['medals'] as int? ?? 0;
+    final String name = player['name']?.toString() ?? 'Comensal';
+
+    return Semantics(
+      label:
+          'Primer puesto: $name, $points puntos y $medals '
+          '${medals == 1 ? 'medalla' : 'medallas'}',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: _kDark, width: AppBorder.normal),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(color: _kDark, offset: Offset(3, 3), blurRadius: 0),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _kDark, width: AppBorder.normal),
+                ),
+                child: Icon(
+                  player['icon'] as IconData? ?? Icons.person_rounded,
+                  size: 24,
+                  color: _kDark,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      'VA GANANDO',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                        color: _kDark,
+                      ),
+                    ),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                        letterSpacing: -0.4,
+                        color: _kDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      medals == 0
+                          ? '$points puntos'
+                          : '$points puntos · $medals '
+                                '${medals == 1 ? 'medalla' : 'medallas'}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _kDark,
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded),
-                tooltip: 'Cerrar',
-                onPressed: () => Navigator.pop(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Del segundo para abajo. Número grande delante: el puesto es el dato, no
+/// el adorno.
+class _RunnerUpRow extends StatelessWidget {
+  const _RunnerUpRow({required this.position, required this.player});
+
+  final int position;
+  final Map<String, dynamic> player;
+
+  @override
+  Widget build(BuildContext context) {
+    final int points = player['points'] as int? ?? 0;
+    final int medals = player['medals'] as int? ?? 0;
+    final String name = player['name']?.toString() ?? 'Comensal';
+
+    return Semantics(
+      label:
+          'Puesto $position: $name, $points puntos y $medals '
+          '${medals == 1 ? 'medalla' : 'medallas'}',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceWarm,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.tintMuted, width: 1.5),
+          ),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 22,
+                child: Text(
+                  '$position',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                player['icon'] as IconData? ?? Icons.person_rounded,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _kDark,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                medals == 0 ? '$points pts' : '$points pts · $medals 🏆',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Ranking ordenado por puntuación, medallas e insignias desbloqueadas.',
-            style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 16),
-          ...players.map((player) {
-            final playerColor = player['color'] as Color;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: playerColor.withValues(alpha: 0.2),
-                          child: Icon(
-                            player['icon'] as IconData,
-                            color: playerColor,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            player['name'] as String,
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: _kDark,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      BadgePill(
-                        text: '🏆 ${player['medals']} medallas',
-                        bgColor: _kYellow.withValues(alpha: 0.25),
-                      ),
-                      const SizedBox(height: 6),
-                      BadgePill(
-                        text: '⭐ ${player['points']} pts',
-                        bgColor: _kRed.withValues(alpha: 0.15),
-                        textColor: _kRed,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 16),
-          Text(
-            'Logros Especiales Globales',
-            style: GoogleFonts.outfit(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: _kDark,
+        ),
+      ),
+    );
+  }
+}
+
+/// Un logro. Conseguido: tinte de su color y su marca de visto. Bloqueado:
+/// apagado, pero con la barra de cuánto llevas — que es la única razón por la
+/// que alguien mira un logro que todavía no tiene.
+class _AchievementRow extends StatelessWidget {
+  const _AchievementRow({required this.achievement});
+
+  final Map<String, dynamic> achievement;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool unlocked = achievement['unlocked'] == true;
+    final String title = achievement['title']?.toString() ?? '';
+    final String desc = achievement['desc']?.toString() ?? '';
+    final int goal = achievement['goal'] as int? ?? 0;
+    final int current = (achievement['progress'] as int? ?? 0).clamp(
+      0,
+      goal == 0 ? 1 : goal,
+    );
+
+    // Tinte opaco por color de marca. Nada de `color.withValues(alpha: 0.08)`:
+    // sobre esta hoja da igual, pero en cuanto una tarjeta lleva sombra dura
+    // el navy se cuela por debajo del fondo translúcido y el texto se vuelve
+    // ilegible. Se hace bien desde el principio.
+    final Color color = achievement['color'] as Color? ?? AppColors.primary;
+    final Color tint = unlocked
+        ? (color == AppColors.accent
+              ? AppColors.tintAccent
+              : color == AppColors.textPrimary
+              ? AppColors.tintMuted
+              : AppColors.tintPrimary)
+        : AppColors.surface;
+
+    return Semantics(
+      label: unlocked
+          ? '$title, conseguido. $desc'
+          : goal > 0
+          ? '$title, bloqueado. $desc Llevas $current de $goal'
+          : '$title, bloqueado. $desc',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: tint,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: unlocked ? _kDark : AppColors.tintMuted,
+              width: unlocked ? AppBorder.thin : 1.5,
             ),
           ),
-          const SizedBox(height: 10),
-          ...achievements.map((a) {
-            final unlocked = a['unlocked'] == true;
-            final color = a['color'] as Color;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: unlocked
-                    ? color.withValues(alpha: 0.08)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: unlocked
-                      ? color.withValues(alpha: 0.3)
-                      : Colors.grey.shade300,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                achievement['icon'] as IconData? ?? Icons.star_rounded,
+                color: unlocked ? _kDark : AppColors.textMuted,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14.5,
+                        color: unlocked ? _kDark : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      desc,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    if (!unlocked && goal > 0) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: ProgressTrack(
+                              value: current / goal,
+                              color: AppColors.primary,
+                              height: 8,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$current de $goal',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    a['icon'] as IconData,
-                    color: unlocked ? color : Colors.grey.shade400,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          a['title'] as String,
-                          style: GoogleFonts.outfit(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: unlocked ? _kDark : Colors.grey.shade500,
-                          ),
-                        ),
-                        Text(
-                          a['desc'] as String,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    unlocked ? Icons.check_circle_rounded : Icons.lock_rounded,
-                    color: unlocked ? color : Colors.grey.shade400,
-                    size: 20,
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Icon(
+                unlocked ? Icons.check_circle_rounded : Icons.lock_rounded,
+                color: unlocked ? _kDark : AppColors.textMuted,
+                size: 20,
               ),
-            );
-          }),
-          const SizedBox(height: 16),
-        ],
+            ],
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

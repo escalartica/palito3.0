@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
 
 class ZonaGamerCard extends StatefulWidget {
   final String title;
@@ -43,25 +46,21 @@ class _ZonaGamerCardState extends State<ZonaGamerCard> {
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 90),
-        curve: Curves.easeOut,
+        duration: AppAnimation.press,
+        curve: AppAnimation.enter,
         transform: Matrix4.translationValues(translation.dx, translation.dy, 0),
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              widget.backgroundColor,
-              widget.backgroundColor.withValues(alpha: 0.8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFF0F172A), width: 2),
+          // Color plano. El degradado era el único de esta pantalla y no
+          // encaja con un lenguaje de bordes duros y sombras macizas: lo que
+          // da profundidad aquí es el desplazamiento, no el difuminado.
+          color: widget.backgroundColor,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.textPrimary, width: 2),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F172A),
+              color: AppColors.textPrimary,
               offset: currentShadowOffset,
               blurRadius: 0,
             ),
@@ -74,7 +73,7 @@ class _ZonaGamerCardState extends State<ZonaGamerCard> {
               children: [
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: _pressed ? 0.85 : 1),
-                  duration: const Duration(milliseconds: 120),
+                  duration: AppAnimation.press,
                   builder: (context, scale, child) =>
                       Transform.scale(scale: scale, child: child),
                   child: Container(
@@ -115,8 +114,8 @@ class _ZonaGamerCardState extends State<ZonaGamerCard> {
               ],
             ),
             AnimatedSlide(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
+              duration: AppAnimation.fast,
+              curve: AppAnimation.enter,
               offset: _pressed ? const Offset(0.15, 0) : Offset.zero,
               child: Container(
                 padding: const EdgeInsets.all(8),

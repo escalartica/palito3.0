@@ -42,6 +42,9 @@ class MemorySaveController {
   Future<MemorySaveResult> save({
     required MemoryModel? existingMemory,
     required String restaurantName,
+    /// Lo que se comió. Opcional: cuando viene vacío, el titular del
+    /// recuerdo sigue siendo el nombre del sitio, igual que siempre.
+    required String dishName,
     required String addressText,
     required LocationData? currentGpsLocation,
     required bool wouldReturn,
@@ -188,7 +191,16 @@ class MemorySaveController {
 
     final newMemory = MemoryModel(
       id: memoryId,
-      title: restaurantName,
+      // EL TITULAR ES EL PLATO, y el sitio solo cuando no hay plato.
+      //
+      // Aquí se copiaba `restaurantName` en los dos campos, lo que dejaba
+      // muerta la tarjeta "LUGAR" del detalle —escrita y condicionada a que
+      // fueran distintos— y hacía que el nombre del bar saliera dos veces
+      // seguidas en la misma pantalla.
+      //
+      // Los recuerdos ya guardados no cambian: siguen teniendo los dos
+      // campos iguales y se pintan exactamente igual que antes.
+      title: dishName.isNotEmpty ? dishName : restaurantName,
       restaurantName: restaurantName,
       location: finalLocation,
       wouldReturn: wouldReturn,

@@ -180,7 +180,29 @@ service cloud.firestore {
              )
           && claimedInvite().groupId == groupId
           && claimedInvite().usedBy == request.auth.uid
-          && claimedInvite().expiresAt > request.time;
+          && claimedInvite().expiresAt > request.time
+          // Y RECIÉN RECLAMADA.
+          //
+          // Sin esta línea, "quitar a alguien de un grupo" no quitaba a
+          // nadie. La secuencia era: Bob entra con el código K7M4PQR2; la
+          // dueña lo expulsa; Bob vuelve a escribir `members` con el MISMO
+          // código. El documento de la invitación seguía ahí, con
+          // `usedBy = bob` y sin caducar, así que la regla lo dejaba pasar.
+          // Bob volvía a estar dentro, con acceso a los recuerdos, a las
+          // fotos y —porque cualquier miembro puede borrar— con capacidad
+          // de vaciar el diario. La ventana era de días, no de segundos:
+          // los códigos duran una semana.
+          //
+          // `useCount` no servía para cerrarlo: volver a entrar no vuelve a
+          // reclamar, así que el contador no se toca. Lo que distingue una
+          // entrada legítima de una reentrada es el TIEMPO: reclamar y
+          // entrar son dos escrituras seguidas, cuestión de segundos.
+          //
+          // Una hora, y no diez minutos, porque el paso 2 se puede
+          // reintentar si la primera vez falló la red (el paso 1 no se
+          // vuelve a gastar, ver household_service.dart). Una hora cubre
+          // ese reintento de sobra y deja la reentrada en nada.
+          && claimedInvite().usedAt > request.time - duration.value(1, 'h');
       }
 
       // --- reglas ------------------------------------------------------
@@ -226,7 +248,24 @@ service cloud.firestore {
       }
 
       match /locations/{locationId} {
-        allow read, write: if isGroupMember(groupId)
+        // LECTURA Y ESCRITURA POR SEPARADO, y no es cosmético.
+        //
+        // Antes era un `allow read, write` con una sola condición que
+        // miraba `request.resource.data.keys()`. En una LECTURA
+        // `request.resource` no existe: es null. Y `request.method` vale
+        // 'get' o 'list', nunca 'delete', así que el atajo de la izquierda
+        // no cortaba y la expresión reventaba. Resultado: **todas** las
+        // lecturas de localizaciones se denegaban, siempre, para todo el
+        // mundo.
+        //
+        // Se veía en el log de la app en cada visita al Mapa:
+        //   ERROR STREAM LOCATIONS LEGACY: [cloud_firestore/permission-denied]
+        //
+        // `memories`, justo arriba, ya lo hacía bien separando
+        // `read, delete` de `create, update`. Esto se quedó sin igualar.
+        allow read: if isGroupMember(groupId);
+
+        allow write: if isGroupMember(groupId)
           && (request.method == 'delete'
               || request.resource.data.keys().size() <= 20);
       }

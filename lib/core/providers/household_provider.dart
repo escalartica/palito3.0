@@ -83,6 +83,22 @@ final currentDisplayNameProvider = Provider<String?>((ref) {
 
 /// `true` cuando ya sabemos quién es el usuario pero todavía no tenemos su
 /// nombre — lo que dispara la pantalla "¿Cómo te llamas?".
+/// ¿Todavía no sabemos nada del documento del usuario?
+///
+/// Existe por una razón muy concreta: `currentUserDocProvider` emite un `Map`
+/// NUEVO en cada snapshot de Firestore, y dos `Map` distintos nunca son `==`.
+/// Quien observe ese provider se recalcula en CADA escritura, aunque el
+/// contenido sea idéntico. Un `Provider<bool>` sí compara por valor, así que
+/// solo avisa cuando el booleano cambia de verdad.
+///
+/// Lo usa `routerProvider` (ver main.dart): observar allí el `AsyncValue`
+/// entero recreaba el `GoRouter` —con `GlobalKey` nuevas— cada vez que se
+/// tocaba `users/{uid}`, y eso desmontaba el árbol de rutas a mitad de una
+/// acción del usuario.
+final userDocLoadingProvider = Provider<bool>((ref) {
+  return ref.watch(currentUserDocProvider).isLoading;
+});
+
 final needsDisplayNameProvider = Provider<bool>((ref) {
   final AsyncValue<Map<String, dynamic>?> userDoc = ref.watch(
     currentUserDocProvider,

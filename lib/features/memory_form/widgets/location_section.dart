@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'form_field_containers.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Campo de ubicación del formulario de recuerdo: texto libre + botón de
 /// GPS. El estado de la geolocalización (coordenadas actuales, si se
@@ -38,7 +41,7 @@ class LocationSection extends StatelessWidget {
                   controller: controller,
                   onChanged: onAddressChanged,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
@@ -79,19 +82,22 @@ class _GpsButton extends StatelessWidget {
     return GestureDetector(
       onTap: isGettingLocation ? null : onGpsTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: AppAnimation.standard,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
+          // Variante apagada del amarillo de marca mientras se obtiene la
+          // ubicación, en vez de un amarillo suelto sin relación con
+          // `AppColors.primary`.
           color: isGettingLocation
-              ? const Color(0xFFFFE77A)
-              : const Color(0xFFFFD400),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF0F172A), width: 2),
+              ? AppColors.primary.withValues(alpha: 0.5)
+              : AppColors.primary,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.textPrimary, width: 2),
           boxShadow: isGettingLocation
               ? const []
               : const [
                   BoxShadow(
-                    color: Color(0xFF0F172A),
+                    color: AppColors.textPrimary,
                     blurRadius: 0,
                     offset: Offset(0, 2),
                   ),
@@ -101,7 +107,7 @@ class _GpsButton extends StatelessWidget {
           turns: animationController,
           child: Icon(
             isGettingLocation ? Icons.sync_rounded : Icons.my_location_rounded,
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
             size: 18,
           ),
         ),

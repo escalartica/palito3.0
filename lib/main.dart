@@ -25,6 +25,8 @@ import 'package:palito_3_0/features/onboarding/household_setup_page.dart';
 import 'package:palito_3_0/features/onboarding/invite_partner_page.dart';
 import 'package:palito_3_0/features/onboarding/name_page.dart';
 import 'package:palito_3_0/features/profile/profile_page.dart';
+import 'core/theme/tokens/app_colors.dart';
+import 'core/theme/tokens/app_animation.dart';
 
 /// Indica si Firebase se ha inicializado correctamente.
 bool firebaseInitialized = false;
@@ -181,16 +183,25 @@ const List<_Tab> _tabs = <_Tab>[
     path: '/gamer',
     icon: Icons.videogame_asset_rounded,
     label: 'Zona Gamer',
+    // El nombre completo no cabe en un cuarto del ancho de un iPhone; el
+    // lector de pantalla sigue diciendo "Zona Gamer".
+    shortLabel: 'Gamer',
   ),
   _Tab(path: '/profile', icon: Icons.person_rounded, label: 'Perfil'),
 ];
 
 class _Tab {
-  const _Tab({required this.path, required this.icon, required this.label});
+  const _Tab({
+    required this.path,
+    required this.icon,
+    required this.label,
+    this.shortLabel,
+  });
 
   final String path;
   final IconData icon;
   final String label;
+  final String? shortLabel;
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -207,10 +218,30 @@ final routerProvider = Provider<GoRouter>((ref) {
   // entero —con un `redirect` nuevo que cierra sobre estos valores ya
   // resueltos— cada vez que cambia la sesión, evitando la condición de
   // carrera de leer providers derivados dentro del propio `redirect`.
+  //
+  // PERO SOLO CON VALORES ESTABLES. Aquí se observaba
+  // `currentUserDocProvider`, que emite un `Map` nuevo en cada snapshot de
+  // Firestore; dos `Map` distintos nunca son `==`, así que este provider se
+  // recalculaba en CADA escritura a `users/{uid}` y devolvía un `GoRouter`
+  // nuevo, con `GlobalKey` nuevas. Flutter entonces destruía el árbol de
+  // rutas entero y volvía a `/`.
+  //
+  // El daño no era estético. Era que cortaba acciones a la mitad:
+  //
+  //   • Crear un diario compartido escribe `groupIds` → la pantalla se
+  //     desmontaba → el `if (!mounted) return` de household_setup_page
+  //     cortaba la función → NUNCA se llegaba a `/invite-partner`. El grupo
+  //     quedaba creado y su dueño no veía jamás el código para compartirlo.
+  //   • Entrar con un código escribe `users/{uid}` en su paso 3 → al volver
+  //     del `await` ya no había pantalla → no se cambiaba el diario activo.
+  //     Entrabas en el grupo y la app seguía enseñando "Mi diario".
+  //   • Cambiarte el nombre te sacaba de Perfil a Inicio sin decir nada.
+  //
+  // De todo el `AsyncValue<Map>` solo se usaba `.isLoading`. Un `bool` sí
+  // compara por valor: el router se reconstruye cuando cambia la sesión, no
+  // cuando cambia una fecha dentro del documento.
   final String? uid = ref.watch(currentUidProvider);
-  final AsyncValue<Map<String, dynamic>?> userDocAsync = ref.watch(
-    currentUserDocProvider,
-  );
+  final bool userDocLoading = ref.watch(userDocLoadingProvider);
   final bool needsName = ref.watch(needsDisplayNameProvider);
 
   return GoRouter(
@@ -231,7 +262,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return onSignIn ? null : '/sign-in';
       }
 
-      if (userDocAsync.isLoading) {
+      if (userDocLoading) {
         // Todavía no sabemos si su grupo personal está creado ni si tiene
         // nombre — no redirigir hasta saberlo.
         return null;
@@ -374,7 +405,7 @@ class _ShellScaffold extends ConsumerWidget {
     final int selectedIndex = _tabs.indexWhere((_Tab t) => t.path == location);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: <Widget>[
           Positioned.fill(child: child),
@@ -384,8 +415,8 @@ class _ShellScaffold extends ConsumerWidget {
               offset: isVisible ? Offset.zero : const Offset(0, 2),
               duration: reduceMotion
                   ? Duration.zero
-                  : const Duration(milliseconds: 350),
-              curve: Curves.easeOutCubic,
+                  : AppAnimation.slow,
+              curve: AppAnimation.enter,
               child: SafeArea(
                 top: false,
                 child: Padding(
@@ -398,7 +429,11 @@ class _ShellScaffold extends ConsumerWidget {
                     child: AppDock(
                       items: _tabs
                           .map(
-                            (_Tab t) => DockItem(icon: t.icon, label: t.label),
+                            (_Tab t) => DockItem(
+                              icon: t.icon,
+                              label: t.label,
+                              shortLabel: t.shortLabel,
+                            ),
                           )
                           .toList(),
                       currentIndex: selectedIndex,
@@ -438,10 +473,10 @@ CustomTransitionPage<void> _page(
     child: child,
     transitionDuration: reduceMotion
         ? Duration.zero
-        : const Duration(milliseconds: 320),
+        : AppAnimation.slow,
     reverseTransitionDuration: reduceMotion
         ? Duration.zero
-        : const Duration(milliseconds: 240),
+        : AppAnimation.standard,
     transitionsBuilder:
         (
           BuildContext context,
@@ -453,8 +488,8 @@ CustomTransitionPage<void> _page(
 
           final CurvedAnimation curved = CurvedAnimation(
             parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
+            curve: AppAnimation.enter,
+            reverseCurve: AppAnimation.exit,
           );
 
           return FadeTransition(

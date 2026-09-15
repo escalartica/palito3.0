@@ -6,6 +6,8 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/models/memory_model.dart';
 import '../../../core/data/rating_scale.dart';
+import '../../../core/theme/tokens/app_colors.dart';
+import '../../../core/theme/tokens/app_shape.dart';
 
 /// Hoja inferior con el resumen de un recuerdo, abierta al tocar un
 /// marcador (normal o dentro de un grupo "spiderfy") en el mapa.
@@ -39,15 +41,17 @@ class MemoryBottomSheet {
 
     showModalBottomSheet(
       context: context,
+      // Por encima del dock (ver gamer_page.dart).
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 36),
           decoration: const BoxDecoration(
-            color: Color(0xFFFFFDF5),
+            color: AppColors.surfaceWarm,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border(top: BorderSide(color: Color(0xFF0F172A), width: 3)),
+            border: Border(top: BorderSide(color: AppColors.textPrimary, width: 3)),
             boxShadow: [
               BoxShadow(color: Colors.black26, blurRadius: 25, spreadRadius: 2),
             ],
@@ -62,8 +66,11 @@ class MemoryBottomSheet {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+                    color: AppColors.textMuted,
+                    // pill, no un número suelto: cualquier radio >= mitad del
+                    // lado corto da la misma cápsula perfecta, así que el paso
+                    // "completo" de la escala es la elección correcta aquí.
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                 ),
               ),
@@ -80,7 +87,7 @@ class MemoryBottomSheet {
                       style: GoogleFonts.outfit(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -91,7 +98,7 @@ class MemoryBottomSheet {
                     ),
                     decoration: BoxDecoration(
                       color: categoryColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Text(
                       RatingScale.shortLabel(memory.rating) == null
@@ -117,7 +124,7 @@ class MemoryBottomSheet {
                   Icon(
                     Icons.location_on_rounded,
                     size: 16,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -138,7 +145,7 @@ class MemoryBottomSheet {
                                     : 'Ubicación no disponible',
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
-                                  color: Colors.grey.shade600,
+                                  color: AppColors.textSecondary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -151,7 +158,7 @@ class MemoryBottomSheet {
                                 : 'Ubicación no disponible',
                             style: GoogleFonts.inter(
                               fontSize: 14,
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -178,7 +185,7 @@ class MemoryBottomSheet {
                       color: categoryColor,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     side: BorderSide(color: categoryColor, width: 1.5),
                   ),
@@ -186,23 +193,28 @@ class MemoryBottomSheet {
                     label: Text(
                       memory.wouldReturn ? '¡Volvería!' : 'No volvería',
                     ),
-                    backgroundColor:
-                        (memory.wouldReturn ? Colors.green : Colors.red)
-                            .withValues(alpha: 0.12),
+                    // Verde y rojo de la paleta de Material, mezclados al
+                    // 12 % sobre lo que hubiera detrás. Dos problemas: no son
+                    // los colores de Palito —que tiene los suyos, medidos— y
+                    // el texto verde sobre el verde aguado se queda en
+                    // **4,2:1**, por debajo del mínimo legible. El texto pasa
+                    // a navy (14,7:1) y el color se queda donde sí puede
+                    // hacer su trabajo sin comprometer la lectura: el borde.
+                    backgroundColor: memory.wouldReturn
+                        ? AppColors.tintSuccess
+                        : AppColors.tintError,
                     labelStyle: GoogleFonts.inter(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
-                      color: memory.wouldReturn
-                          ? Colors.green.shade800
-                          : Colors.red.shade800,
+                      color: AppColors.textPrimary,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     side: BorderSide(
                       color: memory.wouldReturn
-                          ? Colors.green.shade700
-                          : Colors.red.shade700,
+                          ? AppColors.success
+                          : AppColors.error,
                       width: 1.5,
                     ),
                   ),
@@ -219,12 +231,12 @@ class MemoryBottomSheet {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFD400),
-                    foregroundColor: const Color(0xFF0F172A),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textPrimary,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       side: const BorderSide(
-                        color: Color(0xFF0F172A),
+                        color: AppColors.textPrimary,
                         width: 2,
                       ),
                     ),

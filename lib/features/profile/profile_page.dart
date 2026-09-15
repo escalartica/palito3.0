@@ -1,29 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/providers/memory_provider.dart';
+import '../../core/models/memory_model.dart';
 import '../../core/providers/gamer_provider.dart';
 import '../../core/services/gamer_firestore_service.dart';
 import '../../core/data/rating_scale.dart';
 import '../../core/services/account_deletion_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/storage_image_service.dart';
-import '../../core/theme/components/group_switcher.dart';
+import 'widgets/profile_groups_section.dart';
+import '../../core/theme/tokens/app_colors.dart';
+import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/tokens/app_animation.dart';
+import '../../core/theme/tokens/app_typography.dart';
+import '../../core/theme/components/stats_ticker.dart';
+import '../../core/utils/relative_date.dart';
+import '../../core/theme/components/progress_track.dart';
 
 // ─── Constantes de color ────────────────────────────────────────────────────
-const _kDark = Color(0xFF0F172A);
-const _kYellow = Color(0xFFFFD400);
-const _kRed = Color(0xFFFF4D29);
-const _kBg = Color(0xFFFFFDF5);
+const _kDark = AppColors.textPrimary;
+const _kYellow = AppColors.primary;
+const _kRed = AppColors.accent;
+const _kBg = AppColors.background;
 const _kYellowBg = Color(0xFFFFF3D6);
 const _kRedBg = Color(0xFFFFECE6);
 const _kSlateBg = Color(0xFFE2E8F0);
+
+// AppColors solo define tokens funcionales (texto, fondo, estado); esta
+// pantalla necesita además un par de acentos puramente decorativos para
+// distinguir personas y categorías visualmente. Se nombran aquí, una sola
+// vez, en vez de repetir el literal hexadecimal en cada sitio donde se usan
+// (antes `Color(0xFF10B981)` y `Colors.deepPurple` con dos fondos ligeramente
+// distintos aparecían sueltos en tres puntos del archivo).
+const _kPurple = Colors.deepPurple;
+const _kPurpleBg = Color(0xFFEDE7F6);
+const _kGreen = Color(0xFF10B981);
+const _kGreenBg = Color(0xFFD1FAE5);
 
 // ─── Modelo de pestaña de perfil ─────────────────────────────────────────────
 //
@@ -58,8 +77,8 @@ class _ProfileConfig {
 const List<(Color, Color, IconData)> _memberPalette = [
   (_kRed, _kRedBg, Icons.favorite_rounded),
   (_kYellow, _kYellowBg, Icons.person_rounded),
-  (Colors.deepPurple, Color(0xFFEDE7F6), Icons.emoji_emotions_rounded),
-  (Color(0xFF10B981), Color(0xFFD1FAE5), Icons.eco_rounded),
+  (_kPurple, _kPurpleBg, Icons.emoji_emotions_rounded),
+  (_kGreen, _kGreenBg, Icons.eco_rounded),
 ];
 
 /// El color de cada persona sale de un hash estable de su uid, no de su
@@ -125,55 +144,16 @@ List<_ProfileConfig> _buildMemberTabs({
 // difuminado — el neobrutalismo de marca, ejecutado con rigor (radios y
 // offsets consistentes en toda la pantalla, sin blur ni degradados) ──────
 BoxDecoration _stickerCard({
-  double radius = 20,
-  double borderWidth = 2,
+  double radius = AppRadius.lg,
+  double borderWidth = AppBorder.normal,
   Offset shadowOffset = const Offset(4, 4),
   Color? color,
 }) => BoxDecoration(
-  color: color ?? Colors.white,
+  color: color ?? AppColors.surface,
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: _kDark, width: borderWidth),
   boxShadow: [BoxShadow(color: _kDark, offset: shadowOffset, blurRadius: 0)],
 );
-
-// ─── Botón circular con feedback táctil y objetivo de toque accesible ───────
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({
-    required this.icon,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: _kDark, width: 2),
-        boxShadow: const [
-          BoxShadow(color: _kDark, offset: Offset(2, 2), blurRadius: 0),
-        ],
-      ),
-      child: ClipOval(
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Icon(icon, size: 18, color: _kDark),
-          ),
-        ),
-      ),
-    ),
-  );
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // ProfilePage
@@ -208,7 +188,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
   Animation<double> _interval(double start, double end) => CurvedAnimation(
     parent: _entryController,
-    curve: Interval(start, end, curve: Curves.easeOutCubic),
+    curve: Interval(start, end, curve: AppAnimation.enter),
   );
 
   late final Animation<double> _tabBarAnim = _interval(0.00, 0.30);
@@ -227,8 +207,25 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     // mientras se resuelve el stream de Firestore.
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: AppAnimation.entry,
     )..forward();
+  }
+
+  // ── "Reducir movimiento" ──
+  //
+  // Esta pantalla montaba su coreografía de entrada pasara lo que pasara.
+  // Quien lleva activada esa opción del sistema —a menudo por vértigo o por
+  // migraña— seguía viendo entrar los bloques uno detrás de otro.
+  //
+  // Va aquí y no en `initState` porque el `MediaQuery` todavía no existe en
+  // ese momento; y se resuelve poniendo el controlador directamente en su
+  // valor final, que es la pantalla ya montada, sin recorrido.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _entryController.value = 1.0;
+    }
   }
 
   @override
@@ -440,10 +437,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
+            // "Continuar" no dice qué va a pasar, y estaba puesto en la
+            // acción más irreversible de la app. Ahora el botón nombra lo
+            // que hace, que además es la regla de toda la app.
+            //
+            // Y en rojo de verdad: el coral de marca sobre el blanco del
+            // diálogo mide 3,31:1, por debajo del 4,5:1 de WCAG AA. Este
+            // mide 5,44:1. Es el mismo `AppColors.error` que ya usa la hoja
+            // de personas para "Quitar".
             child: Text(
-              'Continuar',
+              'Sí, quiero eliminarla',
               style: GoogleFonts.inter(
-                color: _kRed,
+                color: AppColors.error,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -468,7 +473,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             child: Text(
               'Sí, eliminar mi cuenta',
               style: GoogleFonts.inter(
-                color: _kRed,
+                color: AppColors.error,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -569,8 +574,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
-                      ref.read(activeGroupIdOverrideProvider.notifier).state =
-                          null;
+                      switchActiveGroup(ref, null);
                     },
                     child: const Text('Volver a mi diario'),
                   ),
@@ -596,12 +600,85 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final double? avgRating = RatingScale.average(
       memories.map((m) => m.rating),
     );
-    final returnPct = total > 0
+    // `double?`, no `0.0`.
+    //
+    // Con el diario vacío la tarjeta afirmaba "Volverías 0 %": que no
+    // repetirías en ninguno de los sitios a los que no has ido. Un cero
+    // inventado es peor que un hueco, porque parece un dato. Justo al lado,
+    // "Nota media" ya hacía lo correcto pintando un guion.
+    final double? returnPct = total > 0
         ? memories.where((m) => m.wouldReturn).length / total * 100
-        : 0.0;
+        : null;
+    // ── Tres cosas que el modelo ya sabía y la pantalla no enseñaba ──
+    //
+    // El perfil consumía tres campos de `MemoryModel` —nota, si volverías y
+    // categoría— y del resto no decía nada, teniendo `restaurantName`,
+    // `title` y `date` guardados desde el primer día. El resultado era una
+    // rejilla de porcentajes: correcta, y sin una sola frase que alguien
+    // quiera leer dos veces. Estas tres sí lo son, y no hacen falta datos
+    // nuevos ni una lectura más a Firestore.
+    final Map<String, int> placeCounts = <String, int>{};
+    for (final m in memories) {
+      final String place = m.restaurantName.trim();
+      if (place.isEmpty) continue;
+      placeCounts[place] = (placeCounts[place] ?? 0) + 1;
+    }
+    MapEntry<String, int>? favouritePlace;
+    for (final MapEntry<String, int> e in placeCounts.entries) {
+      if (favouritePlace == null || e.value > favouritePlace.value) {
+        favouritePlace = e;
+      }
+    }
+    // Con una sola visita no hay "sitio de siempre": hay un sitio.
+    if (favouritePlace != null && favouritePlace.value < 2) favouritePlace = null;
+
+    MemoryModel? bestMemory;
+    for (final m in memories) {
+      if (m.rating <= 0) continue;
+      if (bestMemory == null || m.rating > bestMemory.rating) bestMemory = m;
+    }
+
+    DateTime? lastDate;
+    for (final m in memories) {
+      if (lastDate == null || m.date.isAfter(lastDate)) lastDate = m.date;
+    }
+
     final categoryCounts = <String, int>{};
     for (final m in memories) {
       categoryCounts[m.category] = (categoryCounts[m.category] ?? 0) + 1;
+    }
+
+    // ── Las frases de la cinta ──
+    //
+    // Los mismos números que ya salen en las cajitas de abajo, dichos
+    // seguidos. Una cajita con un número es un dato; la misma cifra en una
+    // frase es un retrato. Con la cuenta a cero no hay retrato que hacer, y
+    // la cinta no se dibuja.
+    final List<String> tickerItems = <String>[];
+    if (total > 0) {
+      tickerItems.add(total == 1 ? '1 recuerdo' : '$total recuerdos');
+      if (avgRating != null) {
+        // Coma decimal, que esto se lee en español.
+        final String nota = avgRating.toStringAsFixed(1).replaceAll('.', ',');
+        tickerItems.add('nota media $nota');
+      }
+      if (returnPct != null) {
+        tickerItems.add('volverías al ${returnPct.round()} %');
+      }
+      if (categoryCounts.isNotEmpty) {
+        tickerItems.add(
+          categoryCounts.length == 1
+              ? '1 categoría'
+              : '${categoryCounts.length} categorías',
+        );
+        // La categoría que más se repite. Es la línea con más gracia de las
+        // cinco: no es una métrica, es algo que sabes de ti.
+        final MapEntry<String, int> top = categoryCounts.entries.reduce(
+          (MapEntry<String, int> a, MapEntry<String, int> b) =>
+              b.value > a.value ? b : a,
+        );
+        if (top.value > 1) tickerItems.add('tu debilidad: ${top.key}');
+      }
     }
 
     return Scaffold(
@@ -612,23 +689,37 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
           child: CustomScrollView(
             slivers: [
               _buildAppBar(context),
+
+              // A todo el ancho a propósito: va FUERA del SliverPadding de
+              // 20 de abajo. Una cinta que respeta los márgenes deja de ser
+              // una cinta y pasa a ser otra tarjeta más.
+              SliverToBoxAdapter(child: StatsTicker(items: tickerItems)),
+
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    // ── Selector de perfil ──────────────────────────────────
-                    _fadeSlide(
-                      _tabBarAnim,
-                      _ProfileTabBar(
-                        tabs: tabs,
-                        selectedIndex: safeIndex,
-                        onSelect: (i) {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedProfileIndex = i);
-                        },
+                    // ── Selector de persona ─────────────────────────────────
+                    // Solo tiene sentido cuando hay MÁS DE UNA pestaña que
+                    // elegir. En el diario personal —que es donde empieza
+                    // todo el mundo— había una sola: un chip amarillo con tu
+                    // nombre flotando dentro de una caja blanca del ancho de
+                    // la pantalla. Parecía una fila de pestañas rota, o algo
+                    // que no había terminado de cargar.
+                    if (tabs.length > 1) ...<Widget>[
+                      _fadeSlide(
+                        _tabBarAnim,
+                        _ProfileTabBar(
+                          tabs: tabs,
+                          selectedIndex: safeIndex,
+                          onSelect: (i) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedProfileIndex = i);
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
+                    ],
 
                     // ── Cabecera ────────────────────────────────────────────
                     _fadeSlide(
@@ -645,7 +736,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                         onEditName: isMyTab ? _editDisplayName : null,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
+
+                    // ── Con quién compartes ─────────────────────────────────
+                    // Lo primero después de "quién eres" es "con quién lo
+                    // compartes". Los puntos y las notas medias vienen
+                    // después: a alguien que acaba de entrar le salen todos a
+                    // cero y no le dicen nada, mientras que la pregunta de
+                    // quién ve su diario la tiene desde el primer minuto.
+                    const ProfileGroupsSection(),
+                    const SizedBox(height: 28),
 
                     // ── Stats Gamer ─────────────────────────────────────────
                     _fadeSlide(
@@ -687,6 +787,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     const SizedBox(height: 24),
 
                     // ── Bitácora ────────────────────────────────────────────
+                    //
+                    // Con el diario vacío esto eran seis tarjetas a cero
+                    // —"Recuerdos 0", "Volverías 0 %", "Categorías 0"— y una
+                    // sección de categorías vacía debajo. Seis ceros no son
+                    // un resumen de nada: son la primera pantalla que ve
+                    // alguien que acaba de instalar la app, y no le dicen ni
+                    // qué va a salir ahí ni cómo conseguirlo. Se sustituyen
+                    // por lo único que hace falta decir.
+                    if (total == 0)
+                      _fadeSlide(_bitacoraAnim, const _EmptyDiaryCard())
+                    else ...<Widget>[
                     _fadeSlide(
                       _bitacoraAnim,
                       Column(
@@ -697,17 +808,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           // decía en ninguna parte, así que al cambiar de pestaña
                           // "no cambiaba nada" y la pantalla resultaba
                           // incomprensible.
-                          _SectionTitle('Bitácora de $scopeLabel'),
+                          _SectionTitle('$scopeLabel en números'),
                           const SizedBox(height: 12),
                           Row(
                             children: [
                               Expanded(
                                 child: _MetricCard(
-                                  title: 'Registros',
+                                  // "Recuerdos" en todas partes. Esta
+                                  // tarjeta lo llamaba "Registros", la cinta
+                                  // de arriba "recuerdos" y las barras de
+                                  // abajo "recuerdos": tres palabras y dos
+                                  // vocabularios para el mismo número, en la
+                                  // misma pantalla.
+                                  title: 'Recuerdos',
                                   numericValue: total.toDouble(),
                                   valueBuilder: (v) => '${v.round()}',
                                   icon: Icons.book_rounded,
-                                  color: _kDark,
                                   bgColor: _kSlateBg,
                                 ),
                               ),
@@ -715,19 +831,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                               Expanded(
                                 child: avgRating == null
                                     ? const _MetricCard(
-                                        title: 'Nota Media',
+                                        title: 'Nota media',
                                         value: '—',
                                         icon: Icons.star_half_rounded,
-                                        color: _kYellow,
                                         bgColor: _kYellowBg,
                                       )
                                     : _MetricCard(
-                                        title: 'Nota Media',
+                                        title: 'Nota media',
                                         numericValue: avgRating,
                                         valueBuilder: (v) =>
                                             v.toStringAsFixed(1),
                                         icon: Icons.star_half_rounded,
-                                        color: _kYellow,
                                         bgColor: _kYellowBg,
                                       ),
                               ),
@@ -737,14 +851,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           Row(
                             children: [
                               Expanded(
-                                child: _MetricCard(
-                                  title: 'Índice de Retorno',
-                                  numericValue: returnPct,
-                                  valueBuilder: (v) => '${v.round()}%',
-                                  icon: Icons.thumb_up_rounded,
-                                  color: const Color(0xFF10B981),
-                                  bgColor: const Color(0xFFD1FAE5),
-                                ),
+                                child: returnPct == null
+                                    ? const _MetricCard(
+                                        title: 'Volverías',
+                                        value: '—',
+                                        icon: Icons.thumb_up_rounded,
+                                        bgColor: _kGreenBg,
+                                      )
+                                    : _MetricCard(
+                                        title: 'Volverías',
+                                        numericValue: returnPct,
+                                        valueBuilder: (v) => '${v.round()}%',
+                                        icon: Icons.thumb_up_rounded,
+                                        bgColor: _kGreenBg,
+                                      ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -754,8 +874,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                       .toDouble(),
                                   valueBuilder: (v) => '${v.round()}',
                                   icon: Icons.category_rounded,
-                                  color: Colors.deepPurple,
-                                  bgColor: Colors.purple.shade50,
+                                  bgColor: _kPurpleBg,
                                 ),
                               ),
                             ],
@@ -771,12 +890,26 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionTitle('Categorías de $scopeLabel'),
+                          _SectionTitle('Qué se come en $scopeLabel'),
                           const SizedBox(height: 14),
                           if (categoryCounts.isEmpty)
                             const _EmptyCategoriesPlaceholder()
                           else
-                            ...categoryCounts.entries.map(
+                            // Ordenadas de más a menos.
+                            //
+                            // Se pintaban en el orden en que Firestore
+                            // devolvía los recuerdos, así que la sección
+                            // titulada "Qué se come aquí" podía empezar por
+                            // la categoría con un solo registro y dejar la
+                            // dominante la cuarta. Un ranking sin ordenar no
+                            // responde a su propio título.
+                            ...(categoryCounts.entries.toList()
+                                  ..sort(
+                                    (MapEntry<String, int> a,
+                                            MapEntry<String, int> b) =>
+                                        b.value.compareTo(a.value),
+                                  ))
+                                .map(
                               (e) => _CategoryBar(
                                 category: e.key,
                                 count: e.value,
@@ -786,76 +919,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 32),
-
-                    // ── Grupos ────────────────────────────────────────────────
-                    _fadeSlide(
-                      _saveButtonAnim,
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Aquí es donde el usuario busca "quitar a alguien" o
-                          // "salir del grupo". Antes esas acciones existían pero
-                          // solo se llegaba a ellas desde un chip pequeño en
-                          // Inicio, cuatro niveles por debajo.
-                          const _SectionTitle('Grupos'),
-                          const SizedBox(height: 12),
-                          _AccountActionTile(
-                            icon: Icons.swap_horiz_rounded,
-                            label: 'Estás en: $scopeLabel · Cambiar',
-                            color: _kDark,
-                            bgColor: _kSlateBg,
-                            isLoading: false,
-                            onTap: () => openGroupSwitcher(context, ref),
-                          ),
-                          const SizedBox(height: 12),
-                          _AccountActionTile(
-                            icon: Icons.people_alt_rounded,
-                            label: isPersonalGroup
-                                ? 'Tu diario es privado'
-                                : 'Miembros de $scopeLabel (${memberUids.length})',
-                            color: _kDark,
-                            bgColor: _kYellowBg,
-                            isLoading: false,
-                            onTap: groupId == null
-                                ? null
-                                : () => openGroupMembersSheet(
-                                    context,
-                                    ref,
-                                    groupId: groupId,
-                                    groupData:
-                                        ref
-                                            .read(activeGroupDocProvider)
-                                            .valueOrNull ??
-                                        const <String, dynamic>{},
-                                  ),
-                          ),
-                          if (!isPersonalGroup && groupId != null) ...[
-                            const SizedBox(height: 12),
-                            _AccountActionTile(
-                              icon: Icons.person_add_alt_1_rounded,
-                              label: 'Invitar con un código',
-                              color: _kDark,
-                              bgColor: _kYellowBg,
-                              isLoading: false,
-                              onTap: () => context.push(
-                                '/invite-partner',
-                                extra: groupId,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          _AccountActionTile(
-                            icon: Icons.group_add_rounded,
-                            label: 'Crear grupo o unirme con un código',
-                            color: _kDark,
-                            bgColor: _kYellowBg,
-                            isLoading: false,
-                            onTap: () => context.push('/household-setup'),
-                          ),
-                        ],
+                    // ── Lo tuyo ─────────────────────────────────────────────
+                    if (favouritePlace != null ||
+                        bestMemory != null ||
+                        lastDate != null) ...<Widget>[
+                      const SizedBox(height: 28),
+                      _fadeSlide(
+                        _categoriesAnim,
+                        _YourThingsCard(
+                          favouritePlace: favouritePlace,
+                          bestMemory: bestMemory,
+                          lastDate: lastDate,
+                        ),
                       ),
-                    ),
+                    ],
+                    ],
                     const SizedBox(height: 20),
 
                     // ── Cuenta ──────────────────────────────────────────────
@@ -880,7 +958,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           _AccountActionTile(
                             icon: Icons.delete_forever_rounded,
                             label: 'Eliminar cuenta',
-                            color: _kRed,
+                            // 2,90:1 era el peor contraste de toda la app, y
+                            // estaba en la única acción que no se puede
+                            // deshacer. El coral sobre el rojo pálido no
+                            // llega ni de lejos al 4,5:1; este mide 4,76:1
+                            // sobre ese mismo fondo.
+                            //
+                            // El icono de 22 px tampoco llegaba al 3:1 que
+                            // pide WCAG para elementos gráficos.
+                            color: AppColors.error,
                             bgColor: _kRedBg,
                             isLoading: _isDeletingAccount,
                             onTap: _isSigningOut || _isDeletingAccount
@@ -903,7 +989,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
   SliverAppBar _buildAppBar(BuildContext context) => SliverAppBar(
     title: Text(
-      'Perfil & Estadísticas',
+      'Tu perfil',
       style: GoogleFonts.outfit(
         fontWeight: FontWeight.w900,
         color: _kDark,
@@ -914,19 +1000,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     pinned: true,
     elevation: 0,
     centerTitle: true,
-    leading: Padding(
-      padding: const EdgeInsets.only(left: 12),
-      child: Center(
-        child: _CircleIconButton(
-          icon: Icons.arrow_back_rounded,
-          tooltip: 'Volver',
-          onTap: () {
-            HapticFeedback.selectionClick();
-            context.canPop() ? context.pop() : context.go('/');
-          },
-        ),
-      ),
-    ),
+    // SIN flecha de volver: Perfil es una pestaña raíz del dock, no una
+    // pantalla apilada. La flecha que había aquí prometía un "atrás" que no
+    // existe — al pulsarla saltabas a Inicio, que no es de donde venías.
+    automaticallyImplyLeading: false,
     actions: [
       Padding(
         padding: const EdgeInsets.only(right: 16),
@@ -936,16 +1013,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             height: 40,
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _kDark, width: 2),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: _kDark, width: AppBorder.normal),
               boxShadow: const [
                 BoxShadow(color: _kDark, offset: Offset(2, 2), blurRadius: 0),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.contain,
+                semanticLabel: 'Logotipo de Palito de Sabores',
+              ),
             ),
           ),
         ),
@@ -972,11 +1053,7 @@ class _ProfileTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(5),
-    decoration: _stickerCard(
-      radius: 20,
-      borderWidth: 2,
-      shadowOffset: const Offset(3, 3),
-    ),
+    decoration: _stickerCard(shadowOffset: const Offset(3, 3)),
     // Cada pestaña era `Expanded`: con cuatro miembros, cada una medía
     // ancho/4 y un nombre de 11 caracteres se salía del recuadro amarillo y
     // pisaba al vecino. Ahora cada pestaña mide lo suyo y la tira se
@@ -1017,16 +1094,18 @@ class _ProfileTab extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: AppAnimation.fast,
           constraints: const BoxConstraints(minWidth: 92, minHeight: 48),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected ? _kYellow : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-            border: isSelected ? Border.all(color: _kDark, width: 2) : null,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: isSelected
+                ? Border.all(color: _kDark, width: AppBorder.normal)
+                : null,
             boxShadow: isSelected
                 ? const [
                     BoxShadow(
@@ -1047,7 +1126,7 @@ class _ProfileTab extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
                 // grey.shade600 sobre blanco da 4,0:1 — por debajo de AA.
-                color: isSelected ? _kDark : const Color(0xFF5A6572),
+                color: isSelected ? _kDark : AppColors.textSecondary,
               ),
             ),
           ),
@@ -1075,7 +1154,7 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
-    decoration: _stickerCard(radius: 24),
+    decoration: _stickerCard(radius: AppRadius.xl),
     child: Row(
       children: [
         Tooltip(
@@ -1091,7 +1170,7 @@ class _ProfileHeader extends StatelessWidget {
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: _kDark, width: 2),
+                  border: Border.all(color: _kDark, width: AppBorder.normal),
                   boxShadow: const [
                     BoxShadow(
                       color: _kDark,
@@ -1135,7 +1214,7 @@ class _ProfileHeader extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: _kYellow,
                         shape: BoxShape.circle,
-                        border: Border.all(color: _kDark, width: 1.5),
+                        border: Border.all(color: _kDark, width: AppBorder.thin),
                         boxShadow: const [
                           BoxShadow(
                             color: _kDark,
@@ -1178,10 +1257,15 @@ class _ProfileHeader extends StatelessWidget {
                     IconButton(
                       onPressed: onEditName,
                       tooltip: 'Cambiar tu nombre',
-                      visualDensity: VisualDensity.compact,
+                      // Sin `visualDensity: VisualDensity.compact`.
+                      //
+                      // Las `constraints` pedían 44x44, pero `compact` resta
+                      // cuatro píxeles por eje: el botón real medía 40x40,
+                      // por debajo del mínimo táctil. Y es el único sitio
+                      // desde el que arreglar un nombre que haya salido mal.
                       constraints: const BoxConstraints(
-                        minWidth: 44,
-                        minHeight: 44,
+                        minWidth: 48,
+                        minHeight: 48,
                       ),
                       icon: const Icon(Icons.edit_rounded, size: 18),
                       color: _kDark,
@@ -1194,7 +1278,7 @@ class _ProfileHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   fontSize: 13,
-                  color: const Color(0xFF5A6572),
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1208,7 +1292,7 @@ class _ProfileHeader extends StatelessWidget {
                     const Icon(
                       Icons.touch_app_rounded,
                       size: 12,
-                      color: Color(0xFF5A6572),
+                      color: AppColors.textSecondary,
                     ),
                     const SizedBox(width: 4),
                     Flexible(
@@ -1216,10 +1300,13 @@ class _ProfileHeader extends StatelessWidget {
                         'Toca la foto para cambiarla',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        // Iba a 10 px y en cursiva: el texto más pequeño de
+                        // la pantalla para la única pista de que ahí hay una
+                        // acción, y en el estilo que peor se lee de todos.
                         style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF5A6572),
-                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -1253,24 +1340,30 @@ class _GamerStatsRow extends StatelessWidget {
     children: [
       Expanded(
         child: _MetricCard(
-          title: 'Puntos Totales',
+          title: 'Puntos totales',
           value: hasError ? '—' : (pointsValue == null ? '…' : null),
           numericValue: hasError ? null : pointsValue?.toDouble(),
           valueBuilder: hasError ? null : (v) => '${v.round()}',
           icon: Icons.star_rounded,
-          color: _kYellow,
           bgColor: _kYellowBg,
         ),
       ),
       const SizedBox(width: 16),
       Expanded(
         child: _MetricCard(
-          title: 'Decisiones / Racha',
+          // "Racha" no era una racha.
+          //
+          // El valor que llega aquí es `streak`, y Zona Gamer lo escribe en
+          // Firestore como `streak: _decisionsCount`: es el total de
+          // decisiones de la sesión, sin ninguna noción de días seguidos ni
+          // de nada encadenado. La palabra prometía una constancia que la
+          // app no mide, y que además no se puede romper — una racha que
+          // solo sube no es una racha. Se llama por su nombre.
+          title: 'Decisiones',
           value: hasError ? '—' : (streakValue == null ? '…' : null),
           numericValue: hasError ? null : streakValue?.toDouble(),
           valueBuilder: hasError ? null : (v) => '${v.round()}',
           icon: Icons.local_fire_department_rounded,
-          color: _kRed,
           bgColor: _kRedBg,
         ),
       ),
@@ -1286,7 +1379,6 @@ class _MetricCard extends StatelessWidget {
   const _MetricCard({
     required this.title,
     required this.icon,
-    required this.color,
     required this.bgColor,
     this.value,
     this.numericValue,
@@ -1297,7 +1389,13 @@ class _MetricCard extends StatelessWidget {
   final double? numericValue;
   final String Function(double)? valueBuilder;
   final IconData icon;
-  final Color color, bgColor;
+
+  /// Había también un `color` que las seis llamadas rellenaban con un color
+  /// distinto y que `build` no leía nunca: el icono y la cifra son siempre
+  /// navy. Se quita en vez de empezar a usarlo, porque usarlo era peor: el
+  /// verde `#10B981` sobre su propio fondo mide 2,24:1, por debajo del 3:1
+  /// que necesita un icono que significa algo.
+  final Color bgColor;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1313,8 +1411,8 @@ class _MetricCard extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: bgColor,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _kDark, width: 1.5),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: _kDark, width: AppBorder.thin),
               ),
               child: Icon(icon, color: _kDark, size: 20),
             ),
@@ -1326,7 +1424,7 @@ class _MetricCard extends StatelessWidget {
           title,
           style: GoogleFonts.inter(
             fontSize: 13,
-            color: Colors.grey.shade700,
+            color: AppColors.textSecondary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -1339,14 +1437,15 @@ class _MetricCard extends StatelessWidget {
       fontSize: 24,
       fontWeight: FontWeight.w900,
       color: _kDark,
+      fontFeatures: AppTypography.tabular,
     );
     if (numericValue == null) {
       return Text(value!, style: style);
     }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: numericValue),
-      duration: const Duration(milliseconds: 900),
-      curve: Curves.easeOutCubic,
+      duration: AppAnimation.reveal,
+      curve: AppAnimation.enter,
       builder: (context, v, _) => Text(valueBuilder!(v), style: style),
     );
   }
@@ -1369,8 +1468,7 @@ class _CategoryBar extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: _stickerCard(
-        radius: 16,
-        borderWidth: 2,
+        radius: AppRadius.md,
         shadowOffset: const Offset(3, 3),
       ),
       child: Column(
@@ -1396,8 +1494,8 @@ class _CategoryBar extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: _kYellowBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _kDark, width: 1.5),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                    border: Border.all(color: _kDark, width: AppBorder.thin),
                   ),
                   child: Text(
                     '$count ${count == 1 ? 'recuerdo' : 'recuerdos'}',
@@ -1412,15 +1510,7 @@ class _CategoryBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 8,
-              backgroundColor: Colors.grey.shade200,
-              color: _kYellow,
-            ),
-          ),
+          ProgressTrack(value: pct, color: _kYellow),
         ],
       ),
     );
@@ -1435,16 +1525,16 @@ class _EmptyCategoriesPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(24),
     alignment: Alignment.center,
-    decoration: _stickerCard(radius: 16, borderWidth: 2),
+    decoration: _stickerCard(radius: AppRadius.md),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.category_outlined, size: 28, color: Colors.grey.shade400),
+        Icon(Icons.category_outlined, size: 28, color: AppColors.textMuted),
         const SizedBox(height: 10),
         Text(
-          'Aún no hay categorías registradas para este perfil.',
+          'Cuando guardes recuerdos, aquí verás de qué comes más.',
           style: GoogleFonts.inter(
-            color: Colors.grey.shade600,
+            color: AppColors.textSecondary,
             fontWeight: FontWeight.w600,
           ),
           textAlign: TextAlign.center,
@@ -1475,8 +1565,7 @@ class _AccountActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     decoration: _stickerCard(
-      radius: 16,
-      borderWidth: 2,
+      radius: AppRadius.md,
       shadowOffset: const Offset(3, 3),
       color: bgColor,
     ),
@@ -1484,7 +1573,7 @@ class _AccountActionTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -1541,4 +1630,248 @@ class _SectionTitle extends StatelessWidget {
       color: _kDark,
     ),
   );
+}
+
+// ── Diario en blanco ─────────────────────────────────────────────────────────
+/// Lo que ve alguien que acaba de instalar la app.
+///
+/// Antes veía seis tarjetas a cero y dos secciones vacías: la pantalla se
+/// comportaba como si tuviera datos que enseñar y todos valieran cero. Una
+/// cuenta a estrenar no es un caso raro ni un error — es por donde empieza
+/// todo el mundo, y merece una pantalla escrita para ella.
+class _EmptyDiaryCard extends StatelessWidget {
+  const _EmptyDiaryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: _stickerCard(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.tintPrimary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: _kDark, width: AppBorder.thin),
+            ),
+            child: const Icon(
+              Icons.menu_book_rounded,
+              size: 26,
+              color: _kDark,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Tu diario está en blanco',
+            style: GoogleFonts.outfit(
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.4,
+              color: _kDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Apunta el primer plato y esta pantalla se escribe sola: tu nota '
+            'media, a cuántos sitios volverías, qué es lo que más pides y en '
+            'qué bar acabas siempre.',
+            style: GoogleFonts.inter(
+              fontSize: 13.5,
+              height: 1.5,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: _kDark,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  side: const BorderSide(color: _kDark, width: AppBorder.normal),
+                ),
+              ),
+              onPressed: () => context.push('/new-memory'),
+              icon: const Icon(Icons.add_rounded, size: 22),
+              label: Text(
+                'Apuntar mi primer plato',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Lo tuyo ──────────────────────────────────────────────────────────────────
+/// Tres frases sacadas de campos que los recuerdos ya guardaban y que la
+/// pantalla no leía: el bar al que vuelves, el plato que más te gustó y
+/// cuánto hace que no apuntas nada.
+///
+/// Un porcentaje es un dato; "en La Bulería has comido seis veces" es algo
+/// que sabes de ti. Cada fila se pinta solo si hay con qué: nada de huecos
+/// con un guion.
+class _YourThingsCard extends StatelessWidget {
+  const _YourThingsCard({
+    required this.favouritePlace,
+    required this.bestMemory,
+    required this.lastDate,
+  });
+
+  final MapEntry<String, int>? favouritePlace;
+  final MemoryModel? bestMemory;
+  final DateTime? lastDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final MemoryModel? best = bestMemory;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _SectionTitle('Lo tuyo'),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          decoration: _stickerCard(radius: AppRadius.md),
+          child: Column(
+            children: <Widget>[
+              if (favouritePlace != null)
+                _YourThingRow(
+                  icon: Icons.repeat_rounded,
+                  label: 'Tu sitio de siempre',
+                  value: favouritePlace!.key,
+                  detail: '${favouritePlace!.value} veces',
+                ),
+              if (best != null)
+                _YourThingRow(
+                  icon: Icons.emoji_events_rounded,
+                  label: 'Lo mejor que has comido',
+                  value: best.title.trim().isEmpty
+                      ? best.restaurantName
+                      : best.title,
+                  // Coma decimal: esto se lee en español.
+                  detail: best.rating.toStringAsFixed(1).replaceAll('.', ','),
+                ),
+              if (lastDate != null)
+                _YourThingRow(
+                  icon: Icons.schedule_rounded,
+                  label: 'Tu último apunte',
+                  value: relativeDate(lastDate!),
+                  detail: null,
+                  isLast: true,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _YourThingRow extends StatelessWidget {
+  const _YourThingRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.detail,
+    this.isLast = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? detail;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label: $value${detail == null ? '' : ', $detail'}',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: isLast
+              ? null
+              : const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.tintMuted, width: 1.5),
+                  ),
+                ),
+          child: Row(
+            children: <Widget>[
+              Icon(icon, size: 19, color: AppColors.textSecondary),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      label.toUpperCase(),
+                      style: GoogleFonts.inter(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.9,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _kDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (detail != null) ...<Widget>[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.tintPrimary,
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                    border: Border.all(color: _kDark, width: 1),
+                  ),
+                  child: Text(
+                    detail!,
+                    style: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: _kDark,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

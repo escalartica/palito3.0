@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/categories.dart';
 import 'form_field_containers.dart';
+import '../../../core/theme/tokens/app_colors.dart';
 
 /// Selector desplegable de categoría gastronómica del formulario de
 /// recuerdo. Al cambiar de categoría, quien escuche [onCategoryChanged]
@@ -30,11 +31,11 @@ class CategorySection extends StatelessWidget {
             child: DropdownButton<String>(
               value: selectedCategory,
               isExpanded: true,
-              dropdownColor: Colors.white,
+              dropdownColor: AppColors.surface,
               style: GoogleFonts.outfit(
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
+                color: AppColors.textPrimary,
               ),
               items: gastronomicCategories.map((cat) {
                 return DropdownMenuItem(value: cat.name, child: Text(cat.name));
