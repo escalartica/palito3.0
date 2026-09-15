@@ -12,6 +12,7 @@ import 'package:palito_3_0/core/providers/gamer_provider.dart';
 import 'package:palito_3_0/core/providers/memory_provider.dart';
 import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/utils/app_log.dart';
+import 'package:palito_3_0/core/theme/components/app_dock.dart';
 import 'package:palito_3_0/core/theme/components/neo_pressable.dart';
 import '../gamer/zona_gamer_card.dart';
 import 'data/gamer_content.dart';
@@ -1327,7 +1328,22 @@ class _GamerPageState extends ConsumerState<GamerPage>
           constraints: const BoxConstraints(maxWidth: 640),
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 60),
+              // EL HUECO DE ABAJO LO MARCA EL DOCK, NO UN 60 A OJO.
+              //
+              // El dock flota por delante del contenido en su propio `Stack`
+              // (ver main.dart) y ocupa 76 píxeles más el área segura del
+              // móvil: en un iPhone con isla dinámica, unos 110. Con 60 de
+              // hueco, la última tarjeta —la de "Resumen de la partida", que
+              // es la que lleva insignias, historial y reiniciar— quedaba
+              // medio tapada por el dock y no se podía terminar de leer ni
+              // de pulsar. Se ve en cualquier captura que llegue al final de
+              // la pantalla.
+              padding: EdgeInsets.fromLTRB(
+                20,
+                10,
+                20,
+                AppDock.height + 32 + MediaQuery.viewPaddingOf(context).bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

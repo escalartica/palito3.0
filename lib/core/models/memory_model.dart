@@ -257,6 +257,19 @@ class MemoryModel {
   final String category;
   final Map<String, dynamic> specificFields;
 
+  /// Quién escribió este recuerdo (`uid`).
+  ///
+  /// No existía. En un diario compartido, eso significaba que todos los
+  /// recuerdos eran de nadie: las pestañas de persona del Perfil enseñaban
+  /// exactamente los mismos números pulsaras la que pulsaras, porque no
+  /// había forma de saber cuáles eran de quién.
+  ///
+  /// Es anulable a propósito: todos los recuerdos guardados hasta hoy no lo
+  /// llevan, y no se puede adivinar a posteriori. Un `null` significa "de
+  /// antes de que esto existiera", no "de nadie", y la interfaz tiene que
+  /// distinguirlo.
+  final String? createdBy;
+
   const MemoryModel({
     required this.id,
     required this.title,
@@ -269,6 +282,7 @@ class MemoryModel {
     required this.date,
     this.category = 'General',
     this.specificFields = const <String, dynamic>{},
+    this.createdBy,
   });
 
   /// =========================================================================
@@ -472,6 +486,7 @@ class MemoryModel {
       date: parsedDate,
       category: parsedCategory,
       specificFields: Map<String, dynamic>.unmodifiable(parsedSpecificFields),
+      createdBy: _parseNullableString(map['createdBy'] ?? map['created_by']),
     );
   }
 
@@ -948,6 +963,7 @@ class MemoryModel {
       'date': date,
       'category': category,
       'specificFields': Map<String, dynamic>.from(specificFields),
+      'createdBy': createdBy,
     };
   }
 
@@ -977,6 +993,7 @@ class MemoryModel {
       'date': date.toIso8601String(),
       'category': category,
       'specificFields': _jsonSafeMap(specificFields),
+      'createdBy': createdBy,
     };
   }
 
@@ -1004,6 +1021,7 @@ class MemoryModel {
       'date': Timestamp.fromDate(date),
       'category': category,
       'specificFields': Map<String, dynamic>.from(specificFields),
+      'createdBy': createdBy,
     };
   }
 
@@ -1028,6 +1046,7 @@ class MemoryModel {
     DateTime? date,
     String? category,
     Map<String, dynamic>? specificFields,
+    String? createdBy,
   }) {
     return MemoryModel(
       id: id ?? this.id,
@@ -1043,6 +1062,7 @@ class MemoryModel {
       specificFields: Map<String, dynamic>.unmodifiable(
         specificFields ?? this.specificFields,
       ),
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 

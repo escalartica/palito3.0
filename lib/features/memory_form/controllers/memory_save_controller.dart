@@ -4,6 +4,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/models/memory_model.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/memory_provider.dart';
 import '../../../core/services/storage_image_service.dart';
 
@@ -66,6 +67,10 @@ class MemorySaveController {
     // `Bad state: Cannot use "ref" after the widget was disposed`, y el
     // recuerdo no se guardaba en ninguna parte sin que el usuario se enterara.
     final MemoryNotifier memoryNotifier = ref.read(memoryProvider.notifier);
+
+    // Quién está escribiendo esto. Se lee aquí, junto al notifier y antes
+    // del primer `await`, por el mismo motivo.
+    final String? myUid = ref.read(currentUidProvider);
 
     final memoryId = existingMemory?.id ?? const Uuid().v4();
 
@@ -210,6 +215,13 @@ class MemorySaveController {
       date: existingMemory?.date ?? DateTime.now(),
       category: category,
       specificFields: finalDynamicData,
+      // QUIÉN LO ESCRIBIÓ.
+      //
+      // Al editar se conserva el autor original: corregir la falta de
+      // ortografía de otro no te convierte en quien fue a cenar. Si el
+      // recuerdo es anterior a que este campo existiera, se queda sin autor
+      // en vez de atribuírselo a quien pase por ahí a editarlo.
+      createdBy: existingMemory != null ? existingMemory.createdBy : myUid,
     );
 
     // ========================================================

@@ -20,6 +20,7 @@ import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/theme/tokens/app_animation.dart';
 import '../../core/theme/tokens/app_typography.dart';
+import '../../core/theme/components/app_dock.dart';
 import '../../core/theme/components/stats_ticker.dart';
 import '../../core/utils/relative_date.dart';
 import '../../core/theme/components/progress_track.dart';
@@ -515,7 +516,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   // ─── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final memories = ref.watch(memoryProvider);
+    final List<MemoryModel> allMemories = ref.watch(memoryProvider);
     final gamerStatsAsync = ref.watch(gamerStatsStreamProvider);
 
     final String? groupId = ref.watch(activeGroupIdProvider);
@@ -592,6 +593,35 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
         ? null
         : profileImages[config.uid];
     final bool isMyTab = config.uid != null && config.uid == myUid;
+
+    // ── Los números de cada persona son ahora los suyos ──
+    //
+    // Hasta ahora las pestañas de persona eran decorativas: pulsaras la que
+    // pulsaras, salían las mismas cifras, porque los recuerdos no guardaban
+    // quién los había escrito. Desde que `MemoryModel.createdBy` existe, sí
+    // se puede separar.
+    //
+    // Con dos cautelas, porque este campo es nuevo:
+    //
+    // - Los recuerdos guardados antes de hoy no llevan autor, y no se puede
+    //   adivinar. Si NINGUNO lo lleva, filtrar dejaría todas las pestañas a
+    //   cero: en ese caso se enseñan los del grupo entero, como siempre.
+    // - Si algunos sí lo llevan, se filtra — y se dice cuántos se quedan
+    //   fuera, en vez de que las cuentas no cuadren en silencio.
+    final bool anyAuthored = allMemories.any(
+      (MemoryModel m) => m.createdBy != null,
+    );
+    final bool filterByPerson = config.uid != null && anyAuthored;
+
+    final List<MemoryModel> memories = filterByPerson
+        ? allMemories
+              .where((MemoryModel m) => m.createdBy == config.uid)
+              .toList()
+        : allMemories;
+
+    final int unattributed = filterByPerson
+        ? allMemories.where((MemoryModel m) => m.createdBy == null).length
+        : 0;
 
     final total = memories.length;
     // Solo cuentan los recuerdos que SÍ tienen nota: dividir entre el total
@@ -696,7 +726,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
               SliverToBoxAdapter(child: StatsTicker(items: tickerItems)),
 
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                // El 120 de antes era un número a ojo que en un iPhone con
+                // isla dinámica se queda a dos píxeles de tapar la última
+                // fila. Se deriva del alto real del dock más el área segura,
+                // igual que en Inicio y en el Mapa.
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  10,
+                  20,
+                  AppDock.height + 44 + MediaQuery.viewPaddingOf(context).bottom,
+                ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // ── Selector de persona ─────────────────────────────────
@@ -803,12 +842,33 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Estas cuatro cifras son del GRUPO entero, no de la
-                          // persona cuya pestaña está seleccionada. Antes no se
-                          // decía en ninguna parte, así que al cambiar de pestaña
-                          // "no cambiaba nada" y la pantalla resultaba
-                          // incomprensible.
-                          _SectionTitle('$scopeLabel en números'),
+                          // Antes estas cifras eran SIEMPRE las del grupo
+                          // entero, así que cambiar de pestaña no cambiaba
+                          // nada y la pantalla resultaba incomprensible.
+                          // Ahora son de quien esté seleccionado, siempre que
+                          // haya con qué distinguirlo.
+                          _SectionTitle(
+                            filterByPerson
+                                ? '${config.name} en números'
+                                : '$scopeLabel en números',
+                          ),
+                          if (unattributed > 0) ...<Widget>[
+                            const SizedBox(height: 6),
+                            Text(
+                              unattributed == 1
+                                  ? 'Hay 1 recuerdo anterior a que la app '
+                                        'guardara quién escribe cada uno, y no '
+                                        'se cuenta aquí.'
+                                  : 'Hay $unattributed recuerdos anteriores a '
+                                        'que la app guardara quién escribe '
+                                        'cada uno, y no se cuentan aquí.',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                height: 1.4,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           Row(
                             children: [
@@ -890,7 +950,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionTitle('Qué se come en $scopeLabel'),
+                          _SectionTitle(
+                            filterByPerson
+                                ? 'Qué pide ${config.name}'
+                                : 'Qué se come en $scopeLabel',
+                          ),
                           const SizedBox(height: 14),
                           if (categoryCounts.isEmpty)
                             const _EmptyCategoriesPlaceholder()
