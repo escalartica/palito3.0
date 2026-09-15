@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/data/memory_awards.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/providers/memory_provider.dart';
 import 'memory_form_page.dart';
 import '../../core/theme/components/smart_image.dart';
 import 'widgets/animated_card.dart';
+import 'widgets/awards_card.dart';
 import 'widgets/circle_button.dart';
 import 'widgets/hero_header.dart';
 import 'widgets/icon_box.dart';
@@ -190,6 +192,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
                         extraFields,
                         otroSabor,
                         variedades,
+                        awardsFor(currentMemory.specificFields),
                       ),
                     ),
                   ),
@@ -214,6 +217,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     Map<String, dynamic> extraFields,
     String? otroSabor,
     List<Map<String, dynamic>> variedades,
+    List<MemoryAward> awards,
   ) {
     return Container(
       decoration: const BoxDecoration(
@@ -241,6 +245,21 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           RatingCard(memory: memory),
 
           const SizedBox(height: 20),
+
+          // ── Lo que este sitio se ganó solo ──
+          //
+          // Salen de las respuestas del formulario, no de una nota que
+          // alguien pone a mano, y por eso significan algo cuando aparecen.
+          // Lo normal es que no aparezca ninguno.
+          //
+          // El motor llevaba escrito desde el principio en
+          // `features/memory_results/`, una carpeta que no importaba nadie:
+          // terminado, con sus condiciones bien puestas, y sin ejecutarse
+          // nunca porque no había pantalla que lo llamara.
+          if (awards.isNotEmpty) ...<Widget>[
+            AwardsCard(awards: awards),
+            const SizedBox(height: 20),
+          ],
 
           if (variedades.isNotEmpty) VariedadesCard(variedades: variedades),
 
