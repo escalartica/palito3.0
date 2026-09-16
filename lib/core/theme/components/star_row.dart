@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/rating_scale.dart';
+import '../tokens/app_animation.dart';
 import '../tokens/app_colors.dart';
 
 /// ===========================================================================
@@ -33,18 +34,44 @@ class Star extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
     return SizedBox(
       width: size,
       height: size,
       child: Stack(
         alignment: Alignment.center,
         children: <Widget>[
-          if (fill > 0)
-            Icon(
-              fill == 2 ? Icons.star_rounded : Icons.star_half_rounded,
-              size: size,
-              color: AppColors.primary,
+          // ── El relleno entra con un golpecito ──
+          //
+          // Poner la nota es el gesto más físico de la app: arrastras el dedo
+          // y las estrellas se van encendiendo. Encenderse de golpe funciona,
+          // pero no se siente. Con la curva `pop` cada estrella rebota un
+          // pelo al llenarse, así que arrastrar por la fila suena a algo,
+          // literalmente: el golpecito visual cae a la vez que el háptico.
+          //
+          // Está aquí dentro y no en el formulario para que la ficha del
+          // recuerdo lo herede sin hacer nada. Y sin movimiento cuando el
+          // sistema lo pide: quien tiene activado "reducir movimiento" ve el
+          // mismo cambio, instantáneo.
+          //
+          // El icono relleno no se quita del árbol cuando la estrella está
+          // vacía (solo se apaga); si se quitara, no habría nada que animar
+          // al volver a encenderla.
+          AnimatedScale(
+            scale: fill > 0 ? 1.0 : 0.55,
+            duration: reduceMotion ? Duration.zero : AppAnimation.press,
+            curve: AppAnimation.pop,
+            child: AnimatedOpacity(
+              opacity: fill > 0 ? 1.0 : 0.0,
+              duration: reduceMotion ? Duration.zero : AppAnimation.press,
+              child: Icon(
+                fill == 2 ? Icons.star_rounded : Icons.star_half_rounded,
+                size: size,
+                color: AppColors.primary,
+              ),
             ),
+          ),
           // El contorno va SIEMPRE, encima del relleno. El amarillo de marca
           // sobre blanco mide 1,43:1; con el contorno navy, la estrella se
           // distingue del fondo pase lo que pase con el color.
