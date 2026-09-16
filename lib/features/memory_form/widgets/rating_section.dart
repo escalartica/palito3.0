@@ -65,18 +65,48 @@ class RatingSection extends StatelessWidget {
     required this.onChanged,
   });
 
+  /// Parte izquierda de una estrella que cuenta como MEDIA. El resto cuenta
+  /// como estrella entera.
+  ///
+  /// No es la mitad, y esa es toda la gracia. Ver [ratingAt].
+  static const double _halfZone = 1 / 3;
+
   /// Nota correspondiente a un toque en [dx] dentro de una fila de [width].
   ///
-  /// Redondeo hacia arriba a media estrella: sin él, tocar en el borde
-  /// izquierdo de la primera estrella daría cero, y cero aquí significa
-  /// "sin puntuar" — no se puede llegar a ese estado tocando.
+  /// Tocar en el borde izquierdo da media estrella y nunca cero, porque cero
+  /// aquí significa "sin puntuar" y a ese estado no se debe poder llegar
+  /// tocando.
+  ///
+  /// DÓNDE ESTÁ LA FRONTERA ENTRE MEDIA Y ENTERA. Esto era:
+  ///
+  ///     return ((raw * 2).ceil() / 2)...
+  ///
+  /// que parece razonable hasta que se hace la cuenta. La estrella número i
+  /// ocupa el tramo [(i-1)/5, i/5], así que su CENTRO cae en `raw = i - 0,5`;
+  /// y `ceil((i - 0,5) · 2) / 2` devuelve exactamente `i - 0,5`. Un pelo más
+  /// a la derecha devuelve `i`.
+  ///
+  /// O sea: la frontera entre "media" y "entera" estaba clavada en el centro
+  /// geométrico de la estrella — justo el punto al que apunta el dedo cuando
+  /// quieres esa estrella. Probándolo en el simulador, un píxel de diferencia
+  /// daba 3,5 o 4,0. El control no se sentía impreciso: se sentía aleatorio.
+  ///
+  /// Ahora la media estrella vive en el tercio izquierdo y la entera en los
+  /// dos tercios restantes, así que apuntar al centro da siempre la estrella
+  /// entera y hay que ir claramente al borde para pedir la media.
   static double ratingAt(double dx, double width) {
     if (width <= 0) return RatingScale.max;
 
     final double fraction = (dx / width).clamp(0.0, 1.0);
     final double raw = fraction * RatingScale.max;
 
-    return ((raw * 2).ceil() / 2).clamp(0.5, RatingScale.max).toDouble();
+    // Qué estrella se ha tocado (0..4) y en qué punto de ella cayó el dedo.
+    final int index = raw.floor().clamp(0, RatingScale.max.toInt() - 1);
+    final double within = raw - index;
+
+    final double value = within <= _halfZone ? index + 0.5 : index + 1.0;
+
+    return value.clamp(0.5, RatingScale.max).toDouble();
   }
 
   void _handle(double dx, double width) {

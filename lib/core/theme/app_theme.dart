@@ -53,6 +53,31 @@ class AppTheme {
       // lo que pinta Material por su cuenta— dejan de salir en Roboto.
       textTheme: AppTypography.textTheme,
 
+      // ── EL PEOR CONTRASTE DE LA APP, Y ESTABA EN TODOS LOS DIÁLOGOS ──
+      //
+      // Un `TextButton` sin color propio usa `colorScheme.primary`, que aquí
+      // es el amarillo de marca. Amarillo #FFD400 sobre blanco mide
+      // **1,43:1**. El mínimo para texto es 4,5:1.
+      //
+      // Eso no afectaba a un botón: afectaba a las acciones de TODOS los
+      // `AlertDialog` de la app —"Seguir editando", "Descartar", "Cancelar",
+      // "Salir", "Quitar"— porque ninguno declaraba color. Se vio en el
+      // simulador al intentar salir del formulario: las dos opciones del
+      // diálogo eran dos manchas amarillas sobre blanco.
+      //
+      // Lo llamativo es que este archivo ya documentaba ese mismo 1,43:1
+      // para el par inverso (`onPrimary: white` sobre amarillo) y lo había
+      // corregido. La misma pareja de colores, al revés, seguía viva aquí.
+      //
+      // Se arregla en el tema y no diálogo por diálogo: son diez pantallas
+      // distintas y lo que falla es el valor por defecto.
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.textPrimary, // 17,85:1 sobre blanco
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,

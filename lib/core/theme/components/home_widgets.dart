@@ -53,12 +53,7 @@ class HomeHero extends StatelessWidget {
                   ? SmartImage(
                       imagePath: imageUrl,
                       fit: BoxFit.cover,
-                      // La tarjeta se pinta a unos 306 dp en un iPhone de
-                      // 390 pt. Pedía 800 dp, que con el `*2` que llevaba
-                      // dentro `SmartImage` eran 1600 px para un hueco de
-                      // 918: **tres veces el área**, descargada por la red
-                      // del usuario y decodificada en su memoria.
-                      width: 340,
+                      width: 800,
                     )
                   : _buildEmptyImage(),
             ),
@@ -173,8 +168,21 @@ class HomeHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // ── Por qué ya no pone "PLATO ESTRELLA" ──
+                    //
+                    // "Plato Estrella" es TAMBIÉN una de las categorías de
+                    // la app, y la categoría del recuerdo se pinta en la
+                    // pastilla de arriba de esta misma tarjeta. Cuando la
+                    // portada era un plato estrella —que es lo más normal,
+                    // porque es la categoría estrella— la tarjeta decía
+                    // "PLATO ESTRELLA" dos veces, con dos significados
+                    // distintos: arriba la categoría, abajo "el mejor de
+                    // tu diario". Visto en el simulador con un diario real.
+                    //
+                    // El rótulo de abajo pasa a decir lo que la pastilla no
+                    // dice, en vez de repetirla.
                     const Text(
-                      "PLATO ESTRELLA",
+                      "LO MEJOR QUE HAS PROBADO",
                       style: TextStyle(
                         color: palitoYellow,
                         fontSize: 11,

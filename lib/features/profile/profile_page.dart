@@ -187,17 +187,19 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   // lenguaje de movimiento de la app es consistente entre pantallas.
   late final AnimationController _entryController;
 
-  Animation<double> _interval(double start, double end) => CurvedAnimation(
+  // `CurvedAnimation` y no `Animation<double>`: hace falta el tipo concreto
+  // para poder llamar a su `dispose()`. Ver el `dispose` de este State.
+  CurvedAnimation _interval(double start, double end) => CurvedAnimation(
     parent: _entryController,
     curve: Interval(start, end, curve: AppAnimation.enter),
   );
 
-  late final Animation<double> _tabBarAnim = _interval(0.00, 0.30);
-  late final Animation<double> _headerAnim = _interval(0.10, 0.45);
-  late final Animation<double> _gamerStatsAnim = _interval(0.25, 0.58);
-  late final Animation<double> _bitacoraAnim = _interval(0.38, 0.70);
-  late final Animation<double> _categoriesAnim = _interval(0.52, 0.82);
-  late final Animation<double> _saveButtonAnim = _interval(0.70, 1.00);
+  late final CurvedAnimation _tabBarAnim = _interval(0.00, 0.30);
+  late final CurvedAnimation _headerAnim = _interval(0.10, 0.45);
+  late final CurvedAnimation _gamerStatsAnim = _interval(0.25, 0.58);
+  late final CurvedAnimation _bitacoraAnim = _interval(0.38, 0.70);
+  late final CurvedAnimation _categoriesAnim = _interval(0.52, 0.82);
+  late final CurvedAnimation _saveButtonAnim = _interval(0.70, 1.00);
 
   @override
   void initState() {
@@ -231,6 +233,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
   @override
   void dispose() {
+    // Las seis animaciones ANTES que el controlador del que cuelgan.
+    //
+    // `_interval()` devuelve un `CurvedAnimation`, y un `CurvedAnimation` se
+    // suscribe a su animación padre: solo su propio `dispose()` deshace esa
+    // suscripción. Aquí había seis, una por bloque de la coreografía de
+    // entrada, y ninguna se liberaba — cada entrada y salida del Perfil
+    // dejaba seis oyentes colgados.
+    for (final CurvedAnimation a in <CurvedAnimation>[
+      _tabBarAnim,
+      _headerAnim,
+      _gamerStatsAnim,
+      _bitacoraAnim,
+      _categoriesAnim,
+      _saveButtonAnim,
+    ]) {
+      a.dispose();
+    }
+
     _entryController.dispose();
     super.dispose();
   }
@@ -275,7 +295,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
 
     if (image == null) return;
 
-    final bytes = await image.readAsBytes();
+    // Leer los bytes TAMBIÉN puede fallar, y estaba fuera de los dos try que
+    // lo rodean: una foto que vive en iCloud y no está descargada, un fichero
+    // movido, o una imagen enorme sin memoria, y la excepción salía sin
+    // capturar. El síntoma para el usuario es exactamente el mismo que el
+    // fallo que el comentario de arriba dice haber arreglado: el selector se
+    // cierra y no pasa nada.
+    final Uint8List bytes;
+    try {
+      bytes = await image.readAsBytes();
+    } catch (_) {
+      if (!mounted) return;
+      _snack('No se pudo leer esa foto. Prueba con otra.');
+      return;
+    }
 
     try {
       final String downloadUrl = await StorageImageService.uploadProfileImage(
@@ -349,7 +382,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       ),
     );
 
-    controller.dispose();
+    // Liberar el controlador DESPUÉS del fotograma, no aquí mismo.
+    //
+    // `showDialog` completa su future en el `Navigator.pop`, no cuando
+    // termina la animación de salida. En este punto el `TextField` de arriba
+    // sigue montado y sigue apuntando a este controlador, así que liberarlo
+    // ya provoca *"A TextEditingController was used after being disposed"*
+    // en cuanto el diálogo desmonta su foco.
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
 
     if (newName == null || newName.trim().isEmpty || !mounted) return;
 
@@ -566,7 +606,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const CircularProgressIndicator(),
+                  // Sin `color` toma `colorScheme.primary`, el amarillo de
+                  // marca: 1,39:1 sobre el crema del fondo. Es el único
+                  // indicador de que algo está pasando en la pantalla que ve
+                  // quien ha perdido el acceso a su grupo, y era invisible.
+                  const CircularProgressIndicator(color: _kDark),
                   const SizedBox(height: 24),
                   Text(
                     'Cargando tu perfil…',
@@ -622,6 +666,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final int unattributed = filterByPerson
         ? allMemories.where((MemoryModel m) => m.createdBy == null).length
         : 0;
+
+    // Cero recuerdos no siempre significa "no hay recuerdos". `MemoryNotifier`
+    // distingue el diario vacío del diario que no se ha podido leer, y esta
+    // pantalla no lo estaba preguntando.
+    final bool diaryPermissionDenied =
+        allMemories.isEmpty &&
+        ref.read(memoryProvider.notifier).isPermissionDenied;
+    final bool diaryLoadFailed =
+        allMemories.isEmpty &&
+        ref.read(memoryProvider.notifier).hasStreamError;
 
     final total = memories.length;
     // Solo cuentan los recuerdos que SÍ tienen nota: dividir entre el total
@@ -835,7 +889,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     // qué va a salir ahí ni cómo conseguirlo. Se sustituyen
                     // por lo único que hace falta decir.
                     if (total == 0)
-                      _fadeSlide(_bitacoraAnim, const _EmptyDiaryCard())
+                      _fadeSlide(
+                        _bitacoraAnim,
+                        _EmptyDiaryCard(
+                          // Si el filtro por persona está activo y el grupo
+                          // SÍ tiene recuerdos, lo que pasa no es que el
+                          // diario esté vacío: es que esta persona no ha
+                          // apuntado nada.
+                          personName:
+                              filterByPerson && allMemories.isNotEmpty
+                              ? config.name
+                              : null,
+                          unattributed: unattributed,
+                          loadFailed: diaryLoadFailed,
+                          permissionDenied: diaryPermissionDenied,
+                        ),
+                      )
                     else ...<Widget>[
                     _fadeSlide(
                       _bitacoraAnim,
@@ -899,8 +968,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                     : _MetricCard(
                                         title: 'Nota media',
                                         numericValue: avgRating,
-                                        valueBuilder: (v) =>
-                                            v.toStringAsFixed(1),
+                                        // Coma decimal, como la cinta de
+                                        // arriba y como "Lo mejor que has
+                                        // comido". Era el número más
+                                        // grande de la pantalla y el único
+                                        // de los tres que salía con punto:
+                                        // "4.5" arriba y "4,5" al lado.
+                                        valueBuilder: (v) => v
+                                            .toStringAsFixed(1)
+                                            .replaceAll('.', ','),
                                         icon: Icons.star_half_rounded,
                                         bgColor: _kYellowBg,
                                       ),
@@ -994,6 +1070,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                           favouritePlace: favouritePlace,
                           bestMemory: bestMemory,
                           lastDate: lastDate,
+                          // Null significa "estos datos son tuyos de
+                          // verdad", que es lo único que justifica el "Lo
+                          // tuyo". Los cuatro casos:
+                          //   · tu pestaña, con filtro → tuyos.
+                          //   · pestaña de otro → suyos.
+                          //   · sin filtro, en tu diario personal → tuyos
+                          //     (ahí no hay nadie más).
+                          //   · sin filtro, en un grupo → del grupo.
+                          personName: filterByPerson
+                              ? (config.uid == myUid ? null : config.name)
+                              : (isPersonalGroup ? null : scopeLabel),
                         ),
                       ),
                     ],
@@ -1246,7 +1333,13 @@ class _ProfileHeader extends StatelessWidget {
                 child: ClipOval(
                   child: Material(
                     color: config.color,
-                    child: InkWell(
+                    // El `Tooltip` de arriba pone etiqueta pero no rol: un
+                    // `InkWell` pelado añade la acción al nodo semántico y no
+                    // el indicador de "botón", así que el único sitio de la
+                    // app para cambiar tu foto no se anunciaba como pulsable.
+                    child: Semantics(
+                      button: onTapImage != null,
+                      child: InkWell(
                       onTap: onTapImage,
                       child: Padding(
                         padding: const EdgeInsets.all(3),
@@ -1259,11 +1352,24 @@ class _ProfileHeader extends StatelessWidget {
                           onBackgroundImageError: imagePath != null
                               ? (_, _) {}
                               : null,
-                          child: imagePath == null
-                              ? Icon(config.icon, size: 34, color: _kDark)
-                              : null,
+                          // El icono SIEMPRE debajo, aunque haya foto.
+                          //
+                          // Antes el respaldo solo existía cuando no había
+                          // `imagePath`, así que con una URL caducada, sin
+                          // red o con las reglas de Storage denegando, el
+                          // error se tragaba en silencio y quedaba un disco
+                          // de color liso, sin nada dentro y sin forma de
+                          // saber si tu foto se había perdido. Con la foto
+                          // cargada, el icono queda tapado por ella y no se
+                          // ve; sin ella, se ve.
+                          child: Icon(
+                            config.icon,
+                            size: 34,
+                            color: _kDark,
+                          ),
                         ),
                       ),
+                    ),
                     ),
                   ),
                 ),
@@ -1627,7 +1733,17 @@ class _AccountActionTile extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Semantics(
+    // "Cerrar sesión" y "Eliminar cuenta" se leían como texto plano: un
+    // `InkWell` pelado añade la acción al nodo pero no el rol de botón. Y
+    // mientras la operación está en marcha, `onTap` pasa a null y la
+    // etiqueta no cambiaba, así que el lector seguía ofreciendo una acción
+    // muerta. Son las dos acciones más serias de la app.
+    button: true,
+    enabled: onTap != null,
+    label: isLoading ? '$label. En curso…' : label,
+    child: ExcludeSemantics(
+    child: Container(
     decoration: _stickerCard(
       radius: AppRadius.md,
       shadowOffset: const Offset(3, 3),
@@ -1677,6 +1793,8 @@ class _AccountActionTile extends StatelessWidget {
         ),
       ),
     ),
+    ),
+    ),
   );
 }
 
@@ -1703,8 +1821,37 @@ class _SectionTitle extends StatelessWidget {
 /// comportaba como si tuviera datos que enseñar y todos valieran cero. Una
 /// cuenta a estrenar no es un caso raro ni un error — es por donde empieza
 /// todo el mundo, y merece una pantalla escrita para ella.
+/// La tarjeta de "aquí todavía no hay nada".
+///
+/// Tiene tres versiones porque "cero recuerdos" significa tres cosas
+/// distintas, y antes las tres decían lo mismo:
+///
+///   · Tu diario está de verdad vacío → invitación a empezar.
+///   · Estás mirando la pestaña de OTRA persona que aún no ha apuntado nada
+///     → decírselo en tercera persona, sin botón de "apunta tu primer
+///     plato", que en esa pestaña no tiene sentido.
+///   · **El diario no se ha podido cargar** → no es que no haya nada: es que
+///     no lo sabemos. A alguien con ochenta recuerdos y un fallo de red la
+///     app le decía "Tu diario está en blanco" y le invitaba a empezar de
+///     cero. `MemoryNotifier` ya publicaba `hasStreamError` e
+///     `isPermissionDenied` y esta pantalla no los leía — las estadísticas
+///     de Zona Gamer, dos bloques más arriba, sí lo hacen bien.
 class _EmptyDiaryCard extends StatelessWidget {
-  const _EmptyDiaryCard();
+  const _EmptyDiaryCard({
+    this.personName,
+    this.unattributed = 0,
+    this.loadFailed = false,
+    this.permissionDenied = false,
+  });
+
+  /// Nombre de la persona cuya pestaña se está mirando, si no eres tú.
+  final String? personName;
+
+  /// Recuerdos sin autor que quedan fuera del filtro por persona.
+  final int unattributed;
+
+  final bool loadFailed;
+  final bool permissionDenied;
 
   @override
   Widget build(BuildContext context) {
@@ -1732,7 +1879,7 @@ class _EmptyDiaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Tu diario está en blanco',
+            _title,
             style: GoogleFonts.outfit(
               fontSize: 21,
               fontWeight: FontWeight.w900,
@@ -1742,15 +1889,17 @@ class _EmptyDiaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Apunta el primer plato y esta pantalla se escribe sola: tu nota '
-            'media, a cuántos sitios volverías, qué es lo que más pides y en '
-            'qué bar acabas siempre.',
+            _body,
             style: GoogleFonts.inter(
               fontSize: 13.5,
               height: 1.5,
               color: AppColors.textSecondary,
             ),
           ),
+          // El botón solo donde significa algo: en TU pestaña y con el
+          // diario de verdad vacío. En la de otra persona no puedes apuntar
+          // por ella, y si la carga ha fallado no hay nada que empezar.
+          if (personName == null && !loadFailed) ...<Widget>[
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
@@ -1776,9 +1925,38 @@ class _EmptyDiaryCard extends StatelessWidget {
               ),
             ),
           ),
+          ],
         ],
       ),
     );
+  }
+
+  String get _title {
+    if (permissionDenied) return 'No tienes acceso a este diario';
+    if (loadFailed) return 'No hemos podido cargar el diario';
+    if (personName != null) return '$personName todavía no ha apuntado nada';
+    return 'Tu diario está en blanco';
+  }
+
+  String get _body {
+    if (permissionDenied) {
+      return 'Puede que te hayan sacado del grupo, o que el diario ya no '
+          'exista. Prueba a elegir otro diario desde Inicio.';
+    }
+    if (loadFailed) {
+      return 'No es que esté vacío: es que no hemos podido leerlo. Comprueba '
+          'tu conexión — lo que tengas guardado sigue ahí.';
+    }
+    if (personName != null) {
+      final String extra = unattributed > 0
+          ? ' Los $unattributed recuerdos anteriores a que la app guardara '
+                'quién escribe cada uno no se cuentan en ninguna pestaña.'
+          : '';
+      return 'Cuando apunte su primer plato, aquí saldrán sus números.$extra';
+    }
+    return 'Apunta el primer plato y esta pantalla se escribe sola: tu nota '
+        'media, a cuántos sitios volverías, qué es lo que más pides y en '
+        'qué bar acabas siempre.';
   }
 }
 
@@ -1795,11 +1973,27 @@ class _YourThingsCard extends StatelessWidget {
     required this.favouritePlace,
     required this.bestMemory,
     required this.lastDate,
+    this.personName,
   });
 
   final MapEntry<String, int>? favouritePlace;
   final MemoryModel? bestMemory;
   final DateTime? lastDate;
+
+  /// De quién son estos datos, cuando no son tuyos.
+  ///
+  /// Los rótulos estaban clavados en segunda persona del singular —"Lo
+  /// tuyo", "Tu sitio de siempre", "Lo mejor que has comido"— pero los datos
+  /// salen de `memories`, que en la pestaña de un compañero son LOS SUYOS y
+  /// en la pestaña del grupo son los de todos. O sea que la app te decía que
+  /// *tú* has comido seis veces en un bar al que no has ido nunca.
+  ///
+  /// El resto de la pantalla ya conmutaba sus rótulos según la pestaña
+  /// ("Qué pide Marta", "Marta en números"); esta tarjeta se quedó sin
+  /// enterarse.
+  final String? personName;
+
+  bool get _isMine => personName == null;
 
   @override
   Widget build(BuildContext context) {
@@ -1808,7 +2002,7 @@ class _YourThingsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _SectionTitle('Lo tuyo'),
+        _SectionTitle(_isMine ? 'Lo tuyo' : 'Lo de $personName'),
         const SizedBox(height: 14),
         Container(
           width: double.infinity,
@@ -1819,14 +2013,18 @@ class _YourThingsCard extends StatelessWidget {
               if (favouritePlace != null)
                 _YourThingRow(
                   icon: Icons.repeat_rounded,
-                  label: 'Tu sitio de siempre',
+                  label: _isMine
+                      ? 'Tu sitio de siempre'
+                      : 'Su sitio de siempre',
                   value: favouritePlace!.key,
                   detail: '${favouritePlace!.value} veces',
                 ),
               if (best != null)
                 _YourThingRow(
                   icon: Icons.emoji_events_rounded,
-                  label: 'Lo mejor que has comido',
+                  label: _isMine
+                      ? 'Lo mejor que has comido'
+                      : 'Lo mejor que ha comido',
                   value: best.title.trim().isEmpty
                       ? best.restaurantName
                       : best.title,
@@ -1836,7 +2034,7 @@ class _YourThingsCard extends StatelessWidget {
               if (lastDate != null)
                 _YourThingRow(
                   icon: Icons.schedule_rounded,
-                  label: 'Tu último apunte',
+                  label: _isMine ? 'Tu último apunte' : 'Su último apunte',
                   value: relativeDate(lastDate!),
                   detail: null,
                   isLast: true,

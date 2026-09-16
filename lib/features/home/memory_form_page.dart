@@ -126,9 +126,22 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   late final Animation<double> _pageFadeAnimation;
   late final Animation<Offset> _pageSlideAnimation;
 
+  /// Mando del dock, capturado en [initState]. Ver los comentarios de
+  /// `initState` y `dispose`.
+  late final StateController<bool> _dockVisible;
+
   @override
   void initState() {
     super.initState();
+
+    // El mando del dock se guarda AQUÍ, mientras `ref` todavía es válido.
+    //
+    // Ver el comentario de `dispose`: allí no se puede tocar `ref`, y esta
+    // es la única forma de poder volver a encender el dock al salir.
+    // Guardarlo es seguro porque `dockVisibleProvider` es global y vive lo
+    // que vive la app: no es `autoDispose`, así que este controlador nunca
+    // se queda huérfano.
+    _dockVisible = ref.read(dockVisibleProvider.notifier);
 
     _pageAnimationController = AnimationController(
       vsync: this,
@@ -170,7 +183,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
     Future.microtask(() {
       if (mounted) {
-        ref.read(dockVisibleProvider.notifier).state = false;
+        _dockVisible.state = false;
       }
     });
 
@@ -266,7 +279,39 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     // Va en `dispose` y no en el botón de atrás porque de aquí se sale por
     // cuatro sitios: la flecha, el gesto de deslizar, guardar, y el botón
     // del sistema. `dispose` es el único punto por el que pasan los cuatro.
-    ref.read(dockVisibleProvider.notifier).state = true;
+    //
+    // PERO NO AHORA MISMO, Y NO CON `ref`.
+    //
+    // Esto era, literalmente:
+    //
+    //     ref.read(dockVisibleProvider.notifier).state = true;
+    //
+    // y reventaba en el desmontaje del árbol de widgets. Comprobado en el
+    // simulador: sales del formulario y **la barra de navegación no vuelve**.
+    // Quien tiene pocos recuerdos no tiene nada que desplazar en Inicio, así
+    // que se queda encerrado ahí, sin Mapa, sin Zona Gamer y sin Perfil,
+    // hasta que mata la app. La línea que arreglaba eso nunca llegaba a
+    // ejecutarse: la excepción saltaba antes.
+    //
+    // Y hay DOS problemas distintos aquí, no uno:
+    //
+    //   1. `ref` deja de ser válido mientras el elemento se desmonta
+    //      (`Bad state: Cannot use "ref" after the widget was disposed`).
+    //      Eso se resuelve guardando el mando del provider en `initState`.
+    //
+    //   2. Riverpod prohíbe MODIFICAR un provider durante la construcción o
+    //      el desmontaje del árbol, se llegue a él como se llegue. El
+    //      guardián es `_debugCanModifyProviders`, y salta igual con el
+    //      mando guardado — que es exactamente lo que enseñaba el stack:
+    //      `StateController.state=` llamado desde `_MemoryFormPageState.
+    //      dispose`. Guardar el mando arreglaba (1) y dejaba (2) intacto.
+    //
+    // La solución de los dos a la vez es encender el dock **cuando el
+    // fotograma haya terminado**, que es cuando el árbol ya no está en
+    // mitad de una modificación. El controlador se copia a una variable
+    // local porque para entonces este `State` ya no existe.
+    final StateController<bool> dock = _dockVisible;
+    WidgetsBinding.instance.addPostFrameCallback((_) => dock.state = true);
 
     _pageAnimationController.dispose();
     _photoAnimationController.dispose();
@@ -1353,7 +1398,11 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Seguir editando'),
           ),
+          // La acción que DESTRUYE se pinta distinta de la que no. Las dos
+          // se veían exactamente igual, así que la que borra tu trabajo
+          // tenía el mismo peso visual que la que lo conserva.
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Descartar'),
           ),

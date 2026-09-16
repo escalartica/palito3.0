@@ -62,6 +62,7 @@ class HeroHeader extends StatelessWidget {
         ],
         background: _PressableHeroImage(
           onTap: onImageTap,
+          semanticHint: 'Abrir la foto a pantalla completa',
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -290,7 +291,19 @@ class _PressableHeroImage extends StatefulWidget {
   final VoidCallback? onTap;
   final Widget child;
 
-  const _PressableHeroImage({required this.onTap, required this.child});
+  /// Qué pasa al tocar. Sin esto, la superficie pulsable más grande de la
+  /// pantalla principal —la foto de portada entera— no se anunciaba como
+  /// pulsable: un `GestureDetector` pelado no tiene rol, así que VoiceOver
+  /// leía la foto y el título y no decía en ningún momento que se pudiera
+  /// abrir. La pastilla de "Ver foto" tampoco es un botón de verdad: es
+  /// texto decorado dentro de esta misma zona.
+  final String semanticHint;
+
+  const _PressableHeroImage({
+    required this.onTap,
+    required this.child,
+    required this.semanticHint,
+  });
 
   @override
   State<_PressableHeroImage> createState() => _PressableHeroImageState();
@@ -301,16 +314,23 @@ class _PressableHeroImageState extends State<_PressableHeroImage> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.985 : 1.0,
-        duration: AppAnimation.fast,
-        curve: AppAnimation.enter,
-        child: widget.child,
+    return Semantics(
+      button: widget.onTap != null,
+      // Sin `label` ni `ExcludeSemantics`: lo de dentro (la foto con su
+      // descripción, el título del plato, la nota) sigue leyéndose. Lo único
+      // que se añade es el rol de botón y qué pasa al tocar.
+      onTapHint: widget.semanticHint,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.985 : 1.0,
+          duration: AppAnimation.fast,
+          curve: AppAnimation.enter,
+          child: widget.child,
+        ),
       ),
     );
   }

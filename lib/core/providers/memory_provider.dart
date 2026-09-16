@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +61,12 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   bool _hasReceivedFirestoreData = false;
 
   bool _hasStreamError = false;
+
+  /// Temporizador de la escritura en la caché local. Ver [_schedulePersist].
+  Timer? _persistTimer;
+
+  /// Lo último que hay pendiente de escribir en la caché local.
+  List<MemoryModel>? _pendingPersist;
 
   bool _isPermissionDenied = false;
 
@@ -192,23 +200,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
               '${normalizedMemories.length} memorias.',
             );
 
-            try {
-              await StorageService.saveMemories(normalizedMemories);
-
-              _log(
-                '💾 MemoryNotifier: '
-                'caché local sincronizada '
-                'con Firestore.',
-              );
-            } catch (e, stack) {
-              _log(
-                '⚠️ MemoryNotifier: '
-                'no se pudo actualizar la caché local: '
-                '$e',
-              );
-
-              _logStack(stackTrace: stack);
-            }
+            _schedulePersist(normalizedMemories);
           },
           error: (Object error, StackTrace stack) {
             _log(
@@ -518,12 +510,80 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   }
 
   // ==========================================================================
+  // CACHÉ LOCAL
+  // ==========================================================================
+
+  /// Guarda el diario en la caché local, pero no en el mismo instante en que
+  /// llega de Firestore.
+  ///
+  /// POR QUÉ. Guardar la caché significa recorrer TODOS los recuerdos,
+  /// convertirlos a mapas, normalizarlos y pasarlos por `jsonEncode` — y eso
+  /// ocurre en el hilo de la interfaz. Antes se hacía en cada instantánea de
+  /// Firestore, y Firestore emite más veces de las que uno imagina: al
+  /// guardar un recuerdo emite una por la escritura local (compensación de
+  /// latencia) y otra cuando el servidor confirma. Dos recorridos completos
+  /// del diario por cada plato que apuntas, justo en el momento en que la
+  /// pantalla está animando el guardado.
+  ///
+  /// Con medio segundo de espera, una ráfaga de instantáneas se convierte en
+  /// una sola escritura, y esa escritura ya no cae dentro del fotograma en el
+  /// que la interfaz está trabajando.
+  ///
+  /// QUÉ SE PIERDE: si la app muere en ese medio segundo, la caché local se
+  /// queda con la versión anterior. No es grave y es lo correcto: la fuente
+  /// de verdad es Firestore, y esta caché solo existe para que la app tenga
+  /// algo que enseñar mientras arranca.
+  void _schedulePersist(List<MemoryModel> memories) {
+    if (_isDisposed) return;
+
+    _pendingPersist = memories;
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 500), _flushPersist);
+  }
+
+  Future<void> _flushPersist() async {
+    _persistTimer?.cancel();
+    _persistTimer = null;
+
+    final List<MemoryModel>? pending = _pendingPersist;
+    if (pending == null) return;
+    _pendingPersist = null;
+
+    try {
+      await StorageService.saveMemories(pending);
+
+      _log(
+        '💾 MemoryNotifier: '
+        'caché local sincronizada '
+        'con Firestore.',
+      );
+    } catch (e, stack) {
+      _log(
+        '⚠️ MemoryNotifier: '
+        'no se pudo actualizar la caché local: '
+        '$e',
+      );
+
+      _logStack(stackTrace: stack);
+    }
+  }
+
+  // ==========================================================================
   // DISPOSE
   // ==========================================================================
 
   @override
   void dispose() {
     _isDisposed = true;
+
+    // Si quedaba algo por escribir, se escribe ahora: cambiar de diario
+    // destruye este notifier, y sin esto el último cambio no llegaría nunca
+    // a la caché local. No se espera al resultado — `dispose` no puede ser
+    // asíncrono — pero la escritura ya está lanzada.
+    if (_pendingPersist != null) {
+      unawaited(_flushPersist());
+    }
+    _persistTimer?.cancel();
 
     // No hay que cancelar ninguna suscripción manual: el ref.listen de
     // memoryModelsStreamProvider se limpia solo cuando Riverpod destruye

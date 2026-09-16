@@ -915,7 +915,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Añadir Juicio Picante',
+                  'Añadir un juicio picante',
                   style: GoogleFonts.outfit(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -1187,7 +1187,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
         _showFeedbackSnackbar(
           _selectedMode == 0
               ? 'A $winnerName le toca elegir plato'
-              : '🔥 ¡Juicio Picante para $winnerName!',
+              : '🔥 ¡Juicio picante para $winnerName!',
         );
 
         await _savePersistedData();
@@ -1576,7 +1576,18 @@ class _GamerPageState extends ConsumerState<GamerPage>
                           if (_selectedMode == 1 &&
                               _currentChallenge != null) ...[
                             const SizedBox(height: 14),
-                            GestureDetector(
+                            // La tarjeta dice "toca aquí" con el dedo
+                            // dibujado y no era un botón para el lector de
+                            // pantalla: un `GestureDetector` pelado no tiene
+                            // rol, así que VoiceOver leía el reto y se
+                            // callaba lo único que hay que hacer con él.
+                            Semantics(
+                              button: true,
+                              label:
+                                  'Reto: ${_currentChallenge!}. '
+                                  'Tocar para evaluarlo.',
+                              child: ExcludeSemantics(
+                              child: GestureDetector(
                               onTap: () {
                                 if (_selectedWinner != null) {
                                   _showChallengeOutcomeDialog(
@@ -1590,7 +1601,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(AppRadius.lg),
-                                  border: Border.all(color: _kDark, width: 1.5),
+                                  border: Border.all(
+                                    color: _kDark,
+                                    width: AppBorder.thin,
+                                  ),
                                   boxShadow: const [
                                     BoxShadow(
                                       color: _kDark,
@@ -1621,6 +1635,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
                                     ),
                                   ],
                                 ),
+                              ),
+                              ),
                               ),
                             ),
                           ],
@@ -1940,7 +1956,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Historial de la Sesión',
+                        'Historial de la sesión',
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -2080,7 +2096,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                         size: 18,
                       ),
                       label: Text(
-                        'Añadir Juicio Picante al Vuelo',
+                        'Añadir un juicio picante al vuelo',
                         style: GoogleFonts.outfit(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -2147,6 +2163,29 @@ class _NextAchievementStrip extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
+                        // ── Decía "Mesa llena · te faltan 4" ──
+                        //
+                        // Sin este rótulo, la tira afirma un hecho y lo
+                        // desmiente en la misma línea: "Mesa llena" a la
+                        // izquierda y "te faltan 4" a la derecha. Visto en el
+                        // simulador y hay que leerlo dos veces para entender
+                        // que "Mesa llena" es el NOMBRE de un logro que
+                        // todavía no tienes, no el estado de tu mesa.
+                        //
+                        // Lo llamativo: la etiqueta de VoiceOver de esta
+                        // misma tira ya dice "Siguiente logro: ...". Quien la
+                        // escuchaba entendía la pantalla mejor que quien la
+                        // veía.
+                        Text(
+                          'PRÓXIMO LOGRO',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
                         Row(
                           children: <Widget>[
                             Expanded(

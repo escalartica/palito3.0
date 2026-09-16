@@ -19,8 +19,20 @@ void main() {
       expect(RatingSection.ratingAt(w + 80, w), 5.0);
     });
 
-    test('la mitad da dos y media', () {
-      expect(RatingSection.ratingAt(w / 2, w), 2.5);
+    test('apuntar al centro de una estrella da esa estrella entera', () {
+      // La frontera entre "media" y "entera" estaba clavada en el centro
+      // geométrico de cada estrella, que es justo donde apunta el dedo: un
+      // píxel a un lado daba 3,5 y al otro 4,0. Se vio probándolo en el
+      // simulador, no leyendo el código.
+      expect(RatingSection.ratingAt(w * 0.5, w), 3.0); // centro de la 3ª
+      expect(RatingSection.ratingAt(w * 0.7, w), 4.0); // centro de la 4ª
+      expect(RatingSection.ratingAt(w * 0.9, w), 5.0); // centro de la 5ª
+      expect(RatingSection.ratingAt(w * 0.1, w), 1.0); // centro de la 1ª
+    });
+
+    test('la media estrella se pide en el borde izquierdo de cada una', () {
+      expect(RatingSection.ratingAt(w * 0.42, w), 2.5); // entrando en la 3ª
+      expect(RatingSection.ratingAt(w * 0.62, w), 3.5); // entrando en la 4ª
     });
 
     test('solo salen medias estrellas', () {

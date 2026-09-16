@@ -57,8 +57,21 @@ class _SignInPageState extends ConsumerState<SignInPage> {
 
       if (!mounted) return;
       setState(() {
+        // "Inténtalo de nuevo" era un mal consejo, y comprobado en el
+        // simulador: sin sesión de Apple en el dispositivo, iOS enseña su
+        // propia alerta —"Debes iniciar sesión en tu cuenta de Apple en
+        // Ajustes"— y en cuanto la cierras, la app decía que volvieras a
+        // intentarlo. Intentarlo otra vez da exactamente la misma alerta,
+        // para siempre. La app tenía la explicación delante y la cambiaba
+        // por un consejo que no lleva a ninguna parte.
+        //
+        // Los dos motivos reales por los que esto falla son no tener sesión
+        // de Apple en el dispositivo y no tener conexión. El mensaje nombra
+        // los dos, porque desde aquí no se pueden distinguir con certeza.
         _errorMessage =
-            'No se pudo iniciar sesión con Apple. Inténtalo de nuevo.';
+            'No se pudo iniciar sesión con Apple. Comprueba que tienes '
+            'sesión iniciada con tu Apple ID en los Ajustes del teléfono y '
+            'que hay conexión.';
       });
     } catch (e) {
       if (!mounted) return;
