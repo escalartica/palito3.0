@@ -3,11 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/rating_scale.dart';
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/components/star_row.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import 'animated_card.dart';
 import 'icon_box.dart';
 import '../../../core/theme/tokens/app_shape.dart';
-import '../../../core/theme/tokens/app_animation.dart';
 
 /// Card de puntuación del recuerdo: barra de progreso animada sobre la escala
 /// real de la app (0 a 5 — ver [RatingScale]) con su etiqueta cualitativa.
@@ -23,8 +23,6 @@ class RatingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final double rating = memory.rating.clamp(0.0, RatingScale.max).toDouble();
     final bool isRated = RatingScale.isRated(rating);
-    final double progress = RatingScale.progress(rating);
-    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return AnimatedCard(
       padding: const EdgeInsets.all(20),
@@ -63,68 +61,41 @@ class RatingCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          Semantics(
-            label: isRated
-                ? 'Puntuación ${rating.toStringAsFixed(1)} sobre '
-                      '${RatingScale.max.toStringAsFixed(0)}. '
-                      '${RatingScale.qualitativeLabel(rating)}'
-                : 'Este recuerdo no tiene puntuación',
-            child: ExcludeSemantics(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: progress),
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : AppAnimation.reveal,
-                  curve: AppAnimation.enter,
-                  builder: (BuildContext context, double value, Widget? child) {
-                    return LinearProgressIndicator(
-                      value: value,
-                      minHeight: 10,
-                      backgroundColor: AppColors.textPrimary.withValues(
-                        alpha: 0.10,
-                      ),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.primary,
-                      ),
-                    );
-                  },
-                ),
-              ),
+          // Las MISMAS estrellas con las que se puso la nota. Aquí había una
+          // barra de progreso con un "0" y un "5" a los lados: el dato se
+          // pedía de una forma y se enseñaba de otra. Ver `star_row.dart`.
+          Center(
+            child: StarRow(
+              rating: rating,
+              isRated: isRated,
+              size: 34,
+              alignment: MainAxisAlignment.center,
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              Text('0', style: _scaleStyle),
-              Flexible(
-                child: Text(
-                  RatingScale.qualitativeLabel(rating),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+          Center(
+            child: Text(
+              // Sin nota no hay veredicto que dar. `qualitativeLabel` de un
+              // recuerdo sin puntuar devolvía igualmente una etiqueta, y la
+              // tarjeta afirmaba una opinión que nadie había dado.
+              isRated
+                  ? RatingScale.qualitativeLabel(rating)
+                  : 'Este recuerdo se guardó sin nota',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: isRated
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
               ),
-              Text(RatingScale.max.toStringAsFixed(0), style: _scaleStyle),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
-
-  // `grey.shade500` sobre blanco da 2,68:1 — por debajo del mínimo de WCAG AA.
-  TextStyle get _scaleStyle => GoogleFonts.inter(
-    fontSize: 11,
-    fontWeight: FontWeight.w700,
-    color: AppColors.textSecondary,
-  );
 }
 
 class _RatingBadge extends StatelessWidget {

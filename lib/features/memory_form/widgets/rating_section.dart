@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'form_field_containers.dart';
+import '../../../core/theme/components/star_row.dart';
 import '../../../core/data/rating_scale.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_animation.dart';
@@ -162,15 +163,11 @@ class RatingSection extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: <Widget>[
                             for (int i = 1; i <= RatingScale.max.toInt(); i++)
-                              _Star(
-                                // Sin puntuar: todas vacías, aunque `rating`
-                                // valga 0 por dentro.
-                                fill: !hasInteracted
-                                    ? 0
-                                    : rating >= i
-                                    ? 2
-                                    : rating >= i - 0.5
-                                    ? 1
+                              // Sin puntuar: todas vacías, aunque `rating`
+                              // valga 0 por dentro.
+                              Star(
+                                fill: hasInteracted
+                                    ? StarRow.fillFor(rating, i)
                                     : 0,
                               ),
                           ],
@@ -199,41 +196,6 @@ class RatingSection extends StatelessWidget {
 }
 
 /// Una estrella. [fill]: 0 vacía, 1 media, 2 llena.
-class _Star extends StatelessWidget {
-  const _Star({required this.fill});
-
-  final int fill;
-
-  @override
-  Widget build(BuildContext context) {
-    const double size = 40;
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          if (fill > 0)
-            Icon(
-              fill == 2 ? Icons.star_rounded : Icons.star_half_rounded,
-              size: size,
-              color: AppColors.primary,
-            ),
-          // El contorno va SIEMPRE, encima del relleno. El amarillo de marca
-          // sobre blanco mide 1,43:1; con el contorno navy, la estrella se
-          // distingue del fondo pase lo que pase con el color.
-          Icon(
-            Icons.star_outline_rounded,
-            size: size,
-            color: fill > 0 ? AppColors.textPrimary : AppColors.textMuted,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// La cifra y lo que significa.
 ///
 /// `qualitativeLabel` estaba escrito en `RatingScale` desde el principio y no
