@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/data/memory_awards.dart';
 import '../../../core/models/memory_model.dart';
+import '../../../core/theme/components/app_motion.dart';
 import '../../../core/theme/components/constrained_fab_location.dart';
 import '../../../core/providers/memory_provider.dart';
 import 'memory_form_page.dart';
@@ -286,6 +287,15 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           const SizedBox(height: 24),
 
           LocationSection(memory: memory),
+
+          // Hueco para el botón flotante de "Editar".
+          //
+          // Sin esto, el botón se queda encima de la última tarjeta y no hay
+          // forma de apartarlo: el contenido termina justo debajo de él, así
+          // que la esquina de la última tarjeta es inalcanzable. Se ve en
+          // cuanto abres un recuerdo con pocos datos. El hueco es el alto del
+          // botón más su margen, y el área segura del teléfono.
+          SizedBox(height: 88 + MediaQuery.viewPaddingOf(context).bottom),
         ],
       ),
     );
@@ -713,23 +723,12 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
         pageBuilder: (context, animation, secondaryAnimation) {
           return MemoryFormPage(memory: memory);
         },
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: AppAnimation.enter,
-          );
-
-          return FadeTransition(
-            opacity: curvedAnimation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(curvedAnimation),
-              child: child,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            AppMotion.pageIn(
+              animation,
+              child,
+              from: const Offset(0, 0.04),
             ),
-          );
-        },
       ),
     );
   }

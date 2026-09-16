@@ -1292,7 +1292,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
               ),
             ),
             onPressed: _showBadgesModal,
-            tooltip: 'Ver Puntuaciones e Insignias',
+            // El botón decía "Puntuaciones e Insignias", la hoja que abre se
+            // titula "El podio" y su sección se llama "Logros de la mesa":
+            // tres nombres para lo mismo, y el del botón era el único que no
+            // aparecía dentro. Quien no entiende la navegación de esta app no
+            // es porque falten pantallas, es por esto.
+            tooltip: 'Ver el podio y los logros',
           ),
           // Era una llama y un número, sin una palabra. Nadie sabía qué
           // contaba, y para un lector de pantalla era literalmente "3".

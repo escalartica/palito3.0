@@ -86,7 +86,10 @@ class BadgesModal extends StatelessWidget {
             Text(
               players.isEmpty
                   ? 'Todavía no hay nadie en la mesa.'
-                  : 'Cómo va la sesión ahora mismo.',
+                  : (_anyPoints(players)
+                        ? 'Cómo va la sesión ahora mismo.'
+                        : 'Todavía no hay puntos. Girad la ruleta para abrir '
+                              'el marcador.'),
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -95,7 +98,15 @@ class BadgesModal extends StatelessWidget {
             const SizedBox(height: 18),
 
             if (players.isNotEmpty) ...<Widget>[
-              _WinnerCard(player: players.first),
+              _WinnerCard(
+                player: players.first,
+                // Con todos a cero no hay nadie ganando: la tarjeta decía
+                // "VA GANANDO" encima del primero de la lista antes de la
+                // primera tirada. Es el mismo invento que "Volverías 0 %"
+                // con el diario vacío — un dato que parece un dato y no lo
+                // es.
+                leading: _anyPoints(players),
+              ),
               const SizedBox(height: 10),
               for (int i = 1; i < players.length; i++) ...<Widget>[
                 _RunnerUpRow(position: i + 1, player: players[i]),
@@ -139,13 +150,20 @@ class BadgesModal extends StatelessWidget {
   }
 }
 
+/// Si alguien de la mesa ha puntuado ya.
+bool _anyPoints(List<Map<String, dynamic>> players) =>
+    players.any((Map<String, dynamic> p) => (p['points'] as int? ?? 0) > 0);
+
 /// Quien va primero. Su tarjeta es la única con el amarillo de marca y la
 /// única con sombra dura: en una pantalla donde todo lo demás es blanco y
 /// beige, eso basta para que el ojo aterrice aquí antes de leer un número.
 class _WinnerCard extends StatelessWidget {
-  const _WinnerCard({required this.player});
+  const _WinnerCard({required this.player, required this.leading});
 
   final Map<String, dynamic> player;
+
+  /// Si alguien de la mesa tiene puntos. Sin puntos no se corona a nadie.
+  final bool leading;
 
   @override
   Widget build(BuildContext context) {
@@ -154,9 +172,10 @@ class _WinnerCard extends StatelessWidget {
     final String name = player['name']?.toString() ?? 'Comensal';
 
     return Semantics(
-      label:
-          'Primer puesto: $name, $points puntos y $medals '
-          '${medals == 1 ? 'medalla' : 'medallas'}',
+      label: leading
+          ? 'Primer puesto: $name, $points puntos y $medals '
+                '${medals == 1 ? 'medalla' : 'medallas'}'
+          : '$name, todavía sin puntos',
       child: ExcludeSemantics(
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -192,7 +211,7 @@ class _WinnerCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Text(
-                      'VA GANANDO',
+                      leading ? 'VA GANANDO' : 'EN LA MESA',
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,

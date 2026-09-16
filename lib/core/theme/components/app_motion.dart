@@ -50,6 +50,42 @@ abstract final class AppMotion {
     );
   }
 
+  /// Entrada de una PANTALLA entera, para el `transitionsBuilder` de una
+  /// ruta.
+  ///
+  /// Vive aquí por la misma razón que lo de arriba, pero el caso es mucho
+  /// peor: el `transitionsBuilder` de una ruta se llama **en cada fotograma**
+  /// de la transición. Las dos rutas de la app construían ahí dentro un
+  /// `CurvedAnimation`, o sea unos sesenta objetos por navegación, cada uno
+  /// suscrito a la animación de la ruta y ninguno liberado. Y como todos
+  /// siguen escuchando mientras dura la transición, el coste de cada
+  /// fotograma va creciendo a medida que la transición avanza: la animación
+  /// se va frenando justo según se acerca al final, que es cuando más se
+  /// mira.
+  ///
+  /// `drive` con un `CurveTween` calcula exactamente lo mismo sin crear nada
+  /// que haya que destruir. (Se puede prescindir de `reverseCurve` porque
+  /// `AppAnimation.exit` y `AppAnimation.enter` son la misma curva.)
+  static Widget pageIn(
+    Animation<double> animation,
+    Widget child, {
+    Offset from = const Offset(0.06, 0.02),
+    Curve curve = AppAnimation.enter,
+  }) {
+    return FadeTransition(
+      opacity: animation.drive(CurveTween(curve: curve)),
+      child: SlideTransition(
+        position: animation.drive(
+          Tween<Offset>(
+            begin: from,
+            end: Offset.zero,
+          ).chain(CurveTween(curve: curve)),
+        ),
+        child: child,
+      ),
+    );
+  }
+
   /// Aparición sobria: opacidad y un desplazamiento corto hacia arriba.
   ///
   /// Para listas y bloques de texto. La tipografía escalada se ve borrosa a

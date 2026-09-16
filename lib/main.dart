@@ -14,6 +14,7 @@ import 'package:palito_3_0/core/providers/dock_provider.dart';
 import 'package:palito_3_0/core/providers/household_provider.dart';
 import 'package:palito_3_0/core/theme/app_theme.dart';
 import 'package:palito_3_0/core/theme/components/app_dock.dart';
+import 'package:palito_3_0/core/theme/components/app_motion.dart';
 import 'package:palito_3_0/core/utils/app_log.dart';
 import 'package:palito_3_0/features/auth/sign_in_page.dart';
 import 'package:palito_3_0/features/gamer/gamer_page.dart';
@@ -486,22 +487,7 @@ CustomTransitionPage<void> _page(
         ) {
           if (reduceMotion) return child;
 
-          final CurvedAnimation curved = CurvedAnimation(
-            parent: animation,
-            curve: AppAnimation.enter,
-            reverseCurve: AppAnimation.exit,
-          );
-
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.06, 0.02),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
+          return AppMotion.pageIn(animation, child);
         },
   );
 }
