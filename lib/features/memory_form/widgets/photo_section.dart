@@ -1,6 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+// `services.dart` ya reexporta `Uint8List`, así que el `dart:typed_data` que
+// había aquí pasó a ser redundante al añadir la háptica.
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -36,54 +37,110 @@ class PhotoSection extends StatelessWidget {
         tempMediaFile != null ||
         (existingImagePath != null && existingImagePath!.isNotEmpty);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.96, end: 1.0).animate(
-          CurvedAnimation(
-            parent: photoAnimationController,
-            curve: AppAnimation.pop,
-          ),
-        ),
-        child: AnimatedContainer(
-          duration: AppAnimation.slow,
-          height: 180,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceWarm,
-            border: Border.all(color: AppColors.textPrimary, width: 2),
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            boxShadow: const [
-              BoxShadow(
-                color: AppColors.textPrimary,
-                blurRadius: 0,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            // 2 pt menos que el radio exterior (AppRadius.md): con el mismo
-            // radio, el borde grueso deja una franja recta visible en las
-            // esquinas en vez de seguir la curva.
-            borderRadius: BorderRadius.circular(AppRadius.md - 2),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (tempMediaBytes != null)
-                  Image.memory(tempMediaBytes!, fit: BoxFit.cover)
-                else if (existingImagePath != null &&
-                    existingImagePath!.isNotEmpty)
-                  SmartImage(imagePath: existingImagePath, fit: BoxFit.cover)
-                else
-                  const _EmptyPhotoState(),
+    // Tope de descodificación para la foto recién elegida. Ver el comentario
+    // largo junto a `Image.memory`, más abajo.
+    final int decodeWidth =
+        (MediaQuery.sizeOf(context).width *
+                MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(200, 1600);
 
-                if (hasImage)
-                  const Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: _ChangePhotoBadge(),
+    return Semantics(
+      button: true,
+      // Un `GestureDetector` pelado no tiene rol: VoiceOver leía el texto de
+      // dentro ("Añadir foto del plato o lugar") como si fuera una etiqueta
+      // suelta, sin decir que se pudiera tocar.
+      label: hasImage
+          ? 'Cambiar la foto del recuerdo'
+          : 'Añadir una foto del plato o del lugar',
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: ScaleTransition(
+            // `drive`, no `CurvedAnimation`.
+            //
+            // `CurvedAnimation` se SUSCRIBE a su animación padre, y esa
+            // suscripción solo se deshace llamando a `dispose()`. Aquí se
+            // creaba una nueva en CADA construcción de este widget —y el
+            // formulario se reconstruye constantemente mientras se
+            // rellena—, sin destruir ninguna: cada reconstrucción dejaba un
+            // oyente más colgado del `AnimationController`, que además
+            // sobrevive a este widget.
+            //
+            // `drive(...chain(CurveTween(...)))` calcula exactamente la misma
+            // curva sin suscribirse a nada, así que no hay nada que destruir.
+            scale: photoAnimationController.drive(
+              Tween<double>(
+                begin: 0.96,
+                end: 1.0,
+              ).chain(CurveTween(curve: AppAnimation.pop)),
+            ),
+            child: AnimatedContainer(
+              duration: AppAnimation.slow,
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceWarm,
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppBorder.normal,
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                boxShadow: const [
+                  BoxShadow(
+                    color: AppColors.textPrimary,
+                    blurRadius: 0,
+                    offset: Offset(0, 3),
                   ),
-              ],
+                ],
+              ),
+              child: ClipRRect(
+                // 2 pt menos que el radio exterior (AppRadius.md): con el mismo
+                // radio, el borde grueso deja una franja recta visible en las
+                // esquinas en vez de seguir la curva.
+                borderRadius: BorderRadius.circular(AppRadius.md - 2),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (tempMediaBytes != null)
+                      // ── El agujero de memoria que quedaba sin tapar ──
+                      //
+                      // `SmartImage` ya limita cuánto se descodifica de las
+                      // fotos YA GUARDADAS, pero esta es la otra: la que
+                      // acabas de hacer con la cámara, todavía en memoria y
+                      // sin subir. Sin `cacheWidth`, Flutter la descodifica a
+                      // su tamaño original para pintarla en un recuadro de
+                      // 180 puntos de alto. Una foto de iPhone de 4032×3024
+                      // ocupa 4032 × 3024 × 4 bytes = **46,5 MB** de caché de
+                      // imágenes, cuyo tope por defecto es 100 MB.
+                      //
+                      // O sea: dos fotos seguidas llenaban el caché entero y
+                      // empezaban a expulsar todo lo demás. Con el ancho de la
+                      // pantalla como tope son unos 4 MB — once veces menos, y
+                      // en pantalla se ve exactamente igual.
+                      Image.memory(
+                        tempMediaBytes!,
+                        fit: BoxFit.cover,
+                        cacheWidth: decodeWidth,
+                      )
+                    else if (existingImagePath != null &&
+                        existingImagePath!.isNotEmpty)
+                      SmartImage(imagePath: existingImagePath, fit: BoxFit.cover)
+                    else
+                      const _EmptyPhotoState(),
+
+                    if (hasImage)
+                      const Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: _ChangePhotoBadge(),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -112,7 +169,10 @@ class _EmptyPhotoState extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.textPrimary, width: 2),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppBorder.normal,
+              ),
               boxShadow: const [
                 BoxShadow(
                   color: AppColors.textPrimary,
@@ -152,7 +212,10 @@ class _ChangePhotoBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.textPrimary, width: 2),
+        border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppBorder.normal,
+              ),
         boxShadow: const [
           BoxShadow(
             color: AppColors.textPrimary,

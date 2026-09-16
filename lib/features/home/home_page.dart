@@ -581,14 +581,27 @@ class _HomePageState extends ConsumerState<HomePage>
                     20 +
                     MediaQuery.viewPaddingOf(context).bottom,
               ),
-              child: AnimatedSlide(
-                // El FAB no se escondía al hacer scroll aunque el dock sí: se
-                // quedaba solo, flotando sobre la lista.
-                offset: ref.watch(dockVisibleProvider)
-                    ? Offset.zero
-                    : const Offset(0, 2),
-                duration: AppAnimation.slow,
-                curve: AppAnimation.enter,
+              // ── Por qué un `Consumer` y no `ref.watch` a secas ──
+              //
+              // Esto era `ref.watch(dockVisibleProvider)` leído directamente
+              // en el `build` de la página. `dockVisibleProvider` cambia cada
+              // vez que el scroll INVIERTE su dirección, o sea varias veces
+              // por gesto: subes un poco, bajas un poco, y cambia.
+              //
+              // Cada uno de esos cambios reconstruía la pantalla ENTERA. Y
+              // este `build` no es barato: filtra la lista por categoría,
+              // la ORDENA (`sort`, O(n log n)) y recorre todos los recuerdos
+              // buscando el destacado — todo eso para mover un botón dos
+              // centímetros. Con doscientos recuerdos guardados, ese trabajo
+              // se repetía a mitad de cada gesto de scroll, que es
+              // exactamente el momento en el que se nota.
+              //
+              // Con `Consumer` la suscripción se queda dentro de este trozo:
+              // cambia el provider, se reconstruye el `AnimatedSlide` y nada
+              // más. El `child` se pasa aparte para que ni siquiera el botón
+              // se vuelva a construir — el mismo widget se reutiliza y solo
+              // se desplaza.
+              child: Consumer(
                 child: ScaleTransition(
                   // Desde el 82 %, no desde cero: el boton no sale de la nada, se
                   // coloca. Con `_fabAnimation` pelada crecia desde un punto.
@@ -626,6 +639,19 @@ class _HomePageState extends ConsumerState<HomePage>
                     ),
                   ),
                 ),
+                builder:
+                    (BuildContext context, WidgetRef ref, Widget? fabChild) {
+                      return AnimatedSlide(
+                        // El FAB no se escondía al hacer scroll aunque el dock
+                        // sí: se quedaba solo, flotando sobre la lista.
+                        offset: ref.watch(dockVisibleProvider)
+                            ? Offset.zero
+                            : const Offset(0, 2),
+                        duration: AppAnimation.slow,
+                        curve: AppAnimation.enter,
+                        child: fabChild,
+                      );
+                    },
               ),
             ),
     );

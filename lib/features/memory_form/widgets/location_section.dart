@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'form_field_containers.dart';
@@ -51,7 +52,7 @@ class LocationSection extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(right: 8.0),
+                padding: const EdgeInsets.only(right: 4),
                 child: _GpsButton(
                   isGettingLocation: isGettingLocation,
                   animationController: gpsAnimationController,
@@ -79,36 +80,70 @@ class _GpsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isGettingLocation ? null : onGpsTap,
-      child: AnimatedContainer(
-        duration: AppAnimation.standard,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          // Variante apagada del amarillo de marca mientras se obtiene la
-          // ubicación, en vez de un amarillo suelto sin relación con
-          // `AppColors.primary`.
-          color: isGettingLocation
-              ? AppColors.primary.withValues(alpha: 0.5)
-              : AppColors.primary,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: AppColors.textPrimary, width: 2),
-          boxShadow: isGettingLocation
-              ? const []
-              : const [
-                  BoxShadow(
-                    color: AppColors.textPrimary,
-                    blurRadius: 0,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: RotationTransition(
-          turns: animationController,
-          child: Icon(
-            isGettingLocation ? Icons.sync_rounded : Icons.my_location_rounded,
-            color: AppColors.textPrimary,
-            size: 18,
+    return Semantics(
+      button: true,
+      enabled: !isGettingLocation,
+      // Era un `GestureDetector` sin etiqueta ni rol: VoiceOver anunciaba el
+      // botón como nada en absoluto. Y mientras busca la posición no basta
+      // con que el icono gire — girar no se oye.
+      label: isGettingLocation
+          ? 'Buscando tu ubicación'
+          : 'Usar mi ubicación actual',
+      child: GestureDetector(
+        // `opaque` para que el toque cuente en TODO el cuadro de 44, no solo
+        // encima del dibujo del icono.
+        behavior: HitTestBehavior.opaque,
+        onTap: isGettingLocation
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onGpsTap();
+              },
+        // 44x44 de zona táctil, que es el mínimo de las guías de Apple. El
+        // botón medía 8 + 18 + 8 = **34**, y es de los que más se fallan:
+        // está pegado al borde derecho del campo de texto, así que un dedo
+        // que se queda corto no pulsa nada y uno que se pasa abre el teclado.
+        // El dibujo no cambia de tamaño; lo que crece es lo que escucha.
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              duration: AppAnimation.standard,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                // Tinte OPACO de la paleta mientras busca, no el amarillo al
+                // 50 %: con alfa, el color que sale depende de lo que haya
+                // detrás, y aquí detrás hay una tarjeta con borde y sombra.
+                color: isGettingLocation
+                    ? AppColors.tintPrimary
+                    : AppColors.primary,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppBorder.normal,
+                ),
+                boxShadow: isGettingLocation
+                    ? const <BoxShadow>[]
+                    : const <BoxShadow>[
+                        BoxShadow(
+                          color: AppColors.textPrimary,
+                          blurRadius: 0,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+              ),
+              child: RotationTransition(
+                turns: animationController,
+                child: Icon(
+                  isGettingLocation
+                      ? Icons.sync_rounded
+                      : Icons.my_location_rounded,
+                  color: AppColors.textPrimary,
+                  size: 18,
+                ),
+              ),
+            ),
           ),
         ),
       ),

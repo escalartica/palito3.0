@@ -83,7 +83,19 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
   Map<String, dynamic>? _selectedWinner;
   bool _isSpinning = false;
-  int _highlightedIndex = -1;
+  /// Qué comensal está encendido ahora mismo.
+  ///
+  /// Es un `ValueNotifier` y no un campo normal por una razón concreta: cada
+  /// giro de la ruleta lo cambia **entre 22 y 32 veces seguidas**. Con un
+  /// campo normal cada salto era un `setState`, y un `setState` aquí
+  /// reconstruye la pantalla ENTERA de Zona Gamer: el panel de resultado, el
+  /// podio, el historial, los logros, la tarjeta de introducción... dos mil
+  /// líneas de widgets, treinta veces, mientras el dedo espera a ver quién
+  /// sale. Era la causa del tirón que se nota al girar.
+  ///
+  /// Con el notificador, el único trozo que se vuelve a pintar es la fila de
+  /// comensales, que es el único que cambia.
+  final ValueNotifier<int> _highlightedIndex = ValueNotifier<int>(-1);
   // CERO. Estaba en 3.
   //
   // Era un valor de prueba que se quedó puesto, y `_loadPersistedData` solo
@@ -153,6 +165,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
     _customChallengeController.dispose();
     _pulseController.dispose();
     _winnerScaleController.dispose();
+    _highlightedIndex.dispose();
     super.dispose();
   }
 
@@ -718,8 +731,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
     final removedName = _players[index]['name']?.toString() ?? 'Comensal';
     setState(() {
       _players.removeAt(index);
-      if (_highlightedIndex >= _players.length) {
-        _highlightedIndex = _players.isEmpty ? -1 : _players.length - 1;
+      if (_highlightedIndex.value >= _players.length) {
+        _highlightedIndex.value = _players.isEmpty
+            ? -1
+            : _players.length - 1;
       }
       if (_selectedWinner != null && _selectedWinner!['name'] == removedName) {
         _selectedWinner = null;
@@ -775,7 +790,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
       _selectedWinner = null;
       _currentChallenge = null;
       _palitoPick = null;
-      _highlightedIndex = -1;
+      _highlightedIndex.value = -1;
       // Los logros NO se vuelven a bloquear: un logro conseguido no debería
       // perderse al reiniciar la puntuación de una sesión de juego.
     });
@@ -1099,9 +1114,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
       try {
         for (int step = 0; step <= totalSteps; step++) {
           if (!mounted || _players.isEmpty) return;
-          setState(() {
-            _highlightedIndex = (_highlightedIndex + 1) % _players.length;
-          });
+          // Sin `setState`: el notificador avisa solo a la fila de
+          // comensales. Ver el comentario de `_highlightedIndex`.
+          _highlightedIndex.value =
+              (_highlightedIndex.value + 1) % _players.length;
           HapticFeedback.selectionClick();
           if (step < totalSteps) {
             await Future.delayed(
@@ -1112,7 +1128,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
         if (!mounted || _players.isEmpty) return;
 
-        final winnerIndex = _highlightedIndex % _players.length;
+        final winnerIndex = _highlightedIndex.value % _players.length;
         final winner = _players[winnerIndex];
         final winnerName = winner['name']?.toString() ?? 'Comensal';
         int pointsWon = 0;
@@ -1731,164 +1747,175 @@ class _GamerPageState extends ConsumerState<GamerPage>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    // 94 fijos no dan para el nombre con el texto ampliado.
-                    height:
-                        94 *
-                        MediaQuery.textScalerOf(
-                          context,
-                        ).scale(1).clamp(1.0, 1.4).toDouble(),
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _players.length,
-                      itemBuilder: (context, index) {
-                        final player = _players[index];
-                        final isHighlighted = index == _highlightedIndex;
-                        final isWinner =
-                            _selectedWinner != null &&
-                            _selectedWinner!['name'] == player['name'];
-                        final playerColor = player['color'] as Color;
-                        final myUid = ref.read(gamerServiceProvider).currentUid;
-                        final isLinkedToMe =
-                            myUid != null && player['uid'] == myUid;
+                  // Solo esta fila se vuelve a pintar en cada salto de la
+                  // ruleta. Ver el comentario de `_highlightedIndex`.
+                  ValueListenableBuilder<int>(
+                    valueListenable: _highlightedIndex,
+                    builder:
+                        (
+                          BuildContext context,
+                          int highlighted,
+                          Widget? _,
+                        ) =>
+                    SizedBox(
+                      // 94 fijos no dan para el nombre con el texto ampliado.
+                      height:
+                          94 *
+                          MediaQuery.textScalerOf(
+                            context,
+                          ).scale(1).clamp(1.0, 1.4).toDouble(),
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _players.length,
+                        itemBuilder: (context, index) {
+                          final player = _players[index];
+                          final isHighlighted = index == highlighted;
+                          final isWinner =
+                              _selectedWinner != null &&
+                              _selectedWinner!['name'] == player['name'];
+                          final playerColor = player['color'] as Color;
+                          final myUid = ref.read(gamerServiceProvider).currentUid;
+                          final isLinkedToMe =
+                              myUid != null && player['uid'] == myUid;
 
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            child: InkWell(
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Material(
+                              color: Colors.transparent,
                               borderRadius: BorderRadius.circular(AppRadius.lg),
-                              onTap: () => _toggleLinkedToMe(index),
-                              onLongPress: () => _confirmRemovePlayer(index),
-                              child: AnimatedContainer(
-                                duration: AppAnimation.fast,
-                                width: 76,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 10,
-                                  horizontal: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  // Relleno sólido, no alpha-blend: el mismo
-                                  // patrón de "seleccionado" que tabs y chips
-                                  // en el resto de la app — garantiza que el
-                                  // texto oscuro siempre tenga contraste
-                                  // suficiente, sin depender de qué haya debajo.
-                                  color: isHighlighted
-                                      ? _kYellow
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                                  border: Border.all(
-                                    color: isHighlighted || isWinner
-                                        ? _kBadgeOrange
-                                        : _kDark,
-                                    width: isHighlighted || isWinner ? 2 : 1.5,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(AppRadius.lg),
+                                onTap: () => _toggleLinkedToMe(index),
+                                onLongPress: () => _confirmRemovePlayer(index),
+                                child: AnimatedContainer(
+                                  duration: AppAnimation.fast,
+                                  width: 76,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                    horizontal: 6,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: _kDark,
-                                      offset: Offset(2, 2),
-                                      blurRadius: 0,
+                                  decoration: BoxDecoration(
+                                    // Relleno sólido, no alpha-blend: el mismo
+                                    // patrón de "seleccionado" que tabs y chips
+                                    // en el resto de la app — garantiza que el
+                                    // texto oscuro siempre tenga contraste
+                                    // suficiente, sin depender de qué haya debajo.
+                                    color: isHighlighted
+                                        ? _kYellow
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                                    border: Border.all(
+                                      color: isHighlighted || isWinner
+                                          ? _kBadgeOrange
+                                          : _kDark,
+                                      width: isHighlighted || isWinner ? 2 : 1.5,
                                     ),
-                                  ],
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        // Cuando la tarjeta está
-                                        // seleccionada su fondo es amarillo,
-                                        // y el círculo del comensal se
-                                        // pintaba con SU color al 20 % y el
-                                        // icono en ese mismo color. Para
-                                        // quien tuviera el amarillo de marca
-                                        // —el primer comensal de la mesa,
-                                        // siempre— el resultado era amarillo
-                                        // sobre amarillo: el icono
-                                        // desaparecía justo en el momento en
-                                        // que la ruleta lo elegía, que es
-                                        // cuando más hay que verlo.
-                                        //
-                                        // Seleccionado: círculo blanco y
-                                        // icono navy, con borde. Contraste
-                                        // garantizado sea cual sea el color
-                                        // del comensal.
-                                        CircleAvatar(
-                                          radius: 20,
-                                          backgroundColor: isHighlighted
-                                              ? Colors.white
-                                              : playerColor.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                          child: Container(
-                                            decoration: isHighlighted
-                                                ? const BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    border:
-                                                        Border.fromBorderSide(
-                                                          BorderSide(
-                                                            color: _kDark,
-                                                            width: 1.5,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: _kDark,
+                                        offset: Offset(2, 2),
+                                        blurRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          // Cuando la tarjeta está
+                                          // seleccionada su fondo es amarillo,
+                                          // y el círculo del comensal se
+                                          // pintaba con SU color al 20 % y el
+                                          // icono en ese mismo color. Para
+                                          // quien tuviera el amarillo de marca
+                                          // —el primer comensal de la mesa,
+                                          // siempre— el resultado era amarillo
+                                          // sobre amarillo: el icono
+                                          // desaparecía justo en el momento en
+                                          // que la ruleta lo elegía, que es
+                                          // cuando más hay que verlo.
+                                          //
+                                          // Seleccionado: círculo blanco y
+                                          // icono navy, con borde. Contraste
+                                          // garantizado sea cual sea el color
+                                          // del comensal.
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor: isHighlighted
+                                                ? Colors.white
+                                                : playerColor.withValues(
+                                                    alpha: 0.2,
+                                                  ),
+                                            child: Container(
+                                              decoration: isHighlighted
+                                                  ? const BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      border:
+                                                          Border.fromBorderSide(
+                                                            BorderSide(
+                                                              color: _kDark,
+                                                              width: 1.5,
+                                                            ),
                                                           ),
-                                                        ),
-                                                  )
-                                                : null,
-                                            alignment: Alignment.center,
-                                            child: Icon(
-                                              player['icon'] as IconData,
-                                              color: isHighlighted
-                                                  ? _kDark
-                                                  : playerColor,
-                                              size: 18,
+                                                    )
+                                                  : null,
+                                              alignment: Alignment.center,
+                                              child: Icon(
+                                                player['icon'] as IconData,
+                                                color: isHighlighted
+                                                    ? _kDark
+                                                    : playerColor,
+                                                size: 18,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        if (isLinkedToMe)
-                                          Positioned(
-                                            right: -2,
-                                            bottom: -2,
-                                            child: Container(
-                                              padding: const EdgeInsets.all(2),
-                                              decoration: const BoxDecoration(
-                                                color: _kYellow,
-                                                shape: BoxShape.circle,
-                                                border: Border.fromBorderSide(
-                                                  BorderSide(
-                                                    color: _kDark,
-                                                    width: 1.5,
+                                          if (isLinkedToMe)
+                                            Positioned(
+                                              right: -2,
+                                              bottom: -2,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: const BoxDecoration(
+                                                  color: _kYellow,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.fromBorderSide(
+                                                    BorderSide(
+                                                      color: _kDark,
+                                                      width: 1.5,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              child: const Icon(
-                                                Icons.check_rounded,
-                                                size: 10,
-                                                color: _kDark,
+                                                child: const Icon(
+                                                  Icons.check_rounded,
+                                                  size: 10,
+                                                  color: _kDark,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      player['name'] as String,
-                                      style: GoogleFonts.outfit(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: _kDark,
+                                        ],
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        player['name'] as String,
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          color: _kDark,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
