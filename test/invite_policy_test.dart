@@ -101,6 +101,19 @@ void main() {
       );
     });
 
+    test('un código recién creado de 7 días no dice 6', () {
+      // `Duration.inDays` trunca: 6 días, 23 h y 59 min daban "6 días".
+      // Es el caso REAL —un código que se acaba de generar— y no lo cogía
+      // ninguna prueba porque todas usaban duraciones exactas.
+      expect(
+        InvitePolicy.describe(
+          invite(expiresIn: const Duration(days: 7) - const Duration(minutes: 1)),
+          now,
+        ),
+        endsWith('caduca en 7 días'),
+      );
+    });
+
     test('menos de un día se cuenta en horas', () {
       expect(
         InvitePolicy.describe(invite(expiresIn: const Duration(hours: 5)), now),

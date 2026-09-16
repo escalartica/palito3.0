@@ -553,7 +553,13 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
       ),
     );
 
-    controller.dispose();
+    // Después del fotograma, no aquí: `showDialog` completa su future en el
+    // `Navigator.pop`, no cuando acaba la animación de salida, así que el
+    // `TextField` de arriba sigue montado y apuntando a este controlador.
+    // Liberarlo ya provoca "A TextEditingController was used after being
+    // disposed" al desmontarse el foco del diálogo. (El mismo fallo estaba
+    // en el diálogo de cambiar tu nombre, en profile_page.dart.)
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
 
     if (newName == null || newName.isEmpty || newName == _name) return;
 

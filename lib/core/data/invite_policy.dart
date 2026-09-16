@@ -119,8 +119,19 @@ abstract final class InvitePolicy {
       return 'caduca en ${left.inHours} ${left.inHours == 1 ? "hora" : "horas"}';
     }
 
-    final int days = left.inDays;
-    return days == 1 ? 'caduca mañana' : 'caduca en $days días';
+    // REDONDEAR, NO TRUNCAR.
+    //
+    // `Duration.inDays` trunca, y un código recién creado tiene 6 días, 23
+    // horas y 59 minutos de vida: `inDays` da **6**. Visto en el simulador
+    // al generar un código de siete días y leer "caduca en 6 días" debajo.
+    // No es un redondeo inocente: el usuario cuenta los días para saber
+    // hasta cuándo sirve lo que acaba de mandar por WhatsApp.
+    //
+    // Mis propias pruebas no lo cogían porque usaban duraciones exactas
+    // (`Duration(days: 6)`), que es justo el único caso en el que truncar y
+    // redondear coinciden.
+    final int days = (left.inHours / 24).round();
+    return days <= 1 ? 'caduca mañana' : 'caduca en $days días';
   }
 
   /// Rescata un código de lo que haya en el portapapeles.
