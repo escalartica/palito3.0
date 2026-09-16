@@ -33,6 +33,11 @@ class GamerGameLogic {
 
   /// [selectedMode] 0 = Ruleta Pro (elegir plato); cualquier otro valor =
   /// Juicio Picante (reto al azar de [challenges], usando [random]).
+  ///
+  /// OJO AL CAMBIAR LAS CIFRAS: los 5 y los 10 puntos de aquí abajo están
+  /// escritos también, en palabras, en la hoja de "Cómo se juega"
+  /// (`widgets/how_to_play_sheet.dart`). Si cambian aquí y no allí, la
+  /// pantalla que explica las reglas pasa a mentir.
   static GamerSpinOutcome computeSpinOutcome({
     required int selectedMode,
     required List<String> challenges,
@@ -60,6 +65,8 @@ class GamerGameLogic {
 
   /// Cuánto llevas de un logro y cuánto hace falta: `(3, 10)` = tres de
   /// diez. Devuelve `(0, 0)` para un id que no conoce.
+  ///
+  /// El número de logros (siete) se nombra en `how_to_play_sheet.dart`.
   ///
   /// Antes solo existía un `isAchievementMet` que devolvía sí o no, y por eso
   /// los logros bloqueados eran una lista de candados sin más: "Acumular una

@@ -19,6 +19,7 @@ import 'data/gamer_content.dart';
 import 'gamer_game_logic.dart';
 import 'widgets/add_player_modal.dart';
 import 'widgets/badges_modal.dart';
+import 'widgets/how_to_play_sheet.dart';
 import 'widgets/challenge_outcome_modal.dart';
 import 'widgets/mode_selector.dart';
 import 'widgets/pro_modal.dart';
@@ -1274,6 +1275,43 @@ class _GamerPageState extends ConsumerState<GamerPage>
         ),
         centerTitle: false,
         actions: [
+          // ── Las reglas, siempre a mano ──
+          //
+          // La explicación existía, pero se autodestruía: la tarjeta "¿Quién
+          // elige hoy?" sale solo hasta la primera tirada y se puede cerrar
+          // antes. Después no había forma de volver a verla, justo cuando
+          // empiezas a tener las preguntas de verdad — de dónde salen los
+          // puntos, qué son las medallas, qué hace Palito sentado a la mesa.
+          //
+          // Y esa tarjeta solo explicaba los tres modos: ni puntos, ni
+          // medallas, ni cómo vincular tus puntos a tu cuenta.
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: _kDark, width: AppBorder.thin),
+                boxShadow: const [
+                  BoxShadow(color: _kDark, offset: Offset(2, 2), blurRadius: 0),
+                ],
+              ),
+              child: const Icon(
+                Icons.help_outline_rounded,
+                color: _kDark,
+                size: 18,
+              ),
+            ),
+            onPressed: () => showHowToPlaySheet(context),
+            tooltip: 'Cómo se juega',
+            // Sin `padding: zero`, cada `IconButton` se lleva 48 puntos de
+            // ancho por sus márgenes internos. Con dos botones más la
+            // pastilla de decisiones, al título no le quedaba sitio y se
+            // cortaba en "Zona Gam…". El área táctil sigue siendo de 44,
+            // que es el mínimo de Apple: lo que se quita es aire, no dedo.
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
           IconButton(
             icon: Container(
               padding: const EdgeInsets.all(6),
@@ -1298,6 +1336,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
             // aparecía dentro. Quien no entiende la navegación de esta app no
             // es porque falten pantallas, es por esto.
             tooltip: 'Ver el podio y los logros',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
           ),
           // Era una llama y un número, sin una palabra. Nadie sabía qué
           // contaba, y para un lector de pantalla era literalmente "3".
@@ -2327,6 +2367,22 @@ class _GamerIntroCard extends StatelessWidget {
             title: 'Palito',
             text: 'Siéntalo a la mesa y, si le toca, elige él '
                 'de vuestro diario.',
+          ),
+          const SizedBox(height: 6),
+          // Antes de que esta tarjeta desaparezca para siempre, que diga
+          // dónde vive la explicación completa. Si no, quien la cierra se
+          // queda sin ayuda y sin saber que había más.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => showHowToPlaySheet(context),
+              icon: const Icon(Icons.help_outline_rounded, size: 18),
+              label: const Text('Ver las reglas completas'),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+            ),
           ),
         ],
       ),
