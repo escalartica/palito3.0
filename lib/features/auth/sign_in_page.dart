@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -18,8 +19,25 @@ class SignInPage extends ConsumerStatefulWidget {
 }
 
 class _SignInPageState extends ConsumerState<SignInPage> {
+  static const String _privacyUrl =
+      'https://palito-de-sabores.web.app/privacy.html';
+
   bool _isSigningIn = false;
   String? _errorMessage;
+
+  void _copyPrivacyUrl() {
+    Clipboard.setData(const ClipboardData(text: _privacyUrl));
+    HapticFeedback.selectionClick();
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Enlace copiado. Pégalo en tu navegador.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
 
   Future<void> _handleSignIn() async {
     setState(() {
@@ -102,6 +120,12 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     child: Image.asset(
                       'assets/images/logo.png',
                       width: 124,
+                      // Sin `cacheWidth`, el PNG se descodifica a su tamaño
+                      // original en memoria para pintarlo a 124 puntos. 372 =
+                      // 124 × 3, el factor de pantalla más alto que hay en un
+                      // iPhone; por encima de eso solo se guarda memoria que
+                      // nadie va a ver.
+                      cacheWidth: 372,
                       semanticLabel: 'Logotipo de Palito de Sabores',
                     ),
                   ),
@@ -153,17 +177,17 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     // solo aire) y explican, antes del botón, qué gana el
                     // usuario al entrar — un patrón habitual en pantallas
                     // de login "profesionales".
-                    _ValuePoint(
+                    const _ValuePoint(
                       icon: Icons.restaurant_menu_rounded,
                       text: 'Registra tus platos y experiencias favoritas',
                     ),
                     const SizedBox(height: 16),
-                    _ValuePoint(
+                    const _ValuePoint(
                       icon: Icons.group_rounded,
                       text: 'Comparte tu diario con quien tú invites',
                     ),
                     const SizedBox(height: 16),
-                    _ValuePoint(
+                    const _ValuePoint(
                       icon: Icons.map_rounded,
                       text: 'Ved juntos el mapa de todo lo que habéis probado',
                     ),
@@ -180,7 +204,15 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.08),
+                          // Tinte OPACO de la paleta, no el color de error al
+                          // 8 %. Una sombra maciza sin difuminar se pinta
+                          // ANTES que el fondo: con un fondo semitransparente
+                          // la sombra se transparenta a través de él. Además,
+                          // el resultado exacto de mezclar dependía de lo que
+                          // hubiera detrás, así que el contraste del texto de
+                          // error no era una cifra sino una suposición. Este
+                          // tinte mide 4,54:1 con el rojo encima.
+                          color: AppColors.tintError,
                           borderRadius: BorderRadius.circular(AppRadius.sm),
                           border: Border.all(
                             color: AppColors.error,
@@ -225,19 +257,48 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     // mira App Review en una app que comparte contenido entre
                     // usuarios (guideline 5.1.1).
                     //
-                    // PENDIENTE: hacerlo pulsable hacia
-                    // https://palito-de-sabores.web.app/privacy.html requiere
-                    // añadir `url_launcher` a pubspec.yaml — ver
-                    // docs/PRUEBAS_ANTES_DE_SUBIR.md.
+                    // Abrirla en el navegador necesitaría `url_launcher`, una
+                    // dependencia más. Copiarla no: con un toque, la
+                    // dirección está en el portapapeles y se pega en Safari.
+                    // Es una frase que hasta ahora había que TECLEAR a mano,
+                    // con guiones y todo, así que en la práctica nadie la
+                    // leía nunca.
                     Center(
-                      child: Text(
-                        'Al continuar aceptas nuestra política de privacidad,\n'
-                        'disponible en palito-de-sabores.web.app/privacy.html',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          height: 1.45,
-                          color: AppColors.textSecondary,
+                      child: Semantics(
+                        button: true,
+                        label:
+                            'Copiar la dirección de la política de privacidad',
+                        child: GestureDetector(
+                          onTap: _copyPrivacyUrl,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text.rich(
+                              TextSpan(
+                                children: <InlineSpan>[
+                                  const TextSpan(
+                                    text:
+                                        'Al continuar aceptas nuestra política '
+                                        'de privacidad.\n',
+                                  ),
+                                  TextSpan(
+                                    text: 'Tocar para copiar el enlace',
+                                    style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                height: 1.45,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),

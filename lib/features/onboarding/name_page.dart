@@ -80,6 +80,21 @@ class _NamePageState extends ConsumerState<NamePage> {
     }
   }
 
+  Future<void> _signOut() async {
+    setState(() => _isBusy = true);
+
+    try {
+      await ref.read(authServiceProvider).signOut();
+      // El `redirect` del router lleva a /sign-in en cuanto se vacía la
+      // sesión; no hace falta navegar a mano.
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo cerrar la sesión.');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,6 +134,12 @@ class _NamePageState extends ConsumerState<NamePage> {
                 maxLength: 40,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
+                // El error desaparece en cuanto escribes. Antes se quedaba
+                // debajo del campo, diciendo "escribe cómo quieres que te
+                // llamemos" mientras lo estabas escribiendo.
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
                 onSubmitted: (_) => _save(),
                 inputFormatters: <TextInputFormatter>[
                   LengthLimitingTextInputFormatter(40),
@@ -170,6 +191,24 @@ class _NamePageState extends ConsumerState<NamePage> {
                 label: 'Continuar',
                 isBusy: _isBusy,
                 onPressed: _save,
+              ),
+              const SizedBox(height: 8),
+              // SALIDA DE EMERGENCIA.
+              //
+              // Este paso es obligatorio y la cabecera no tiene botón de
+              // volver, así que hasta ahora era un callejón sin salida
+              // literal: si guardar fallaba una y otra vez (o si alguien
+              // entró con la cuenta equivocada de Apple), la única forma de
+              // salir era cerrar la app a la fuerza y volver a caer aquí.
+              Center(
+                child: TextButton(
+                  onPressed: _isBusy ? null : _signOut,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    minimumSize: const Size(0, 48),
+                  ),
+                  child: const Text('Cerrar sesión'),
+                ),
               ),
             ],
           ),

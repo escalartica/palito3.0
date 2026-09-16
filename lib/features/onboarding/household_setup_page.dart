@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/data/invite_policy.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/household_service.dart';
 import '../../core/theme/components/neo_header.dart';
+import '../../core/theme/components/neo_pressable.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/providers/memory_provider.dart';
@@ -175,8 +177,48 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       'Por ejemplo "Con Marta" o "Amigos del curro" — te ayudará a '
           'distinguirlo cuando tengas varios.',
     _Mode.joining =>
-      'Pide el código a quien te quiera invitar. Son 8 letras y números.',
+      'Pide el código a quien te quiera invitar. Son '
+          '${InvitePolicy.codeLength} letras y números. Si lo tienes copiado, '
+          'toca "Pegar" y ya está.',
   };
+
+  /// El error se borra en cuanto el usuario toca el campo. Antes se quedaba
+  /// pegado debajo mientras escribías el código correcto, diciendo que no
+  /// existe uno que ya habías corregido.
+  void _clearError() {
+    if (_errorMessage == null) return;
+    setState(() => _errorMessage = null);
+  }
+
+  /// Rellena el campo con el código que haya en el portapapeles — sea el
+  /// código pelado o el mensaje de invitación entero (ver
+  /// [InvitePolicy.codeFromSharedText]).
+  ///
+  /// Quien recibe una invitación SIEMPRE la tiene copiada: es así como le ha
+  /// llegado. Obligarle a teclear ocho caracteres a mano, con un alfabeto que
+  /// además esconde la O y el 0, era pedirle que se equivocara.
+  Future<void> _pasteCode() async {
+    final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+    final String? code = InvitePolicy.codeFromSharedText(data?.text);
+
+    if (!mounted) return;
+
+    if (code == null) {
+      setState(() {
+        _errorMessage = 'No hay ningún código en el portapapeles.';
+      });
+      return;
+    }
+
+    HapticFeedback.selectionClick();
+
+    _codeController.value = TextEditingValue(
+      text: code,
+      selection: TextSelection.collapsed(offset: code.length),
+    );
+
+    setState(() => _errorMessage = null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +302,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
           maxLength: 60,
           textCapitalization: TextCapitalization.sentences,
           textInputAction: TextInputAction.done,
+          onChanged: (_) => _clearError(),
           onSubmitted: (_) => _createHousehold(),
           style: GoogleFonts.outfit(
             fontSize: 18,
@@ -291,15 +334,18 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
             autofocus: true,
             textCapitalization: TextCapitalization.characters,
             textAlign: TextAlign.center,
-            maxLength: 8,
+            maxLength: InvitePolicy.codeLength,
             textInputAction: TextInputAction.done,
+            onChanged: (_) => _clearError(),
             onSubmitted: (_) => _joinHousehold(),
             // El generador usa un alfabeto sin O/0/I/1; cualquier otra tecla
             // solo puede producir un código inválido.
             inputFormatters: <TextInputFormatter>[
               _UpperCaseFormatter(),
-              FilteringTextInputFormatter.allow(RegExp('[A-HJ-NP-Z2-9]')),
-              LengthLimitingTextInputFormatter(8),
+              FilteringTextInputFormatter.allow(
+                RegExp('[${InvitePolicy.alphabet}]'),
+              ),
+              LengthLimitingTextInputFormatter(InvitePolicy.codeLength),
             ],
             style: GoogleFonts.outfit(
               fontSize: 24,
@@ -310,7 +356,20 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
             decoration: _fieldDecoration(hint: 'CÓDIGO'),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton.icon(
+            onPressed: _isBusy ? null : _pasteCode,
+            icon: const Icon(Icons.content_paste_rounded, size: 18),
+            label: const Text('Pegar el código que te han mandado'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              minimumSize: const Size(0, 48),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
         NeoPrimaryButton(
           label: 'Unirme',
           isBusy: _isBusy,
@@ -330,20 +389,24 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       filled: true,
       fillColor: AppColors.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-      border: _border(2),
-      enabledBorder: _border(2),
-      focusedBorder: _border(2.5),
-      errorBorder: _border(2, color: AppColors.error),
-      focusedErrorBorder: _border(2.5, color: AppColors.error),
+      // Un único grosor, el del sistema de tokens. Aquí había un 2 y un 2,5
+      // escritos a mano: el 2,5 es el "quinto grosor" que el propio archivo de
+      // tokens dice haber eliminado, y el foco ya se distingue por el cursor y
+      // el teclado abierto sin necesidad de engordar el borde.
+      border: _border(),
+      enabledBorder: _border(),
+      focusedBorder: _border(),
+      errorBorder: _border(color: AppColors.error),
+      focusedErrorBorder: _border(color: AppColors.error),
     );
   }
 
-  OutlineInputBorder _border(double width, {Color? color}) {
+  OutlineInputBorder _border({Color? color}) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.md),
       borderSide: BorderSide(
         color: color ?? AppColors.textPrimary,
-        width: width,
+        width: AppBorder.normal,
       ),
     );
   }
@@ -359,6 +422,18 @@ class _UpperCaseFormatter extends TextInputFormatter {
   }
 }
 
+/// Las dos tarjetas de "¿Con quién vas a compartir?".
+///
+/// Antes eran un `InkWell` envolviendo un `Container` con su propio color
+/// opaco. Eso no da NINGUNA señal al tocar: la onda del InkWell se pinta sobre
+/// el `Material` que hay debajo, y el fondo opaco de la tarjeta la tapa
+/// entera. En una pantalla que existe precisamente para elegir entre dos
+/// caminos, tocar y que no pase nada visible durante el viaje a la red se lee
+/// como que la app se ha quedado colgada.
+///
+/// [NeoPressable] es el componente que ya usa el resto de la app: se hunde
+/// sobre su propia sombra al apoyar el dedo, vibra, respeta "reducir
+/// movimiento" y garantiza los 44x44 de las guías de Apple.
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
     required this.icon,
@@ -374,83 +449,60 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '$title. $subtitle',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-              color: AppColors.textPrimary,
-              width: AppBorder.normal,
-            ),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
+    return NeoPressable(
+      onTap: onTap,
+      semanticLabel: '$title. $subtitle',
+      shadowOffset: const Offset(3, 3),
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
                 color: AppColors.textPrimary,
-                blurRadius: 0,
-                offset: Offset(3, 3),
+                width: AppBorder.thin,
               ),
-            ],
+            ),
+            child: Icon(icon, color: AppColors.textPrimary),
           ),
-          child: ExcludeSemantics(
-            child: Row(
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Container(
-                  width: 48,
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    border: Border.all(
-                      color: AppColors.textPrimary,
-                      width: AppBorder.thin,
-                    ),
-                  ),
-                  child: Icon(icon, color: AppColors.textPrimary),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
-        ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textSecondary,
+          ),
+        ],
       ),
     );
   }

@@ -6,16 +6,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/data/invite_policy.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
+import '../../core/services/household_service.dart';
 import '../../core/theme/components/neo_header.dart';
+import '../../core/theme/components/neo_pressable.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 
-/// Muestra un código de invitación recién generado para el grupo [groupId].
-/// Se llega aquí justo después de crear un grupo, o desde Perfil para invitar
-/// a alguien más a uno ya existente — siempre con el grupo explícito, nunca
-/// resuelto de forma ambigua (un usuario puede pertenecer a varios a la vez).
+/// ===========================================================================
+/// INVITAR A UN GRUPO
+/// ===========================================================================
+///
+/// Se llega aquí justo después de crear un grupo, o desde la hoja de diarios
+/// para invitar a alguien más a uno ya existente — siempre con el grupo
+/// explícito, nunca resuelto de forma ambigua (un usuario puede pertenecer a
+/// varios a la vez).
+///
+/// QUÉ CAMBIÓ Y POR QUÉ. Esta pantalla generaba un código NUEVO y DE UN SOLO
+/// USO cada vez que se abría. Las dos cosas estaban mal para lo que la gente
+/// hace de verdad con un código de invitación, que es pegarlo en un grupo de
+/// WhatsApp:
+///
+///   · De un solo uso: entraba el primero que lo tocaba y los demás recibían
+///     "Ese código ya se ha usado". Quien invitaba no se enteraba nunca.
+///   · Nuevo en cada visita: el código que ya habías mandado seguía siendo
+///     válido, pero la app te enseñaba otro distinto. Dos códigos vivos, y
+///     ninguna pantalla para verlos ni anularlos.
+///
+/// Ahora el código es UNO, dura mientras sirva, dice para cuánta gente vale y
+/// hasta cuándo, y se puede anular a mano. La lógica de "cuál enseñar" está
+/// en [InvitePolicy], con pruebas.
+/// ===========================================================================
 class InvitePartnerPage extends ConsumerStatefulWidget {
   const InvitePartnerPage({super.key, required this.groupId});
 
@@ -26,17 +49,26 @@ class InvitePartnerPage extends ConsumerStatefulWidget {
 }
 
 class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
-  static const Duration _validFor = Duration(days: 7);
+  /// El camino que se nombra aquí tiene que coincidir PALABRA POR PALABRA con
+  /// lo que pone en pantalla (ver `ProfileGroupsSection`): si se renombra esa
+  /// fila del Perfil y no se actualiza este texto, el invitado se queda
+  /// buscando un menú que no existe. Una versión anterior decía que el código
+  /// se metía "al abrir la app por primera vez" — ese sitio nunca ha
+  /// existido.
+  static const String _howToRedeem =
+      'abrir la app, iniciar sesión, ir a la pestaña Perfil, tocar "Ver tus '
+      'diarios y quién está en cada uno" y ahí "Entrar con un código"';
 
-  String? _code;
+  InviteSummary? _invite;
   String? _errorMessage;
+  bool _isWorking = false;
   bool _copied = false;
   Timer? _copiedTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _generateCode());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -45,7 +77,7 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
     super.dispose();
   }
 
-  Future<void> _generateCode() async {
+  Future<void> _load() async {
     final String? uid = ref.read(currentUidProvider);
 
     if (uid == null) {
@@ -56,18 +88,19 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
       return;
     }
 
+    setState(() {
+      _isWorking = true;
+      _errorMessage = null;
+    });
+
     try {
-      final String code = await ref
+      final InviteSummary invite = await ref
           .read(householdServiceProvider)
-          .createInvite(
-            groupId: widget.groupId,
-            createdBy: uid,
-            validFor: _validFor,
-          );
+          .ensureInvite(groupId: widget.groupId, createdBy: uid);
 
       if (!mounted) return;
       setState(() {
-        _code = code;
+        _invite = invite;
         _errorMessage = null;
       });
     } on StateError catch (e) {
@@ -76,32 +109,114 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'No se pudo generar el código. Comprueba tu conexión.';
+        _errorMessage = 'No se pudo preparar el código. Comprueba tu conexión.';
       });
+    } finally {
+      if (mounted) setState(() => _isWorking = false);
     }
   }
 
-  /// Mensaje completo, con las instrucciones REALES incluidas. Una versión
-  /// anterior decía que el invitado metería el código "al abrir la app por
-  /// primera vez" — ese sitio no existe. Quien invitaba creía haber hecho su
-  /// parte y el invitado no encontraba dónde meterlo.
-  ///
-  /// El camino que se nombra aquí tiene que coincidir PALABRA POR PALABRA con
-  /// lo que pone en pantalla (ver `ProfileGroupsSection`): si se renombra la
-  /// sección del Perfil y no se actualiza este texto, el invitado se queda
-  /// buscando un menú que no existe.
+  Future<void> _regenerate() async {
+    final String? uid = ref.read(currentUidProvider);
+    if (uid == null || _isWorking) return;
+
+    final bool confirmed = await _confirmRegenerate();
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _isWorking = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final InviteSummary invite = await ref
+          .read(householdServiceProvider)
+          .replaceInvite(
+            groupId: widget.groupId,
+            createdBy: uid,
+            previousCode: _invite?.code,
+          );
+
+      if (!mounted) return;
+      setState(() {
+        _invite = invite;
+        _copied = false;
+      });
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Código nuevo listo. El anterior ya no sirve.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'No se pudo generar otro código. Comprueba tu conexión.';
+      });
+    } finally {
+      if (mounted) setState(() => _isWorking = false);
+    }
+  }
+
+  Future<bool> _confirmRegenerate() async {
+    final bool? answer = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          '¿Generar otro código?',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'El código actual dejará de funcionar al momento. Quien ya esté '
+          'dentro del grupo se queda dentro; solo deja de servir para entrar.',
+          style: GoogleFonts.inter(height: 1.45),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Generar otro'),
+          ),
+        ],
+      ),
+    );
+
+    return answer ?? false;
+  }
+
   String get _shareMessage =>
       'Te invito a mi grupo en Palito de Sabores 🍽️\n\n'
-      'Código: $_code\n\n'
-      'Descarga la app, inicia sesión con Apple y ve a la pestaña Perfil. '
-      'Ahí toca "Ver tus diarios y quién está en cada uno" y luego '
-      '"Entrar con un código".\n'
-      'El código caduca en ${_validFor.inDays} días.';
+      'Código: ${_invite?.code}\n\n'
+      'Descarga la app y para usarlo tendrás que $_howToRedeem.\n'
+      '${_expiryLine(capitalized: true)}.';
+
+  String _expiryLine({bool capitalized = false}) {
+    final InviteSummary? invite = _invite;
+    if (invite == null) return '';
+
+    final String text = InvitePolicy.describe(invite.life, DateTime.now());
+    if (!capitalized) return text;
+
+    return text[0].toUpperCase() + text.substring(1);
+  }
 
   void _copy({required bool full}) {
-    if (_code == null) return;
+    final InviteSummary? invite = _invite;
+    if (invite == null) return;
 
-    Clipboard.setData(ClipboardData(text: full ? _shareMessage : _code!));
+    Clipboard.setData(
+      ClipboardData(text: full ? _shareMessage : invite.code),
+    );
     HapticFeedback.selectionClick();
 
     setState(() => _copied = true);
@@ -116,6 +231,8 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final InviteSummary? invite = _invite;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: NeoHeader(
@@ -130,7 +247,7 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
-                'Invita a alguien',
+                'Invita a quien quieras',
                 style: GoogleFonts.outfit(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
@@ -139,36 +256,48 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Pásale este código. Para usarlo tendrá que abrir la app, '
-                'iniciar sesión, ir a la pestaña Perfil, tocar "Ver tus '
-                'diarios y quién está en cada uno" y ahí "Entrar con un '
-                'código". Caduca en ${_validFor.inDays} días.',
+                'Pásales este código: sirve para varias personas, así que '
+                'puedes pegarlo en un grupo. Para usarlo tendrán que '
+                '$_howToRedeem.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               if (_errorMessage != null)
-                _ErrorBlock(message: _errorMessage!, onRetry: _generateCode)
-              else if (_code == null)
+                _ErrorBlock(message: _errorMessage!, onRetry: _load)
+              else if (invite == null)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else
-                _CodeBlock(code: _code!),
+              else ...<Widget>[
+                _CodeBlock(code: invite.code),
+                const SizedBox(height: 12),
+                // Las dos únicas cosas que quien invita necesita saber y que
+                // antes no aparecían por ninguna parte.
+                Text(
+                  _expiryLine(capitalized: true),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
-              if (_code != null) ...<Widget>[
+              if (invite != null) ...<Widget>[
                 NeoPrimaryButton(
                   label: _copied ? 'Copiado ✓' : 'Copiar invitación completa',
                   icon: _copied ? Icons.check_rounded : Icons.ios_share_rounded,
-                  onPressed: () => _copy(full: true),
+                  onPressed: _isWorking ? null : () => _copy(full: true),
                 ),
                 const SizedBox(height: 10),
                 TextButton.icon(
-                  onPressed: () => _copy(full: false),
+                  onPressed: _isWorking ? null : () => _copy(full: false),
                   icon: const Icon(Icons.copy_rounded, size: 18),
                   label: const Text('Copiar solo el código'),
                   style: TextButton.styleFrom(
@@ -176,8 +305,20 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
                     minimumSize: const Size(0, 48),
                   ),
                 ),
+                const SizedBox(height: 18),
+                // Anular el código es lo único que permite cerrar la puerta
+                // cuando se ha ido de las manos (un grupo reenviado, una
+                // captura publicada). Estaba escrito en el servicio desde
+                // hacía tiempo, pero no había ningún sitio desde el que
+                // pedirlo.
+                NeoActionButton(
+                  label: 'Generar un código nuevo',
+                  hint: 'El actual dejará de funcionar.',
+                  icon: Icons.autorenew_rounded,
+                  onTap: _isWorking ? null : _regenerate,
+                ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               TextButton(
                 onPressed: () =>
                     context.canPop() ? context.pop() : context.go('/'),
@@ -220,7 +361,7 @@ class _CodeBlock extends StatelessWidget {
             ),
           ],
         ),
-        // Un código de 8 caracteres a 40 px con letterSpacing 10 no cabe en un
+        // Un código de 8 caracteres a 36 px con letterSpacing 7 no cabe en un
         // iPhone SE. FittedBox lo encoge en vez de desbordar.
         child: FittedBox(
           fit: BoxFit.scaleDown,

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:palito_3_0/core/data/invite_policy.dart';
 import 'package:palito_3_0/core/utils/app_log.dart';
 
 /// ===========================================================================
@@ -32,13 +33,16 @@ class HouseholdService {
 
   final FirebaseFirestore _firestore;
 
-  /// Sin O/0/I/1, ambiguos al leerlos en voz alta o en una captura.
-  static const String _codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
+  /// Alfabeto y longitud viven en [InvitePolicy]: el formulario de "Entrar
+  /// con un código" necesita exactamente los mismos, y tenerlos duplicados en
+  /// dos archivos era una forma garantizada de que un día dejaran de
+  /// coincidir.
+  ///
   /// 8 caracteres sobre un alfabeto de 32 = 32^8 ≈ 1,1·10^12 combinaciones.
   /// Con 6 eran 1,07·10^9, al alcance de una fuerza bruta paciente contra
   /// `invites/{code}` (que cualquier usuario autenticado puede resolver por id).
-  static const int _codeLength = 8;
+  static const String _codeAlphabet = InvitePolicy.alphabet;
+  static const int _codeLength = InvitePolicy.codeLength;
 
   /// Crea un grupo nuevo con [uid] como único miembro inicial, y añade su id
   /// a `users/{uid}.groupIds` (sin tocar los demás grupos a los que ya
@@ -154,6 +158,105 @@ class HouseholdService {
     return code;
   }
 
+  /// El código que hay que ENSEÑAR para invitar a [groupId]: reutiliza el que
+  /// ya esté vivo si lo hay, y solo crea uno nuevo cuando no queda ninguno
+  /// aprovechable.
+  ///
+  /// Antes, la pantalla de invitar llamaba directamente a [createInvite] en
+  /// cada apertura. Eso significaba dos cosas a la vez: que el código que ya
+  /// habías mandado por WhatsApp dejaba de ser "el" código en cuanto volvías
+  /// a entrar, y que cada visita dejaba una llave viva más tirada por ahí
+  /// durante una semana, sin ninguna pantalla desde la que verla ni anularla.
+  ///
+  /// Si listar falla (por ejemplo, sin conexión), se crea uno nuevo: es
+  /// preferible un código de más a una pantalla de invitar rota.
+  Future<InviteSummary> ensureInvite({
+    required String groupId,
+    required String createdBy,
+    int maxUses = InvitePolicy.defaultMaxUses,
+    Duration validFor = InvitePolicy.defaultValidFor,
+  }) async {
+    try {
+      final List<InviteSummary> live = await activeInvitesFor(groupId);
+
+      final InviteLife? reusable = InvitePolicy.pickReusable(
+        live.map((InviteSummary i) => i.life).toList(),
+        DateTime.now(),
+      );
+
+      if (reusable != null) {
+        return live.firstWhere((InviteSummary i) => i.code == reusable.code);
+      }
+    } catch (e) {
+      AppLog.w(
+        'HouseholdService: no se pudieron listar las invitaciones vivas '
+        '($e). Se genera una nueva.',
+      );
+    }
+
+    return _mintInvite(
+      groupId: groupId,
+      createdBy: createdBy,
+      maxUses: maxUses,
+      validFor: validFor,
+    );
+  }
+
+  /// Anula [previousCode] y devuelve un código nuevo. Es lo que hay detrás de
+  /// "Generar un código nuevo": la única forma que tiene quien invita de
+  /// cerrar la puerta cuando el código se le ha ido de las manos (un grupo de
+  /// WhatsApp reenviado, una captura publicada).
+  Future<InviteSummary> replaceInvite({
+    required String groupId,
+    required String createdBy,
+    String? previousCode,
+    int maxUses = InvitePolicy.defaultMaxUses,
+    Duration validFor = InvitePolicy.defaultValidFor,
+  }) async {
+    if (previousCode != null && previousCode.isNotEmpty) {
+      try {
+        await revokeInvite(previousCode);
+      } catch (e) {
+        // Que no se pueda borrar el viejo no es razón para no dar uno nuevo;
+        // el viejo caducará solo.
+        AppLog.w('HouseholdService: no se pudo revocar $previousCode ($e).');
+      }
+    }
+
+    return _mintInvite(
+      groupId: groupId,
+      createdBy: createdBy,
+      maxUses: maxUses,
+      validFor: validFor,
+    );
+  }
+
+  Future<InviteSummary> _mintInvite({
+    required String groupId,
+    required String createdBy,
+    required int maxUses,
+    required Duration validFor,
+  }) async {
+    final String code = await createInvite(
+      groupId: groupId,
+      createdBy: createdBy,
+      maxUses: maxUses,
+      validFor: validFor,
+    );
+
+    // Los mismos recortes que aplica `createInvite`, para que lo que se
+    // pinta en pantalla coincida con lo que se acaba de guardar.
+    return InviteSummary(
+      code: code,
+      createdBy: createdBy,
+      expiresAt: DateTime.now().add(
+        validFor > const Duration(days: 30) ? const Duration(days: 30) : validFor,
+      ),
+      maxUses: maxUses.clamp(1, 20).toInt(),
+      useCount: 0,
+    );
+  }
+
   /// Invitaciones vivas (sin gastar y sin caducar) de [groupId], para poder
   /// revocarlas desde la app. Antes no había forma de listarlas, así que un
   /// código filtrado era irrevocable.
@@ -249,16 +352,54 @@ class HouseholdService {
 
     // PASO 2 — entrar en el grupo. `lastJoinCode` es lo que permite al
     // servidor verificar la invitación (ver firestore.rules).
-    await _firestore.collection('groups').doc(groupId).update(<String, dynamic>{
-      'members': FieldValue.arrayUnion(<String>[uid]),
-      'memberProfiles.$uid': <String, dynamic>{
-        'displayName': displayName,
-        'photoUrl': photoUrl,
-        'joinedAt': Timestamp.now(),
-      },
-      'lastJoinCode': normalizedCode,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _enterGroup(
+        groupId: groupId,
+        uid: uid,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        code: normalizedCode,
+      );
+    } on FirebaseException catch (e) {
+      // CARRERA ENTRE INVITADOS. Con un código de varios usos, dos personas
+      // pueden reclamarlo con segundos de diferencia. `usedBy` es un único
+      // campo: el segundo lo sobrescribe y, cuando el primero llega al paso
+      // 2, la regla `claimedInvite().usedBy == request.auth.uid` lo rechaza.
+      //
+      // Con códigos de un solo uso esto no podía pasar, así que no existía.
+      // Sin este reintento, el primero vería "no se pudo unir al grupo,
+      // comprueba tu conexión" — un mensaje falso: su conexión está bien y
+      // el código es correcto.
+      if (e.code != 'permission-denied') rethrow;
+
+      final DocumentSnapshot<Map<String, dynamic>> fresh = await inviteRef
+          .get();
+      final Map<String, dynamic> now = fresh.data() ?? <String, dynamic>{};
+
+      // Si la invitación sigue siendo nuestra, el rechazo es por otro motivo
+      // y no hay nada que reintentar.
+      if (!fresh.exists || (now['usedBy'] as String?) == uid) rethrow;
+
+      final int usedNow = (now['useCount'] as num?)?.toInt() ?? 0;
+      final int allowed = (now['maxUses'] as num?)?.toInt() ?? 1;
+      if (usedNow >= allowed) {
+        throw StateError('Ese código ya se ha usado.');
+      }
+
+      await inviteRef.update(<String, dynamic>{
+        'usedBy': uid,
+        'usedAt': FieldValue.serverTimestamp(),
+        'useCount': FieldValue.increment(1),
+      });
+
+      await _enterGroup(
+        groupId: groupId,
+        uid: uid,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        code: normalizedCode,
+      );
+    }
 
     // PASO 3 — registrar el grupo en la lista de conveniencia del usuario.
     await _firestore.collection('users').doc(uid).set(<String, dynamic>{
@@ -432,6 +573,27 @@ class HouseholdService {
     }
   }
 
+  Future<void> _enterGroup({
+    required String groupId,
+    required String uid,
+    required String displayName,
+    required String? photoUrl,
+    required String code,
+  }) {
+    return _firestore.collection('groups').doc(groupId).update(
+      <String, dynamic>{
+        'members': FieldValue.arrayUnion(<String>[uid]),
+        'memberProfiles.$uid': <String, dynamic>{
+          'displayName': displayName,
+          'photoUrl': photoUrl,
+          'joinedAt': Timestamp.now(),
+        },
+        'lastJoinCode': code,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
   String _generateCode() {
     final Random random = Random.secure();
 
@@ -482,4 +644,12 @@ class InviteSummary {
   final int useCount;
 
   bool get isSpent => useCount >= maxUses;
+
+  /// La misma invitación, sin nada de Firestore dentro, para poder decidir
+  /// sobre ella (y probarlo) con [InvitePolicy].
+  InviteLife get life => InviteLife(
+    code: code,
+    usesLeft: (maxUses - useCount).clamp(0, maxUses),
+    expiresAt: expiresAt,
+  );
 }
