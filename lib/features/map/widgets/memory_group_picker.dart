@@ -139,17 +139,25 @@ class MemoryGroupPicker {
                 width: 44,
                 height: 44,
                 alignment: Alignment.center,
+                // Mismo caso que la pastilla de la hoja de detalle: icono
+                // del color del fondo sobre ese mismo color al 15 %. Un
+                // icono es un elemento gráfico y las guías piden 3:1; así
+                // no llega nunca. Tinte opaco, icono navy.
                 decoration: BoxDecoration(
-                  color: categoryColor.withValues(alpha: 0.15),
+                  color: Color.lerp(
+                    AppColors.surface,
+                    categoryColor,
+                    0.15,
+                  ),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   border: Border.all(
                     color: AppColors.textPrimary,
-                    width: 1.5,
+                    width: AppBorder.thin,
                   ),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.restaurant_rounded,
-                  color: categoryColor,
+                  color: AppColors.textPrimary,
                   size: 20,
                 ),
               ),

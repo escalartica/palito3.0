@@ -491,7 +491,10 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
             'Añade cada sabor con su propia valoración',
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: AppColors.textPrimary.withValues(alpha: 0.6),
+              // `textSecondary` es el token que existe para esto y mide
+              // 5,94:1 medido. Un 60 % de alfa escrito a mano da un gris
+              // parecido pero sin número detrás.
+              color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 10),

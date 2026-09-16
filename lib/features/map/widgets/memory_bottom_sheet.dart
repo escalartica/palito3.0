@@ -96,8 +96,27 @@ class MemoryBottomSheet {
                       horizontal: 12,
                       vertical: 6,
                     ),
+                    // ── Texto del color del fondo, sobre ese mismo color ──
+                    //
+                    // Era `categoryColor` al 12 % de fondo y `categoryColor`
+                    // entero de texto: el mismo tono contra sí mismo. El
+                    // contraste no es que sea bajo, es que **no puede** ser
+                    // alto — sale de la propia construcción, y cambia con
+                    // cada categoría, así que con una categoría clara la
+                    // nota del plato desaparecía del todo.
+                    //
+                    // El tinte se queda (es lo que distingue la categoría de
+                    // un vistazo) pero opaco, y el texto pasa a navy, que
+                    // mide por encima de 12:1 sobre cualquiera de estos
+                    // tintes. `Color.lerp` sobre blanco da exactamente el
+                    // mismo aspecto que tenía el alfa, sin depender de lo
+                    // que haya debajo.
                     decoration: BoxDecoration(
-                      color: categoryColor.withValues(alpha: 0.12),
+                      color: Color.lerp(
+                        AppColors.surface,
+                        categoryColor,
+                        0.12,
+                      ),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Text(
@@ -107,7 +126,7 @@ class MemoryBottomSheet {
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: categoryColor,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -250,7 +269,8 @@ class MemoryBottomSheet {
                     context.push('/memory-detail', extra: memory);
                   },
                   child: Text(
-                    'Ver Experiencia Completa',
+                    // En español solo va en mayúscula la primera palabra.
+                    'Ver el recuerdo completo',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
