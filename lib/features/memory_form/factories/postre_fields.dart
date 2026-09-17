@@ -287,7 +287,7 @@ class PostreFields implements DynamicFieldGenerator {
     return TweenAnimationBuilder<double>(
       key: ValueKey('postre_field_$index'),
       tween: Tween<double>(begin: 0, end: 1),
-      duration: AppAnimation.stagger(index),
+      duration: AppMotion.durFromPlatform(AppAnimation.stagger(index)),
       curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
@@ -393,7 +393,7 @@ class PostreFields implements DynamicFieldGenerator {
       },
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: AnimatedContainer(
-        duration: AppAnimation.standard,
+        duration: AppMotion.durFromPlatform(AppAnimation.standard),
         curve: AppAnimation.enter,
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -406,7 +406,7 @@ class PostreFields implements DynamicFieldGenerator {
           children: [
             AnimatedScale(
               scale: isSelected ? 1.08 : 1.0,
-              duration: AppAnimation.fast,
+              duration: AppMotion.durFromPlatform(AppAnimation.fast),
               child: Icon(icon, size: 18, color: AppColors.textPrimary),
             ),
             const SizedBox(width: 6),
@@ -582,7 +582,7 @@ class PostreFields implements DynamicFieldGenerator {
           const SizedBox(height: 8),
 
           AnimatedContainer(
-            duration: AppAnimation.standard,
+            duration: AppMotion.durFromPlatform(AppAnimation.standard),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -622,7 +622,7 @@ class PostreFields implements DynamicFieldGenerator {
                 ),
 
                 AnimatedSwitcher(
-                  duration: AppAnimation.fast,
+                  duration: AppMotion.durFromPlatform(AppAnimation.fast),
                   transitionBuilder: (child, animation) {
                     return AppMotion.popIn(animation, child);
                   },

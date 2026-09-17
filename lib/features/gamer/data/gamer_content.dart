@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens/app_colors.dart';
 
-/// Contenido estático de Zona Gamer: logros desbloqueables y retos de
+/// Contenido estático de la ruleta: logros desbloqueables y retos de
 /// "Juicio Picante". Extraído de gamer_page.dart.
 ///
 /// Se exponen como funciones que construyen una lista nueva en cada

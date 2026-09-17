@@ -6,6 +6,7 @@ import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../widgets/memory_text_field.dart';
+import '../../../core/theme/components/app_motion.dart';
 
 class TortillaFields implements DynamicFieldGenerator {
   @override
@@ -345,7 +346,7 @@ class TortillaFields implements DynamicFieldGenerator {
           // =====================================================================
           if (hasCustomOption)
             AnimatedSize(
-              duration: AppAnimation.standard,
+              duration: AppMotion.durFromPlatform(AppAnimation.standard),
               curve: AppAnimation.enter,
               child: isCustomSelected
                   ? Padding(
@@ -373,7 +374,7 @@ class TortillaFields implements DynamicFieldGenerator {
     required Function(String, dynamic) onUpdate,
   }) {
     return TweenAnimationBuilder<double>(
-      duration: AppAnimation.standard,
+      duration: AppMotion.durFromPlatform(AppAnimation.standard),
       tween: Tween(begin: 0.0, end: 1.0),
       curve: AppAnimation.enter,
       builder: (context, value, child) {

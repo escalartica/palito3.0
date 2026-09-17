@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'pro_stat.dart';
 import '../../../core/theme/components/progress_track.dart';
+import '../../../core/theme/components/app_motion.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 
@@ -12,7 +13,7 @@ const _kDark = AppColors.textPrimary;
 /// CÓMO VA LA MESA
 /// ===========================================================================
 ///
-/// Antes se llamaba "Panel Pro de Zona Gamer" y debajo ponía "Estadísticas
+/// Antes se llamaba "Panel Pro de la ruleta" y debajo ponía "Estadísticas
 /// globales en tiempo real y rendimiento analítico de la sesión en Palito":
 /// catorce palabras para decir "puntos y partidas", en una hoja con tres
 /// números. Nada de eso es información; es relleno de folleto en mitad de una
@@ -37,16 +38,29 @@ class ProModal extends StatelessWidget {
     super.key,
     required this.players,
     required this.decisionsCount,
-    required this.historyCount,
+    required this.history,
     required this.onViewBadges,
     required this.onResetSession,
+    required this.onClearHistory,
   });
 
   final List<Map<String, dynamic>> players;
   final int decisionsCount;
-  final int historyCount;
+
+  /// ── EL HISTORIAL VIVE AQUÍ, Y SOLO AQUÍ ──
+  ///
+  /// Esta hoja se abre desde una tarjeta cuyo subtítulo prometía
+  /// "historial"… y enseñaba un número. La lista entera estaba repetida
+  /// abajo del todo de la pantalla principal, detrás de todo, siendo dos de
+  /// los nueve bloques que hacían que La ruleta se leyera como una lista
+  /// de cajas sin fin.
+  ///
+  /// Dos sitios para lo mismo y ninguno correcto: el que lo prometía no lo
+  /// tenía, y el que lo tenía no lo había prometido.
+  final List<Map<String, String>> history;
   final VoidCallback onViewBadges;
   final VoidCallback onResetSession;
+  final VoidCallback onClearHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +97,9 @@ class ProModal extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SingleChildScrollView(
-        child: Column(
+        // Escalonada: la hoja se coloca de arriba abajo en vez de encenderse
+        // entera. Ver MotionColumn.
+        child: MotionColumn(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -151,8 +167,8 @@ class ProModal extends StatelessWidget {
                   ),
                   ProStat(
                     icon: Icons.history_rounded,
-                    label: historyCount == 1 ? 'Tirada' : 'Tiradas',
-                    value: '$historyCount',
+                    label: history.length == 1 ? 'Tirada' : 'Tiradas',
+                    value: '${history.length}',
                   ),
                 ],
               ),
@@ -243,6 +259,104 @@ class ProModal extends StatelessWidget {
                 ),
               );
             }),
+
+            // ─── Historial de la sesión ──────────────────────────────────
+            if (history.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Qué ha pasado',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: _kDark,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onClearHistory();
+                    },
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      // `Colors.red.shade400` medía 3,49:1 sobre blanco: por
+                      // debajo del 4,5:1 que pide un texto.
+                      foregroundColor: AppColors.error,
+                    ),
+                    child: Text(
+                      'Limpiar',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Filas separadas por un filete, no diez tarjetas con borde y
+              // sombra cada una. Un registro es una lista, no una colección
+              // de objetos: diez cajas apiladas pesan diez veces más que la
+              // información que llevan dentro.
+              ...history.asMap().entries.map((
+                MapEntry<int, Map<String, String>> entry,
+              ) {
+                final Map<String, String> record = entry.value;
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    border: entry.key == history.length - 1
+                        ? null
+                        : const Border(
+                            bottom: BorderSide(
+                              color: AppColors.tintMuted,
+                              width: 1,
+                            ),
+                          ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              record['winner'] ?? '',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: _kDark,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              record['detail'] ?? '',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        record['time'] ?? '',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
 
             const SizedBox(height: 8),
             SizedBox(

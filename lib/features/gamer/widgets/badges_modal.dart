@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/components/progress_track.dart';
+import '../../../core/theme/components/app_motion.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 
@@ -59,7 +60,9 @@ class BadgesModal extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SingleChildScrollView(
-        child: Column(
+        // Escalonada: la hoja se coloca de arriba abajo en vez de encenderse
+        // entera. Ver MotionColumn.
+        child: MotionColumn(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[

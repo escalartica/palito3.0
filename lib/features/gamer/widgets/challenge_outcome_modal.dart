@@ -29,7 +29,7 @@ class ChallengeOutcomeModal extends StatelessWidget {
       // Crema deliberadamente más cálido que AppColors.surfaceWarm: este
       // modal es el momento de evaluar un reto superado o no, y el tono se
       // eligió para destacar frente al resto de hojas inferiores en blanco
-      // de Zona Gamer, no por descuido.
+      // de la ruleta, no por descuido.
       color: Color(0xFFFFF8EE),
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),

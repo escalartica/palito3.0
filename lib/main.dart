@@ -180,13 +180,28 @@ class _PalitoDeSaboresAppState extends ConsumerState<PalitoDeSaboresApp> {
 const List<_Tab> _tabs = <_Tab>[
   _Tab(path: '/', icon: Icons.home_rounded, label: 'Inicio'),
   _Tab(path: '/map', icon: Icons.map_rounded, label: 'Mapa'),
+  // ── DE "ZONA GAMER" A "LA RULETA" ──
+  //
+  // El nombre decía lo que la pantalla ES —una zona de juego— y no lo que
+  // HACE: echar a suertes quién elige la comida, para no discutirlo. Y
+  // "Gamer", que era lo único que cabía en el dock, no dice ninguna de las
+  // dos cosas. Quien se bajó la app y no entendía para qué servía esta
+  // pestaña se encontraba de entrada con un anglicismo y un mando de
+  // videoconsola: dos pistas, y las dos apuntando a un videojuego que esto
+  // no es.
+  //
+  // "La ruleta" es el mecanismo real, cubre los dos modos —en los dos se
+  // gira la misma ruleta, solo cambia qué le pasa a quien salga— y no hay
+  // que explicárselo a nadie. Las propias reglas de la app ya lo decían
+  // así: "giráis, y la ruleta decide por vosotros".
+  //
+  // El icono pasa de mando a dado, que es además el que ya lleva el botón
+  // de girar dentro de la pantalla.
   _Tab(
     path: '/gamer',
-    icon: Icons.videogame_asset_rounded,
-    label: 'Zona Gamer',
-    // El nombre completo no cabe en un cuarto del ancho de un iPhone; el
-    // lector de pantalla sigue diciendo "Zona Gamer".
-    shortLabel: 'Gamer',
+    icon: Icons.casino_rounded,
+    label: 'La ruleta',
+    shortLabel: 'Ruleta',
   ),
   _Tab(path: '/profile', icon: Icons.person_rounded, label: 'Perfil'),
 ];
@@ -347,7 +362,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // SHELL PRINCIPAL — las cuatro pestañas del dock
       // ============================================================
       //
-      // Antes, solo `/` estaba dentro del shell: Mapa, Zona Gamer y Perfil
+      // Antes, solo `/` estaba dentro del shell: Mapa, La ruleta y Perfil
       // eran rutas sueltas sin dock, así que la barra de navegación
       // desaparecía en cuanto salías de Inicio — y el índice de pestaña que
       // se calculaba para ellas no se llegaba a ver nunca.
@@ -458,6 +473,25 @@ class _ShellScaffold extends ConsumerWidget {
 // TRANSICIÓN DE PÁGINAS
 // ================================================================
 
+/// Las cuatro pestañas, EN ORDEN. El orden no es decorativo: es el que se
+/// ve en el dock y el que decide hacia qué lado se mueve la pantalla.
+const List<String> _tabOrder = <String>['/', '/map', '/gamer', '/profile'];
+
+/// Hacia dónde va el último viaje entre pestañas. `+` derecha, `-` izquierda.
+///
+/// POR QUÉ ES UNA VARIABLE SUELTA Y NO ESTADO DE VERDAD. Durante una
+/// transición hay DOS páginas dibujándose a la vez —la que entra y la que se
+/// va— y las dos tienen que moverse en el mismo sentido, o se cruzan. Cada
+/// una construyó su `Page` en un momento distinto, así que no pueden
+/// llevarse el dato dentro: tienen que leer el mismo valor **mientras** se
+/// dibujan. Por eso se lee dentro del `transitionsBuilder`, que corre en
+/// cada fotograma, y no en el `pageBuilder`.
+///
+/// Es puramente visual: si se quedara desfasado, lo peor que pasa es que una
+/// transición entra por el lado contrario.
+double _travelDx = 0.06;
+int _lastTabIndex = 0;
+
 /// Transición compartida por todas las rutas. Respeta "Reducir movimiento"
 /// (`MediaQuery.disableAnimations`): con esa opción activada, la app tardaba
 /// más de un segundo en mostrar nada porque las animaciones de entrada seguían
@@ -468,6 +502,16 @@ CustomTransitionPage<void> _page(
   Widget child,
 ) {
   final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+  // Si el destino es una pestaña, el sentido lo marca su sitio en la fila.
+  // Si no lo es —la ficha de un recuerdo, el formulario, la invitación— se
+  // deja el sentido de siempre: esas pantallas se apilan ENCIMA, no están al
+  // lado de nada.
+  final int destino = _tabOrder.indexOf(state.uri.path);
+  if (destino != -1 && destino != _lastTabIndex) {
+    _travelDx = destino > _lastTabIndex ? 0.06 : -0.06;
+    _lastTabIndex = destino;
+  }
 
   return CustomTransitionPage<void>(
     key: state.pageKey,
@@ -487,7 +531,14 @@ CustomTransitionPage<void> _page(
         ) {
           if (reduceMotion) return child;
 
-          return AppMotion.pageIn(animation, child);
+          if (destino == -1) return AppMotion.pageIn(animation, child);
+
+          return AppMotion.pageSwap(
+            animation,
+            secondaryAnimation,
+            child,
+            dx: _travelDx,
+          );
         },
   );
 }

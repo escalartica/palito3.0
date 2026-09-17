@@ -606,12 +606,23 @@ class GamerFirestoreService {
   //
   // ==========================================================================
 
+  /// Guarda los puntos de un miembro en el marcador del grupo.
+  ///
+  /// [decisions] y [streak] son OPCIONALES a propósito. La mesa de La ruleta
+  /// la lleva un móvil, y ese móvil conoce los puntos de todos los que están
+  /// sentados —los va sumando él—, pero **no** cuántas decisiones ha tomado
+  /// cada uno en sus propias partidas. Escribir ahí el contador de esta mesa
+  /// le atribuiría a otra persona unas tiradas que no ha hecho, y encima
+  /// pisaría las suyas.
+  ///
+  /// Así que quien lleva la mesa manda los puntos de todos y su propio
+  /// contador de decisiones; el de los demás se queda como estaba.
   Future<void> updatePlayerStats({
     required String playerKey,
     required String uid,
     required int score,
-    required int decisions,
-    required int streak,
+    int? decisions,
+    int? streak,
     List<String> unlockedChallenges = const <String>[],
     String? displayName,
   }) async {
@@ -658,8 +669,11 @@ class GamerFirestoreService {
           'displayName':
               displayName ?? previousPlayer['displayName'] ?? 'Usuario',
           'gamerPoints': score,
-          'decisions': decisions,
-          'streak': streak,
+          // `?decisions` es la sintaxis de Dart para «si es nulo, esta
+          // entrada no existe»: deja intacto lo que ya hubiera en
+          // `previousPlayer` en vez de escribir un cero encima.
+          'decisions': ?decisions,
+          'streak': ?streak,
           'unlocked_challenges': unlockedChallenges,
           'last_updated': FieldValue.serverTimestamp(),
         };

@@ -35,8 +35,22 @@ class ProfileGroupsSection extends ConsumerWidget {
     final List<String> groupIds = ref.watch(userGroupIdsProvider);
     final int count = groupIds.length;
 
-    final String resumen = count <= 1
-        ? 'Ahora mismo solo tienes tu diario privado'
+    // ── LO QUE TIENES ARRIBA, LO QUE PUEDES HACER DEBAJO ──
+    //
+    // El rótulo del botón decía "Ver tus diarios y quién está en cada uno":
+    // once palabras que en un iPhone parten en dos líneas y dejan "uno"
+    // solo en la segunda. Y encima del botón había un párrafo explicando qué
+    // es un diario… que **ya está dentro de la hoja que abre este botón**, y
+    // mejor escrito ("cada diario guarda sus propios platos, su mapa y su
+    // ruleta"). Dos explicaciones de lo mismo en dos sitios, ya divergiendo:
+    // una habla de libretas y la otra de platos, mapa y ruleta.
+    //
+    // La explicación se queda donde se puede actuar sobre ella. Aquí el
+    // botón dice **lo que tienes** —que es el dato, y cambia— y debajo, en
+    // pequeño, lo que se hace ahí dentro. De siete líneas de prosa a tres.
+    final bool soloElTuyo = count <= 1;
+    final String tienes = soloElTuyo
+        ? 'Solo tienes tu diario privado'
         : (count == 2
               ? 'Tu diario y uno compartido'
               : 'Tu diario y ${count - 1} compartidos');
@@ -45,31 +59,20 @@ class ProfileGroupsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Tus diarios',
+          kSeccionTusDiarios,
           style: GoogleFonts.outfit(
             fontSize: 18,
             fontWeight: FontWeight.w900,
             color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Cada diario es una libreta aparte. Lo que guardas en uno no se ve '
-          'en los demás.',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            height: 1.35,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         NeoActionButton(
-          // El rótulo nombra las tres cosas que la gente viene a buscar. Un
-          // "Gestionar grupos" no dice ninguna de ellas.
-          label: 'Ver tus diarios y quién está en cada uno',
-          hint: '$resumen. Aquí también invitas, entras con un código o creas '
-              'uno nuevo.',
+          label: tienes,
+          hint: soloElTuyo
+              ? 'Crea uno compartido o entra con un código'
+              : 'Mira quién está en cada uno, invita, entra con un código '
+                    'o crea otro',
           icon: Icons.menu_book_rounded,
           background: AppColors.primary,
           onTap: () => openGroupSwitcher(context, ref),

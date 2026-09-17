@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/data/field_labels.dart';
 import '../../../core/data/memory_awards.dart';
 import '../../../core/models/memory_model.dart';
 import '../../../core/theme/components/app_motion.dart';
@@ -346,7 +347,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
   Widget _buildReturnMiniBadge(bool wouldReturn) {
     return AnimatedContainer(
-      duration: AppAnimation.slow,
+      duration: AppMotion.dur(context, AppAnimation.slow),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         // Tinte de `success` para "sí volvería"; el naranja de "no" no
@@ -467,7 +468,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
 
             return TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
-              duration: AppAnimation.stagger(index, stepMs: 55),
+              duration: AppMotion.dur(context, AppAnimation.stagger(index, stepMs: 55)),
               curve: AppAnimation.enter,
               builder: (context, value, child) {
                 return Opacity(
@@ -511,7 +512,10 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
           Expanded(
             flex: 4,
             child: Text(
-              key == 'otro_sabor' ? 'Sabor adicional' : _formatKey(key),
+              // 'otro_sabor' tenía aquí su propia excepción escrita a mano,
+              // que es lo que pasa cuando falta el sitio donde ponerlas
+              // todas. Ahora está en el mapa con las otras ochenta y una.
+              _formatKey(key),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -598,7 +602,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
     final bool wouldReturn = memory.wouldReturn;
 
     return AnimatedContainer(
-      duration: AppAnimation.slow,
+      duration: AppMotion.dur(context, AppAnimation.slow),
       curve: AppAnimation.enter,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -619,7 +623,7 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
       child: Row(
         children: [
           AnimatedSwitcher(
-            duration: AppAnimation.standard,
+            duration: AppMotion.dur(context, AppAnimation.standard),
             child: Container(
               key: ValueKey(wouldReturn),
               padding: const EdgeInsets.all(10),
@@ -789,10 +793,23 @@ class _MemoryDetailPageState extends ConsumerState<MemoryDetailPage>
   // UTILIDADES
   // ============================================================
 
+  /// Cómo se llama este campo cuando lo lees.
+  ///
+  /// Antes esto era la única fuente: `key.replaceAll('_', ' ')` y la primera
+  /// letra en mayúscula. O sea que la ficha enseñaba la clave de la base de
+  /// datos disfrazada —"Tecnica", "Coccion", "Harias por volver"— en vez de
+  /// la pregunta que la persona respondió. Ver `core/data/field_labels.dart`.
+  ///
+  /// El apaño se queda como RESPALDO, no como camino principal: si mañana
+  /// alguien añade un campo y se olvida de ponerle nombre, la fila sale con
+  /// un nombre feo, que es mejor que salir en blanco.
   String _formatKey(String key) {
     if (key.isEmpty) {
       return '';
     }
+
+    final String? etiqueta = kFieldLabels[key];
+    if (etiqueta != null) return etiqueta;
 
     final formatted = key.replaceAll('_', ' ');
 

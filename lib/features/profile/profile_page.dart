@@ -24,6 +24,8 @@ import '../../core/theme/components/app_dock.dart';
 import '../../core/theme/components/stats_ticker.dart';
 import '../../core/utils/relative_date.dart';
 import '../../core/theme/components/progress_track.dart';
+import '../../core/theme/components/app_motion.dart';
+import '../../core/theme/components/app_feedback.dart';
 
 // ─── Constantes de color ────────────────────────────────────────────────────
 const _kDark = AppColors.textPrimary;
@@ -40,10 +42,24 @@ const _kSlateBg = Color(0xFFE2E8F0);
 // vez, en vez de repetir el literal hexadecimal en cada sitio donde se usan
 // (antes `Color(0xFF10B981)` y `Colors.deepPurple` con dos fondos ligeramente
 // distintos aparecían sueltos en tres puntos del archivo).
-const _kPurple = Colors.deepPurple;
-const _kPurpleBg = Color(0xFFEDE7F6);
-const _kGreen = Color(0xFF10B981);
-const _kGreenBg = Color(0xFFD1FAE5);
+// ── LOS COLORES DE LAS PERSONAS SON LOS DE LA MARCA ──
+//
+// Aquí había `Colors.deepPurple` y un esmeralda `#10B981`, ninguno de los
+// dos de Palito —que es navy, amarillo y coral— y el morado era, además, el
+// color más saturado de toda la app, en una pantalla secundaria. El propio
+// proyecto ya lo había echado del panel de la ruleta por esa razón; había
+// sobrevivido aquí.
+//
+// Y había algo peor que el tono: **La ruleta reparte los colores de
+// comensal con otra paleta distinta** (ver `_kPlayerPalette`), así que la
+// misma persona salía morada en Perfil y navy en la mesa. Un color que
+// identifica a alguien no puede cambiar de pantalla a pantalla; si cambia,
+// deja de identificar.
+//
+// Ahora las dos listas son la misma: amarillo, coral, navy y el verde de
+// acierto de la app, que sí está medido (5,3:1 sobre blanco).
+const _kGreen = AppColors.success;
+const _kGreenBg = AppColors.tintSuccess;
 
 // ─── Modelo de pestaña de perfil ─────────────────────────────────────────────
 //
@@ -78,7 +94,7 @@ class _ProfileConfig {
 const List<(Color, Color, IconData)> _memberPalette = [
   (_kRed, _kRedBg, Icons.favorite_rounded),
   (_kYellow, _kYellowBg, Icons.person_rounded),
-  (_kPurple, _kPurpleBg, Icons.emoji_emotions_rounded),
+  (AppColors.textPrimary, _kSlateBg, Icons.emoji_emotions_rounded),
   (_kGreen, _kGreenBg, Icons.eco_rounded),
 ];
 
@@ -112,9 +128,27 @@ List<_ProfileConfig> _buildMemberTabs({
           name: uid == myUid
               ? (name?.isNotEmpty == true ? name! : 'Tú')
               : (name?.isNotEmpty == true ? name! : AuthService.unnamedMember),
+          // ── «TU CUENTA» NO DICE NADA; «ASÍ TE VEN» SÍ ──
+          //
+          // Compartiendo diario, tu nombre no es un ajuste tuyo: es lo que
+          // leen los demás cada vez que abren la lista de quién está
+          // dentro. Y hay gente que no lo sabe, porque nunca se lo hemos
+          // dicho.
+          //
+          // Importa más de lo que parece. La app arregló hace tiempo que
+          // los nombres nuevos salieran del prefijo del correo —con
+          // «Ocultar mi correo» eso daba cosas como `gdvcgp2gdt`—, pero
+          // quien ya tenía uno de esos **se lo quedó**: la puerta que pide
+          // el nombre solo salta si NO hay ninguno. Y ahí sigue, visible
+          // para todo su grupo, a un toque del lápiz que tiene al lado y
+          // que nadie tiene motivo para pulsar.
+          //
+          // Solo se dice cuando hay alguien más en el diario. En el diario
+          // personal no hay quien te vea, y prometer un público que no
+          // existe sería otra frase que no es verdad.
           subtitle: uid == myUid
-              ? 'Tu cuenta'
-              : (uid == createdBy ? 'Creó el grupo' : 'Miembro del grupo'),
+              ? (ordered.length > 1 ? 'Así te ven los demás' : 'Tu cuenta')
+              : (uid == createdBy ? 'Creó el diario' : 'Miembro del diario'),
           color: palette.$1,
           bgCard: palette.$2,
           icon: palette.$3,
@@ -129,8 +163,8 @@ List<_ProfileConfig> _buildMemberTabs({
         // "Team" en una app en español, colado entre nombres de personas como
         // si fuera una más. Y lo único que cambiaba al tocarlo eran dos
         // números, sin decirlo en ninguna parte.
-        name: 'Todo el grupo',
-        subtitle: 'Suma de todas las personas del grupo',
+        name: 'Todo el diario',
+        subtitle: 'Suma de todas las personas del diario',
         color: _kDark,
         bgCard: _kSlateBg,
         icon: Icons.groups_rounded,
@@ -314,6 +348,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       final String downloadUrl = await StorageImageService.uploadProfileImage(
         groupId: groupId,
         bytes: bytes,
+        // Tu cara es tuya, no de un diario concreto.
+        alsoInGroupIds: ref.read(userGroupIdsProvider),
       );
 
       if (!mounted) return;
@@ -330,13 +366,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     }
   }
 
-  void _snack(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
-  }
+  void _snack(String message) => AppFeedback.warning(context, message);
 
   // El antiguo botón "Guardar Cambios" no guardaba nada: solo vibraba y
   // mostraba "¡Cambios guardados con éxito!". La foto ya se sube sola al
@@ -402,24 +432,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
             groupIds: ref.read(userGroupIdsProvider),
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Nombre actualizado'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      AppFeedback.success(context, 'Nombre actualizado');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo guardar el nombre.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      AppFeedback.error(context, 'No se pudo guardar el nombre.');
     }
   }
 
@@ -465,9 +481,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       builder: (context) => AlertDialog(
         title: const Text('Eliminar tu cuenta'),
         content: const Text(
-          'Se eliminará tu cuenta y saldrás de todos tus grupos. Tu diario '
-          'personal y cualquier grupo en el que estés tú solo se borran por '
-          'completo. En los grupos donde quede más gente, el contenido '
+          'Se eliminará tu cuenta y saldrás de todos tus diarios. Tu diario '
+          'personal y cualquier diario en el que estés tú solo se borran por '
+          'completo. En los diarios donde quede más gente, el contenido '
           'compartido sigue ahí para ellos. Esta acción no se puede '
           'deshacer.',
         ),
@@ -584,7 +600,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     final bool isPersonalGroup = groupId != null && groupId == personalGroupId;
     final String scopeLabel = isPersonalGroup
         ? 'Mi diario'
-        : (groupName ?? 'este grupo');
+        : (groupName ?? 'este diario');
 
     final tabs = _buildMemberTabs(
       memberUids: memberUids,
@@ -738,15 +754,35 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     // seguidos. Una cajita con un número es un dato; la misma cifra en una
     // frase es un retrato. Con la cuenta a cero no hay retrato que hacer, y
     // la cinta no se dibuja.
+    //
+    // DOS COSAS QUE ESTABAN MAL, VISTAS EN EL SIMULADOR CON UNA CUENTA
+    // RECIÉN HECHA:
+    //
+    // 1. **Con un solo recuerdo no hay retrato.** El umbral era `total > 0`,
+    //    así que la cinta desfilaba diciendo "1 RECUERDO ◆ 1 CATEGORÍA".
+    //    Eso no es un retrato, es un inventario de una línea paseándose en
+    //    letras grandes por la parte más visible del perfil. El propio
+    //    comentario de aquí decía "con la cuenta a cero no hay retrato que
+    //    hacer" — la idea era correcta y el listón estaba demasiado bajo.
+    //    Tres recuerdos: a partir de ahí las cifras empiezan a decir algo de
+    //    quien las mira.
+    //
+    // 2. **"VOLVERÍAS AL 0 %"**. Literalmente cierto y, como titular, una
+    //    acusación: lo primero que lee alguien que acaba de empezar es que
+    //    no volvería a ningún sitio. Un cero no es un rasgo, es la ausencia
+    //    de datos todavía. Misma familia que el "PLATO ESTRELLA" sobre el
+    //    peor valorado y el "VA GANANDO" con cero puntos: cifras correctas
+    //    que afirman algo falso.
+    const int minParaRetrato = 3;
     final List<String> tickerItems = <String>[];
-    if (total > 0) {
-      tickerItems.add(total == 1 ? '1 recuerdo' : '$total recuerdos');
+    if (total >= minParaRetrato) {
+      tickerItems.add('$total recuerdos');
       if (avgRating != null) {
         // Coma decimal, que esto se lee en español.
         final String nota = avgRating.toStringAsFixed(1).replaceAll('.', ',');
         tickerItems.add('nota media $nota');
       }
-      if (returnPct != null) {
+      if (returnPct != null && returnPct.round() > 0) {
         tickerItems.add('volverías al ${returnPct.round()} %');
       }
       if (categoryCounts.isNotEmpty) {
@@ -848,7 +884,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                         children: [
                           _SectionTitle(
                             config.uid == null
-                                ? 'Puntos de todo el grupo'
+                                ? 'Puntos de todo el diario'
                                 : (isMyTab
                                       ? 'Tus puntos'
                                       : 'Puntos de ${config.name}'),
@@ -1010,7 +1046,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                       .toDouble(),
                                   valueBuilder: (v) => '${v.round()}',
                                   icon: Icons.category_rounded,
-                                  bgColor: _kPurpleBg,
+                                  bgColor: _kSlateBg,
                                 ),
                               ),
                             ],
@@ -1247,7 +1283,7 @@ class _ProfileTab extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: AnimatedContainer(
-          duration: AppAnimation.fast,
+          duration: AppMotion.dur(context, AppAnimation.fast),
           constraints: const BoxConstraints(minWidth: 92, minHeight: 48),
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
           alignment: Alignment.center,
@@ -1523,7 +1559,7 @@ class _GamerStatsRow extends StatelessWidget {
         child: _MetricCard(
           // "Racha" no era una racha.
           //
-          // El valor que llega aquí es `streak`, y Zona Gamer lo escribe en
+          // El valor que llega aquí es `streak`, y la ruleta lo escribe en
           // Firestore como `streak: _decisionsCount`: es el total de
           // decisiones de la sesión, sin ninguna noción de días seguidos ni
           // de nada encadenado. La palabra prometía una constancia que la
@@ -1614,7 +1650,7 @@ class _MetricCard extends StatelessWidget {
     }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: numericValue),
-      duration: AppAnimation.reveal,
+      duration: AppMotion.durFromPlatform(AppAnimation.reveal),
       curve: AppAnimation.enter,
       builder: (context, v, _) => Text(valueBuilder!(v), style: style),
     );
@@ -1647,14 +1683,22 @@ class _CategoryBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                category,
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: _kDark,
+              // El nombre de la categoría cede el sitio; la pastilla con la
+              // cifra, no. Sin esto la fila se desbordaba con el texto del
+              // sistema ampliado.
+              Expanded(
+                child: Text(
+                  category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: _kDark,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Transform.rotate(
                 angle: -0.05,
                 child: Container(
@@ -1835,7 +1879,7 @@ class _SectionTitle extends StatelessWidget {
 ///     app le decía "Tu diario está en blanco" y le invitaba a empezar de
 ///     cero. `MemoryNotifier` ya publicaba `hasStreamError` e
 ///     `isPermissionDenied` y esta pantalla no los leía — las estadísticas
-///     de Zona Gamer, dos bloques más arriba, sí lo hacen bien.
+///     de la ruleta, dos bloques más arriba, sí lo hacen bien.
 class _EmptyDiaryCard extends StatelessWidget {
   const _EmptyDiaryCard({
     this.personName,
@@ -1940,8 +1984,8 @@ class _EmptyDiaryCard extends StatelessWidget {
 
   String get _body {
     if (permissionDenied) {
-      return 'Puede que te hayan sacado del grupo, o que el diario ya no '
-          'exista. Prueba a elegir otro diario desde Inicio.';
+      return 'Puede que te hayan sacado de este diario, o que ya no exista. '
+          'Prueba a elegir otro desde Inicio.';
     }
     if (loadFailed) {
       return 'No es que esté vacío: es que no hemos podido leerlo. Comprueba '

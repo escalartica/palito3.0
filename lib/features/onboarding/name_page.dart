@@ -8,6 +8,7 @@ import '../../core/providers/household_provider.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/components/app_motion.dart';
 
 /// ===========================================================================
 /// ¿CÓMO TE LLAMAS?
@@ -105,7 +106,7 @@ class _NamePageState extends ConsumerState<NamePage> {
         top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: Column(
+          child: MotionColumn(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
@@ -118,8 +119,8 @@ class _NamePageState extends ConsumerState<NamePage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Es el nombre que verán las personas con las que compartas un '
-                'grupo. Puedes cambiarlo cuando quieras desde tu perfil.',
+                'Es el nombre que verán las personas con las que compartas '
+                'un diario. Puedes cambiarlo cuando quieras desde tu perfil.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   height: 1.45,

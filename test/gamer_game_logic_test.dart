@@ -6,7 +6,7 @@ import 'package:palito_3_0/features/gamer/gamer_game_logic.dart';
 
 void main() {
   group('GamerGameLogic.computeSpinOutcome', () {
-    test('modo 0 (Ruleta Pro) otorga 5 puntos, sin medalla ni reto', () {
+    test('modo 0 (Quién elige) otorga 5 puntos, sin medalla ni reto', () {
       final outcome = GamerGameLogic.computeSpinOutcome(
         selectedMode: 0,
         challenges: const ['reto único'],
@@ -20,7 +20,7 @@ void main() {
       expect(outcome.challenge, isNull);
     });
 
-    test('cualquier modo distinto de 0 (Juicio Picante) otorga 10 puntos, '
+    test('cualquier modo distinto de 0 (juicio picante) otorga 10 puntos, '
         'medalla, y elige un reto de la lista', () {
       final outcome = GamerGameLogic.computeSpinOutcome(
         selectedMode: 1,
@@ -31,11 +31,11 @@ void main() {
       expect(outcome.pointsAwarded, 10);
       expect(outcome.awardsMedal, isTrue);
       expect(outcome.eventDetail, 'Juicio Picante');
-      expect(outcome.historyDetail, '🔥 Juicio Picante asignado');
+      expect(outcome.historyDetail, '🔥 Le cae un juicio picante');
       expect(outcome.challenge, 'único reto disponible');
     });
 
-    test('el reto elegido en Juicio Picante siempre pertenece a la lista '
+    test('el reto elegido en el juicio picante siempre pertenece a la lista '
         'recibida', () {
       const challenges = ['a', 'b', 'c', 'd', 'e'];
       final random = Random(42);

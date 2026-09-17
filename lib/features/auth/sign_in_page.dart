@@ -7,6 +7,8 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/components/app_feedback.dart';
+import '../../core/theme/components/app_motion.dart';
 
 /// Pantalla de inicio de sesión — único método: Sign in with Apple. Se
 /// muestra cuando `GoRouter`'s `redirect` detecta que no hay sesión
@@ -27,16 +29,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
 
   void _copyPrivacyUrl() {
     Clipboard.setData(const ClipboardData(text: _privacyUrl));
-    HapticFeedback.selectionClick();
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Enlace copiado. Pégalo en tu navegador.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    // La háptica la dispara `AppFeedback`, en el mismo instante en que se
+    // pide el aviso. Aquí había otra justo antes: dos golpecitos seguidos
+    // para una sola acción se sienten como un fallo del móvil.
+    AppFeedback.success(context, 'Enlace copiado. Pégalo en tu navegador.');
   }
 
   Future<void> _handleSignIn() async {
@@ -159,7 +155,11 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               // simplemente se desplaza, sin perder nada.
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-                child: Column(
+                // La primera pantalla de la app entraba de una pieza, como
+                // un cartel que se enciende. Ahora se coloca de arriba abajo:
+                // logo, titular, explicación, botón. Es la primera impresión
+                // de Palito y era exactamente igual de estática que un PDF.
+                child: MotionColumn(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
@@ -281,7 +281,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         button: true,
                         label:
                             'Copiar la dirección de la política de privacidad',
-                        child: GestureDetector(
+                        child: PressScale(
                           onTap: _copyPrivacyUrl,
                           behavior: HitTestBehavior.opaque,
                           child: Padding(

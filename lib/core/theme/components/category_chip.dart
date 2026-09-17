@@ -92,15 +92,18 @@ class _CategoryChipState extends State<CategoryChip> {
                         color: AppColors.textPrimary.withValues(alpha: 0.22),
                         width: 1.5,
                       ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.textPrimary.withValues(
-                      alpha: widget.isSelected ? 0.12 : 0.03,
-                    ),
-                    blurRadius: widget.isSelected ? 6 : 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                // ── UN SOLO IDIOMA DE SOMBRA ──
+                //
+                // Esto era una sombra de Material: difuminada 4-6 px, recta
+                // hacia abajo y casi transparente. El resto de la app —65
+                // superficies— usa sombra maciza, sin difuminar, desplazada
+                // en diagonal (ver AppShadow). Dos idiomas en la misma
+                // frase, y encima en la fila de chips de Inicio y del mapa,
+                // que están a la vista en las dos pantallas más usadas.
+                //
+                // Sin difuminado la sombra se ve; con el 3 % de alfa que
+                // tenía sin seleccionar, no se veía nada en absoluto.
+                boxShadow: widget.isSelected ? AppShadow.sm : AppShadow.none,
               ),
               child: ExcludeSemantics(
                 child: Text(

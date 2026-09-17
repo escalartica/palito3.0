@@ -72,26 +72,37 @@ class RatingCard extends StatelessWidget {
               alignment: MainAxisAlignment.center,
             ),
           ),
-          const SizedBox(height: 10),
-          Center(
-            child: Text(
-              // Sin nota no hay veredicto que dar. `qualitativeLabel` de un
-              // recuerdo sin puntuar devolvía igualmente una etiqueta, y la
-              // tarjeta afirmaba una opinión que nadie había dado.
-              isRated
-                  ? RatingScale.qualitativeLabel(rating)
-                  : 'Este recuerdo se guardó sin nota',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: isRated
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
+          // ── LO MISMO, TRES VECES ──
+          //
+          // Sin nota, esta tarjeta lo decía tres veces seguidas: la pastilla
+          // ponía "Sin nota", las cinco estrellas salían apagadas, y debajo
+          // había una línea diciendo "Este recuerdo se guardó sin nota".
+          // Visto en el simulador sobre un recuerdo real.
+          //
+          // Repetir un dato no lo hace más claro: hace dudar de si son tres
+          // datos distintos. La pastilla lo nombra y las estrellas lo
+          // enseñan; con eso está dicho.
+          //
+          // La línea se queda SOLO cuando hay nota, que es cuando dice algo
+          // que no dicen ni la pastilla ni las estrellas: qué significa ese
+          // número. (Y no se pinta con un recuerdo sin puntuar porque
+          // `qualitativeLabel` devolvía una etiqueta igualmente, y la
+          // tarjeta afirmaba una opinión que nadie había dado.)
+          if (isRated) ...<Widget>[
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                RatingScale.qualitativeLabel(rating),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

@@ -6,6 +6,7 @@ import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../widgets/memory_text_field.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 class MenuFields implements DynamicFieldGenerator {
   @override
@@ -401,7 +402,7 @@ class MenuFields implements DynamicFieldGenerator {
             const SizedBox(height: 10),
 
             AnimatedSwitcher(
-              duration: AppAnimation.standard,
+              duration: AppMotion.durFromPlatform(AppAnimation.standard),
               switchInCurve: AppAnimation.enter,
               switchOutCurve: AppAnimation.exit,
               transitionBuilder: (child, animation) {
@@ -538,11 +539,20 @@ class _AnimatedFieldEntryState extends State<_AnimatedFieldEntry>
       end: Offset.zero,
     ).animate(curve);
 
+    // Si se ha pedido menos movimiento, el campo aparece ya colocado: el
+    // cambio sigue ocurriendo, solo que sin recorrido. Se decide en
+    // `didChangeDependencies`, que es donde ya existe el `MediaQuery`.
     Future.delayed(AppAnimation.stagger(widget.index, base: Duration.zero, stepMs: 50), () {
-      if (mounted) {
+      if (mounted && _controller.value == 0) {
         _controller.forward();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) _controller.value = 1.0;
   }
 
   @override

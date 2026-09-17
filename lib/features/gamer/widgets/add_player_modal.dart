@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/data/field_limits.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 
@@ -46,7 +47,7 @@ class AddPlayerModal extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Nuevo Comensal',
+              'Nuevo comensal',
               style: GoogleFonts.outfit(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -64,6 +65,18 @@ class AddPlayerModal extends StatelessWidget {
         TextField(
           controller: controller,
           autofocus: true,
+          // Este nombre se canta a 34 puntos en el escenario de la ruleta y
+          // se mete en una ficha de 74. Los dos sitios saben recortar, pero
+          // un nombre recortado no sirve para saber a quién le toca: mejor
+          // que no quepa escribirlo.
+          maxLength: FieldLimits.nombreComensal,
+          buildCounter:
+              (
+                BuildContext context, {
+                required int currentLength,
+                required bool isFocused,
+                required int? maxLength,
+              }) => null,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             hintText: 'Nombre del amigo o familiar…',
@@ -91,7 +104,7 @@ class AddPlayerModal extends StatelessWidget {
             ),
             onPressed: onAdd,
             child: Text(
-              'Añadir a la Mesa',
+              'Añadir a la mesa',
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,

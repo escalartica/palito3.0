@@ -3,13 +3,16 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/providers/memory_map_provider.dart';
+import '../../core/providers/memory_provider.dart';
 import '../../../../../core/models/memory_model.dart';
 import 'services/memory_geocoding_service.dart';
 import 'map_fit.dart';
@@ -23,6 +26,8 @@ import '../../core/theme/tokens/app_animation.dart';
 import '../../core/theme/components/app_dock.dart';
 import '../../core/theme/components/neo_pressable.dart';
 import '../../core/theme/components/category_chip.dart';
+import '../../core/theme/components/app_feedback.dart';
+import '../../core/theme/components/app_motion.dart';
 
 /// Paleta de categorías de los marcadores del mapa.
 ///
@@ -104,6 +109,34 @@ class _MapPageState extends ConsumerState<MapPage>
   static const double _aroundMeZoom = 10.5;
 
   static const Duration _cameraAnimationDuration = AppAnimation.camera;
+
+  /// Cuánto se espera, después del vuelo de la cámara, antes de volver a
+  /// permitir un reajuste automático.
+  ///
+  /// SE DERIVA DEL VUELO, NO SE ESCRIBE A MANO. Aquí había un `900` suelto
+  /// con el comentario "el margen evita que la cámara vuelva a intentar
+  /// ajustarse mientras la animación todavía está terminando". O sea que ese
+  /// 900 era el vuelo (750) más un margen (150), calculado a mano en otro
+  /// sitio del fichero.
+  ///
+  /// El día que alguien toque `AppAnimation.camera` —para que el mapa vuele
+  /// más rápido, por ejemplo— este número se queda como está y el fallo no
+  /// lo caza nadie: si el vuelo se alarga, el bloqueo se suelta a media
+  /// animación y la cámara se pelea consigo misma; si se acorta, el mapa se
+  /// queda bloqueado más tiempo del necesario. Los dos son de los que se
+  /// notan y no se saben explicar.
+  ///
+  /// `final` y no `const`: sumar dos `Duration` no es una expresión
+  /// constante en Dart —en `const` solo valen los operadores sobre `num` y
+  /// `String`— así que esto se calcula al arrancar. Es el precio de que el
+  /// número salga del vuelo de la cámara en vez de estar escrito a mano, y
+  /// merece la pena: un `static final` se evalúa una vez en la vida del
+  /// proceso.
+  static final Duration _cameraSettleDelay =
+      _cameraAnimationDuration + const Duration(milliseconds: 150);
+
+  /// Margen para decidir que el dedo ha terminado de manejar el mapa.
+  static const Duration _gestureSettleDelay = Duration(milliseconds: 350);
 
   static const Duration _spiderfyAnimationDuration = Duration(
     milliseconds: 280,
@@ -649,7 +682,7 @@ class _MapPageState extends ConsumerState<MapPage>
   /// El margen evita que la cámara vuelva a intentar ajustarse
   /// mientras la animación todavía está terminando.
   void _releaseCameraFitLock() {
-    Future.delayed(const Duration(milliseconds: 900), () {
+    Future.delayed(_cameraSettleDelay, () {
       if (!_isDisposed && mounted) {
         _isFittingCamera = false;
       }
@@ -835,17 +868,12 @@ class _MapPageState extends ConsumerState<MapPage>
   void _showLocationMessage(String message, {VoidCallback? onSettings}) {
     if (_isDisposed || !mounted) return;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          action: onSettings == null
-              ? null
-              : SnackBarAction(label: 'Ajustes', onPressed: onSettings),
-        ),
-      );
+    AppFeedback.warning(
+      context,
+      message,
+      actionLabel: onSettings == null ? null : 'Ajustes',
+      onAction: onSettings,
+    );
   }
 
   // ============================================================
@@ -903,7 +931,25 @@ class _MapPageState extends ConsumerState<MapPage>
     return Scaffold(
       body: memoryModelsAsync.when(
         loading: () {
-          return const Center(child: CircularProgressIndicator());
+          // El indicador ya no es amarillo sobre blanco (ver
+          // `progressIndicatorTheme` en app_theme.dart), pero seguía sin
+          // decir qué se está cargando: en una pantalla que es un mapa
+          // entero, un círculo girando en el centro puede ser el mapa, los
+          // permisos o tu posición.
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                SizedBox(height: 14),
+                Text('Colocando tus recuerdos en el mapa…'),
+              ],
+            ),
+          );
         },
         error: (error, stack) {
           _log('❌ ERROR STREAM MEMORY MODELS: $error');
@@ -919,6 +965,26 @@ class _MapPageState extends ConsumerState<MapPage>
           //
           // Inicio ya resolvía bien este mismo caso; el Mapa se quedó sin
           // hacer.
+          //
+          // ══ Y SE QUEDÓ A MEDIAS ══
+          //
+          // Se arregló el texto ilegible, pero no la parte que importa: el
+          // Mapa seguía diciendo «suele ser la conexión» pasara lo que
+          // pasara. Y `permission-denied` NO es la conexión: significa una
+          // sola cosa, que ya no eres miembro del diario que estás mirando
+          // —te han quitado, o se ha borrado—.
+          //
+          // Decirle «suele ser la conexión» a quien acaban de sacar de un
+          // diario es mandarle a mirar el wifi, y ofrecerle «Volver a
+          // intentarlo» es mandarle a un botón que va a fallar siempre.
+          // Inicio distingue los dos casos y ofrece una salida de verdad;
+          // aquí faltaba.
+          //
+          // Solo se nota con más de una persona en el diario, que es
+          // precisamente el caso que menos se prueba.
+          final bool sinPermiso =
+              error is FirebaseException && error.code == 'permission-denied';
+
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -932,7 +998,9 @@ class _MapPageState extends ConsumerState<MapPage>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No hemos podido cargar el mapa',
+                    sinPermiso
+                        ? 'Este diario ya no es tuyo'
+                        : 'No hemos podido cargar el mapa',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 18,
@@ -942,8 +1010,12 @@ class _MapPageState extends ConsumerState<MapPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Suele ser la conexión. Tus recuerdos siguen guardados: '
-                    'no se ha perdido nada.',
+                    sinPermiso
+                        ? 'Puede que alguien te haya quitado de él, o que se '
+                              'haya borrado. Tu diario personal sigue '
+                              'intacto.'
+                        : 'Suele ser la conexión. Tus recuerdos siguen '
+                              'guardados: no se ha perdido nada.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 14,
@@ -952,12 +1024,19 @@ class _MapPageState extends ConsumerState<MapPage>
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // Reintentar solo sirve cuando hay algo que reintentar.
+                  // Sin permiso, el botón que hace falta es el que te saca
+                  // de aquí — el mismo que ofrece Inicio.
                   NeoActionButton(
-                    label: 'Volver a intentarlo',
-                    icon: Icons.refresh_rounded,
+                    label: sinPermiso ? 'Ir a mi diario' : 'Volver a intentarlo',
+                    icon: sinPermiso
+                        ? Icons.menu_book_rounded
+                        : Icons.refresh_rounded,
                     background: AppColors.primary,
                     expand: false,
-                    onTap: () => ref.invalidate(memoryModelsStreamProvider),
+                    onTap: sinPermiso
+                        ? () => switchActiveGroup(ref, null)
+                        : () => ref.invalidate(memoryModelsStreamProvider),
                   ),
                 ],
               ),
@@ -1170,7 +1249,14 @@ class _MapPageState extends ConsumerState<MapPage>
                   },
 
                   onPointerUp: (event, point) {
-                    Future.delayed(const Duration(milliseconds: 350), () {
+                    // No es la duración de ninguna animación: es el margen
+                    // que se le da a un dedo para saber si ha terminado de
+                    // manejar el mapa o solo ha levantado el dedo entre dos
+                    // arrastres. Por eso NO sale de `AppAnimation` — atarlo
+                    // a una duración de motion sería un acoplamiento falso,
+                    // y cambiar el ritmo de las animaciones cambiaría cuándo
+                    // el mapa cree que has soltado.
+                    Future.delayed(_gestureSettleDelay, () {
                       if (!_isDisposed && mounted) {
                         _isUserInteractingWithMap = false;
                       }
@@ -1231,7 +1317,7 @@ class _MapPageState extends ConsumerState<MapPage>
                       // que estás dentro de algo, y no lo estás — el dock ya
                       // te lleva a donde quieras con un toque.
                       //
-                      // Perfil y Zona Gamer ya la tenían quitada; el Mapa se
+                      // Perfil y la ruleta ya la tenían quitada; el Mapa se
                       // quedó sin igualar. Además hacía `context.go('/')`,
                       // que es exactamente lo que hace el botón de Inicio
                       // del dock, treinta píxeles más abajo.
@@ -1415,16 +1501,19 @@ class _MapPageState extends ConsumerState<MapPage>
                             horizontal: 16,
                             vertical: 12,
                           ),
+                          // Era blanca, sin borde y con una sombra negra
+                          // difuminada de 12 px: la única pastilla de la app
+                          // que no hablaba su idioma. Flotando sobre un mapa
+                          // de colores, además, una sombra suave no la separa
+                          // del fondo — el borde sí.
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(AppRadius.lg),
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                            border: Border.all(
+                              color: AppColors.textPrimary,
+                              width: AppBorder.thin,
+                            ),
+                            boxShadow: AppShadow.sm,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1536,6 +1625,84 @@ class _MapPageState extends ConsumerState<MapPage>
                   child: const Icon(Icons.my_location_rounded, size: 24),
                 ),
               ),
+
+              // ==================================================
+              // EL DIARIO ESTÁ VACÍO
+              // ==================================================
+              //
+              // ESTA PANTALLA ERA LA ÚNICA DE LAS CUATRO SIN ESTADO VACÍO.
+              //
+              // Inicio, Perfil y la ruleta explican para qué sirven
+              // justo cuando no tienen nada que enseñar: "apunta un sitio al
+              // que hayas ido…", "apunta el primer plato y esta pantalla se
+              // escribe sola…", "con dos ya se puede jugar". El Mapa no
+              // decía nada: quien entraba sin recuerdos veía **un mapa del
+              // mundo vacío**, centrado en un sitio en el que no ha estado,
+              // sin una sola palabra.
+              //
+              // Y el estado vacío es el mejor momento que tiene una app para
+              // explicarse: es el único en el que no hay nada compitiendo
+              // por la atención, la persona está mirando justo esa pestaña,
+              // y lo que hace falta decirle es exactamente lo que necesita
+              // para llenarla. Cuando hay contenido, desaparece solo — sin
+              // ocupar sitio para siempre, que es lo que pasa con un aviso
+              // de "primera vez".
+              if (allMemories.isEmpty)
+                Positioned.fill(
+                  child: ColoredBox(
+                    // Tapa el mapa entero: un mapa de fondo detrás de un
+                    // texto no es decoración, es ruido sobre el que hay que
+                    // leer.
+                    color: AppColors.background,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(32, 0, 32, 80),
+                        child: MotionColumn(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.map_outlined,
+                              size: 46,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              'Tu mapa está en blanco',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.4,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Cada recuerdo que apuntes con un sitio se '
+                              'coloca aquí. Con unos cuantos vas viendo por '
+                              'dónde comes de verdad — y dónde no has vuelto '
+                              'nunca.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                height: 1.5,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            NeoActionButton(
+                              label: 'Apuntar tu primer recuerdo',
+                              icon: Icons.add_rounded,
+                              background: AppColors.primary,
+                              expand: false,
+                              onTap: () => context.push('/new-memory'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../zona_gamer_card.dart';
+import '../../../core/theme/components/app_motion.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 
@@ -8,7 +10,7 @@ import '../../../core/theme/tokens/app_shape.dart';
 /// CÓMO SE JUEGA
 /// ===========================================================================
 ///
-/// Las reglas de Zona Gamer, enteras y a mano en cualquier momento.
+/// Las reglas de la ruleta, enteras y a mano en cualquier momento.
 ///
 /// POR QUÉ HACÍA FALTA. La explicación existía —la tarjeta "¿Quién elige
 /// hoy?"— pero **se autodestruía**: sale solo hasta la primera tirada y se
@@ -56,7 +58,11 @@ class _HowToPlaySheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SingleChildScrollView(
-        child: Column(
+        // `MotionColumn` y no `Column`: las seis reglas se colocan de arriba
+        // abajo en vez de encenderse las seis a la vez. En una hoja que son
+        // seis bloques de texto seguidos, eso es la diferencia entre "aquí
+        // hay un muro" y "esto se lee por orden".
+        child: MotionColumn(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -81,8 +87,8 @@ class _HowToPlaySheet extends StatelessWidget {
               ],
             ),
             Text(
-              'Zona Gamer es para decidir sin discutir. Sentáis a la mesa a '
-              'quien esté, giráis, y la ruleta decide por vosotros.',
+              'Para decidir sin discutir. Sentáis a la mesa a quien esté, '
+              'giráis, y la ruleta decide por vosotros.',
               style: GoogleFonts.inter(
                 fontSize: 13.5,
                 height: 1.5,
@@ -104,7 +110,7 @@ class _HowToPlaySheet extends StatelessWidget {
 
             const _Rule(
               icon: Icons.casino_rounded,
-              title: 'Ruleta',
+              title: 'Quién elige',
               lines: <String>[
                 'Señala a quién le toca elegir el plato.',
                 'Quien salga se lleva 5 puntos.',
@@ -115,8 +121,9 @@ class _HowToPlaySheet extends StatelessWidget {
               icon: Icons.local_fire_department_rounded,
               title: 'Juicio picante',
               lines: <String>[
-                'Al señalado le cae un reto al azar.',
-                'Vale 10 puntos y una medalla.',
+                'Al señalado le cae un reto al azar. Solo por salir ya son '
+                    '10 puntos y una medalla.',
+                'Si lo cumple, 15 puntos más y otra medalla.',
                 'Toca la tarjeta del reto para decir si lo cumplió.',
               ],
             ),
@@ -146,7 +153,7 @@ class _HowToPlaySheet extends StatelessWidget {
               icon: Icons.restart_alt_rounded,
               title: 'Empezar de cero',
               lines: <String>[
-                'En «Resumen de la partida» puedes poner los puntos a cero '
+                'En «$kResumenDeLaPartida» puedes poner los puntos a cero '
                     'sin perder los logros que ya hayáis conseguido.',
               ],
               isLast: true,

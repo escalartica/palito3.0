@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/cloudinary_config.dart';
+import '../utils/app_log.dart';
 
 /// Sube fotos a Cloudinary (gratis, sin tarjeta) en vez de al almacenamiento
 /// local del dispositivo, para que sean visibles en todos los móviles del
@@ -106,15 +107,33 @@ class StorageImageService {
     return _uploadToCloudinary(bytes, fileName);
   }
 
-  /// Sube TU foto de perfil y guarda su URL en `groups/{groupId}`, campo
-  /// `profileImages`, indexado por uid.
+  /// Sube TU foto de perfil y guarda su URL en el campo `profileImages` de
+  /// **todos** tus diarios, indexada por uid.
   ///
   /// El uid ya no se recibe por parámetro: se toma siempre de la sesión. Con
   /// el parámetro, bastaba con llamar al servicio con el uid de otra persona
   /// para cambiarle la foto de perfil a todo el grupo.
+  ///
+  /// ══ POR QUÉ A TODOS Y NO SOLO AL QUE TIENES ABIERTO ══
+  ///
+  /// Esto escribía en UN grupo: el activo cuando tocaste la foto. Así que tu
+  /// cara aparecía en ese diario y en ninguno más — en los otros seguías
+  /// siendo un icono gris, para siempre, salvo que se te ocurriera cambiar
+  /// de diario y volver a subir la misma foto.
+  ///
+  /// El nombre nunca tuvo ese problema: `syncDisplayNameInGroups` recorre
+  /// todos tus grupos desde el principio. La foto se quedó a medio camino, y
+  /// **no se notaba** porque la lista de miembros pintaba una silueta gris
+  /// para todo el mundo: con todos iguales, nadie echaba en falta una cara.
+  /// Apareció en cuanto esa lista empezó a enseñar fotos.
+  ///
+  /// Cada grupo va en su propio `try`: que te hayan quitado de uno —o que ya
+  /// no exista— no puede impedir que tu foto llegue a los demás. Es el mismo
+  /// criterio que usa el nombre.
   static Future<String> uploadProfileImage({
     required String groupId,
     required Uint8List bytes,
+    List<String> alsoInGroupIds = const <String>[],
   }) async {
     final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -124,15 +143,36 @@ class StorageImageService {
 
     final String url = await _uploadToCloudinary(bytes, 'profile_$uid.jpg');
 
-    await FirebaseFirestore.instance.collection('groups').doc(groupId).set(
+    // El diario que tienes delante, primero y esperando: es donde vas a
+    // mirar si ha funcionado.
+    await _writeProfileImage(groupId: groupId, uid: uid, url: url);
+
+    for (final String otro in alsoInGroupIds) {
+      if (otro == groupId) continue;
+      try {
+        await _writeProfileImage(groupId: otro, uid: uid, url: url);
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied' && e.code != 'not-found') {
+          AppLog.w('No se pudo poner la foto en un diario: ${e.code}');
+        }
+      }
+    }
+
+    return url;
+  }
+
+  static Future<void> _writeProfileImage({
+    required String groupId,
+    required String uid,
+    required String url,
+  }) {
+    return FirebaseFirestore.instance.collection('groups').doc(groupId).set(
       <String, dynamic>{
         'profileImages': <String, dynamic>{uid: url},
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
     );
-
-    return url;
   }
 
   /// Devuelve la URL de la foto de perfil de [uid] si existe.

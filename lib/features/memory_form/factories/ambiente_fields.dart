@@ -6,6 +6,7 @@ import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../widgets/memory_text_field.dart';
+import '../../../core/theme/components/app_motion.dart';
 
 class AmbienteFields implements DynamicFieldGenerator {
   @override
@@ -50,7 +51,7 @@ class AmbienteFields implements DynamicFieldGenerator {
 
       // Campo dinámico que aparece al seleccionar "Otra"
       AnimatedSwitcher(
-        duration: AppAnimation.standard,
+        duration: AppMotion.durFromPlatform(AppAnimation.standard),
         transitionBuilder: (child, animation) {
           return SizeTransition(
             sizeFactor: animation,
@@ -316,7 +317,7 @@ class AmbienteFields implements DynamicFieldGenerator {
                     },
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                     child: AnimatedContainer(
-                      duration: AppAnimation.fast,
+                      duration: AppMotion.durFromPlatform(AppAnimation.fast),
                       margin: const EdgeInsets.symmetric(vertical: 2),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,

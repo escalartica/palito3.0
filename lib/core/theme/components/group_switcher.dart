@@ -5,14 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../data/field_limits.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/household_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_log.dart';
 import '../tokens/app_colors.dart';
 import '../tokens/app_shape.dart';
+import 'app_motion.dart';
 import 'marker_highlight.dart';
+import 'smart_image.dart';
 import '../../providers/memory_provider.dart';
+import 'app_feedback.dart';
 
 /// Selector del grupo activo: qué grupo se está viendo/usando ahora mismo en
 /// Inicio/Mapa/Gamer/Perfil. Un toque abre la lista de todos los grupos del
@@ -32,6 +36,30 @@ import '../../providers/memory_provider.dart';
 ///
 /// Ahora el nombre del diario ES el titular, con su galón y su flecha, y
 /// debajo dice quién lo ve.
+/// ===========================================================================
+/// LAS DOS ETIQUETAS QUE EL INVITADO TIENE QUE ENCONTRAR
+/// ===========================================================================
+///
+/// Son constantes y no literales sueltos por una razón concreta: el mensaje
+/// que se copia al invitar («abre la app, ve a Perfil, toca…») NOMBRA ESTOS
+/// DOS RÓTULOS. Si alguien los renombra aquí y no allí, el invitado se queda
+/// buscando en el Perfil un botón que ya no se llama así — y ese mensaje es
+/// justo el que se pega en un grupo de WhatsApp, o sea el texto de la app
+/// que más gente lee y el único que nadie vuelve a mirar.
+///
+/// Ya pasó: el rótulo del Perfil se mejoró, el mensaje de invitación se
+/// quedó con el viejo, y durante semanas mandó a la gente a tocar «Ver tus
+/// diarios y quién está en cada uno», que no existe. Un comentario pidiendo
+/// «cuidado, cámbialo en los dos sitios» no lo evitó. Esto sí.
+const String kEntrarConCodigo = 'Entrar con un código';
+
+/// El titular de la sección del Perfil. El rótulo del botón que hay debajo
+/// NO sirve para dar indicaciones: cambia según cuántos diarios tengas
+/// («Solo tienes tu diario privado», «Tu diario y 3 compartidos»), así que
+/// quien acaba de instalar la app nunca ve el mismo texto que quien la
+/// lleva usando un mes.
+const String kSeccionTusDiarios = 'Tus diarios';
+
 class GroupSwitcher extends ConsumerWidget {
   const GroupSwitcher({super.key});
 
@@ -51,13 +79,13 @@ class GroupSwitcher extends ConsumerWidget {
     // Antes, un error del stream se mostraba como "Cargando…" para siempre.
     final String label;
     if (activeGroupAsync.hasError) {
-      label = 'Sin grupo';
+      label = 'Sin diario';
     } else if (activeGroupAsync.isLoading && !activeGroupAsync.hasValue) {
       label = 'Cargando…';
     } else if (isPersonal) {
       label = 'Mi diario';
     } else {
-      label = (activeGroupAsync.valueOrNull?['name'] as String?) ?? 'Grupo';
+      label = (activeGroupAsync.valueOrNull?['name'] as String?) ?? 'Diario';
     }
 
     final String subtitle;
@@ -378,21 +406,35 @@ Future<void> openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                   // el usuario no tenía forma de saberlo antes de pulsar.
                   const _SheetLabel('Cambiar a'),
                   const SizedBox(height: 4),
-                  for (final DocumentSnapshot<Map<String, dynamic>> snap
-                      in others)
-                    _GroupTile(
-                      name: nameOf(snap),
-                      memberCount:
-                          (snap.data()?['members'] as List<dynamic>?)?.length ??
-                          1,
-                      isPersonal:
-                          snap.id == personalGroupId ||
-                          snap.data()?['isPersonal'] == true,
-                      onTap: () {
-                        switchActiveGroup(ref, snap.id);
-                        Navigator.pop(sheetContext);
-                      },
-                      onManage: () => openPeople(snap),
+                  // ── LA LISTA SE FORMA, NO APARECE DE UNA PIEZA ──
+                  //
+                  // Esta hoja es la única de la app donde se ve QUÉ diarios
+                  // tienes, y aparecía entera de golpe, como un cartel que se
+                  // enciende. Con el escalón, la lista se lee como una lista:
+                  // el ojo la recorre de arriba abajo en el mismo orden en
+                  // que va a tener que elegir.
+                  //
+                  // Son cinco o seis filas, no doscientas, así que cada una
+                  // puede traerse su propio reloj (ver MotionItem).
+                  for (final MapEntry<int, DocumentSnapshot<Map<String, dynamic>>> entrada
+                      in others.asMap().entries)
+                    MotionItem(
+                      index: entrada.key,
+                      child: _GroupTile(
+                        name: nameOf(entrada.value),
+                        memberCount:
+                            (entrada.value.data()?['members'] as List<dynamic>?)
+                                ?.length ??
+                            1,
+                        isPersonal:
+                            entrada.value.id == personalGroupId ||
+                            entrada.value.data()?['isPersonal'] == true,
+                        onTap: () {
+                          switchActiveGroup(ref, entrada.value.id);
+                          Navigator.pop(sheetContext);
+                        },
+                        onManage: () => openPeople(entrada.value),
+                      ),
                     ),
                 ],
                 const SizedBox(height: 22),
@@ -410,7 +452,7 @@ Future<void> openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                 const SizedBox(height: 8),
                 _ActionTile(
                   icon: Icons.login_rounded,
-                  title: 'Entrar con un código',
+                  title: kEntrarConCodigo,
                   subtitle: 'Si alguien te ha pasado uno para entrar en su diario',
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -454,7 +496,7 @@ Future<void> openGroupMembersSheet(
     ),
     builder: (BuildContext sheetContext) => _MembersSheet(
       groupId: groupId,
-      groupName: (groupData['name'] as String?) ?? 'Grupo',
+      groupName: (groupData['name'] as String?) ?? 'Diario',
       isPersonal: groupData['isPersonal'] == true,
       createdBy: groupData['createdBy'] as String?,
       initialMembers:
@@ -466,8 +508,82 @@ Future<void> openGroupMembersSheet(
           (groupData['memberProfiles'] as Map<dynamic, dynamic>?)
               ?.cast<String, dynamic>() ??
           const <String, dynamic>{},
+      // Las fotos ya venían en este mismo documento y esta hoja las
+      // ignoraba: enseñaba tres iconos grises idénticos donde hay tres
+      // personas distintas. Es la pantalla de «quién está aquí» — no
+      // reconocer a nadie en ella es justo lo contrario de lo que promete.
+      profileImages:
+          (groupData['profileImages'] as Map<dynamic, dynamic>?)
+              ?.map(
+                (dynamic k, dynamic v) =>
+                    MapEntry<String, String>(k.toString(), v.toString()),
+              ) ??
+          const <String, String>{},
     ),
   );
+}
+
+/// La cara de un miembro en la lista de «quién está aquí».
+///
+/// Enseñaba un icono gris para todo el mundo, aunque las fotos estuvieran
+/// ahí mismo, en el documento del grupo que la hoja ya lee. Tres personas
+/// distintas se veían como tres siluetas iguales.
+///
+/// Sin foto no se pinta la silueta: se pinta **la inicial**. Una silueta no
+/// distingue a nadie; una letra sí, y además dice quién es sin leer el
+/// nombre. Es lo que hacen Mensajes y Contactos cuando no hay foto.
+class _CaraDeMiembro extends StatelessWidget {
+  const _CaraDeMiembro({required this.url, required this.nombre});
+
+  final String? url;
+  final String nombre;
+
+  static const double _lado = 32;
+
+  @override
+  Widget build(BuildContext context) {
+    final String limpio = nombre.trim();
+    // `runes.first` y no `substring(0, 1)`: un nombre que empiece por emoji
+    // o por una letra fuera del plano básico ocupa dos unidades UTF-16, y
+    // cortar por la primera devuelve media letra —un rombo con un
+    // interrogante—.
+    final String inicial = limpio.isEmpty
+        ? '?'
+        : String.fromCharCode(limpio.runes.first).toUpperCase();
+
+    return Container(
+      width: _lado,
+      height: _lado,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.tintPrimary,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: AppColors.textPrimary,
+          width: AppBorder.thin,
+        ),
+      ),
+      child: (url == null || url!.isEmpty)
+          ? Text(
+              inicial,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+              ),
+            )
+          // `width` en dp: `SmartImage` lo multiplica por la densidad real y
+          // le pide a Cloudinary una versión de ese tamaño, en vez de bajar
+          // la foto de cámara entera para pintarla a 32 puntos.
+          : SmartImage(
+              imagePath: url,
+              width: _lado.round(),
+              fit: BoxFit.cover,
+              semanticLabel: 'Foto de $limpio',
+            ),
+    );
+  }
 }
 
 /// Lista de miembros de un grupo con acciones de salir/expulsar. Es
@@ -481,6 +597,7 @@ class _MembersSheet extends ConsumerStatefulWidget {
     required this.createdBy,
     required this.initialMembers,
     required this.memberProfiles,
+    required this.profileImages,
   });
 
   final String groupId;
@@ -489,6 +606,10 @@ class _MembersSheet extends ConsumerStatefulWidget {
   final String? createdBy;
   final List<String> initialMembers;
   final Map<String, dynamic> memberProfiles;
+
+  /// Foto de perfil de cada miembro, por uid. Sale del mismo documento del
+  /// grupo, así que no cuesta ni una lectura más.
+  final Map<String, String> profileImages;
 
   @override
   ConsumerState<_MembersSheet> createState() => _MembersSheetState();
@@ -526,7 +647,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 60,
+          maxLength: FieldLimits.nombreDiario,
           textCapitalization: TextCapitalization.sentences,
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
@@ -644,7 +765,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
       AppLog.w('Acción sobre miembros fallida: ${e.code}');
       _showError(
         e.code == 'permission-denied'
-            ? 'No tienes permiso para hacer eso en este grupo.'
+            ? 'No tienes permiso para hacer eso en este diario.'
             : 'No se pudo completar la acción. Comprueba tu conexión.',
       );
     } catch (e, st) {
@@ -657,11 +778,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
+    AppFeedback.error(context, message);
   }
 
   @override
@@ -701,14 +818,22 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
               ),
             ),
             const SizedBox(height: 4),
+            // Lo que dice esta línea depende de lo que se pueda hacer aquí
+            // de verdad. El caso de estar solo no lo cubría ninguna de las
+            // tres frases: decía "puedes quitar a quien ya no deba estar"
+            // en un diario donde no hay nadie a quien quitar, y se callaba
+            // lo único que sí se puede hacer, que es eliminarlo.
             Text(
               widget.isPersonal
                   ? 'Tu diario personal es solo tuyo: no se puede compartir '
                         'ni invitar a nadie.'
+                  : _members.length == 1 && _members.first == myUid
+                  ? 'Estás tú solo en este diario. Puedes invitar a alguien '
+                        'con un código, cambiarle el nombre o eliminarlo.'
                   : canModerate
                   ? 'Puedes invitar a más gente o quitar a quien ya no '
                         'deba estar.'
-                  : 'Solo quien creó el grupo puede quitar a otras '
+                  : 'Solo quien creó el diario puede quitar a otras '
                         'personas.',
               style: GoogleFonts.inter(
                 fontSize: 13,
@@ -738,14 +863,15 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                     final String name = _nameFor(uid);
                     final bool isMe = uid == myUid;
 
-                    return Padding(
+                    return MotionItem(
+                      index: index,
+                      child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: <Widget>[
-                          const Icon(
-                            Icons.person_rounded,
-                            size: 20,
-                            color: AppColors.textSecondary,
+                          _CaraDeMiembro(
+                            url: widget.profileImages[uid],
+                            nombre: name,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -764,7 +890,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                                 ),
                                 if (uid == widget.createdBy)
                                   Text(
-                                    'Creó el grupo',
+                                    'Creó el diario',
                                     style: GoogleFonts.inter(
                                       fontSize: 11,
                                       color: AppColors.textSecondary,
@@ -779,26 +905,62 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
+                          // ══ SALIR Y BORRAR NO SON LO MISMO ══
+                          //
+                          // Y la app llamaba "Salir" a las dos cosas.
+                          //
+                          // `leaveGroup` borra el diario entero cuando quien
+                          // se va es el último que queda —tiene que hacerlo:
+                          // un diario sin miembros no lo puede leer, borrar
+                          // ni reclamar nadie—. Pero el botón decía "Salir" y
+                          // el aviso remataba con «Podrás volver a unirte si
+                          // alguien te invita de nuevo», que en ese caso es
+                          // **exactamente lo contrario de lo que pasa**: no
+                          // queda nadie para invitarte y no queda diario al
+                          // que volver. Los recuerdos, las fotos, el mapa y
+                          // los puntos se van con él.
+                          //
+                          // Aquí está la otra mitad de "no se puede borrar un
+                          // diario": sí se podía, pero la única forma era
+                          // pulsar un botón que prometía no borrar nada.
                           else if (isMe && !widget.isPersonal)
                             TextButton(
                               style: TextButton.styleFrom(
                                 minimumSize: const Size(0, 48),
+                                foregroundColor: _members.length == 1
+                                    ? AppColors.error
+                                    : null,
                               ),
                               onPressed: () => _confirmAndRun(
                                 uid: uid,
                                 isLeaving: true,
-                                title: 'Salir del grupo',
-                                content:
-                                    'Dejarás de ver y compartir contenido con '
-                                    '«$_name». Podrás volver a '
-                                    'unirte si alguien te invita de nuevo.',
-                                confirmLabel: 'Salir',
+                                title: _members.length == 1
+                                    ? '¿Eliminar «$_name»?'
+                                    : 'Salir del diario',
+                                content: _members.length == 1
+                                    ? 'Eres la única persona en este '
+                                          'diario, así que al salir '
+                                          'desaparece: se borran sus '
+                                          'recuerdos, sus fotos, sus '
+                                          'sitios del mapa y sus puntos. '
+                                          'No se puede deshacer.'
+                                    : 'Dejarás de ver y compartir '
+                                          'contenido con «$_name». El '
+                                          'diario sigue existiendo para '
+                                          'los demás, y podrás volver a '
+                                          'unirte si alguien te invita de '
+                                          'nuevo.',
+                                confirmLabel: _members.length == 1
+                                    ? 'Eliminar'
+                                    : 'Salir',
                                 action: () => householdService.leaveGroup(
                                   groupId: widget.groupId,
                                   uid: uid,
                                 ),
                               ),
-                              child: const Text('Salir'),
+                              child: Text(
+                                _members.length == 1 ? 'Eliminar' : 'Salir',
+                              ),
                             )
                           else if (!isMe && canModerate)
                             TextButton(
@@ -823,6 +985,7 @@ class _MembersSheetState extends ConsumerState<_MembersSheet> {
                               child: const Text('Quitar'),
                             ),
                         ],
+                      ),
                       ),
                     );
                   },

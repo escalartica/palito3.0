@@ -132,8 +132,13 @@ void main() {
     });
 
     test('se rescata del mensaje de invitación completo', () {
+      // Copia del mensaje real de `invite_partner_page.dart`. Si allí cambia
+      // la redacción, esta copia se queda vieja sin que nada avise: el
+      // parser seguiría pasando el test con un mensaje que ya nadie envía.
+      // Por eso se actualiza a mano cada vez que cambia el original — y por
+      // eso lo que el parser ancla es la palabra "código", no la frase.
       const String mensaje =
-          'Te invito a mi grupo en Palito de Sabores 🍽️\n\n'
+          'Te invito a mi diario en Palito de Sabores 🍽️\n\n'
           'Código: K7M4PQR2\n\n'
           'Descarga la app, inicia sesión con Apple y ve a la pestaña Perfil.';
 

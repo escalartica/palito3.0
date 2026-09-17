@@ -51,10 +51,15 @@ class MemoryBottomSheet {
           decoration: const BoxDecoration(
             color: AppColors.surfaceWarm,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border(top: BorderSide(color: AppColors.textPrimary, width: 3)),
-            boxShadow: [
-              BoxShadow(color: Colors.black26, blurRadius: 25, spreadRadius: 2),
-            ],
+            border: Border(
+              top: BorderSide(color: AppColors.textPrimary, width: 3),
+            ),
+            // SIN SOMBRA. Llevaba `Colors.black26` difuminada 25 px con 2 de
+            // expansión: un borrón gris debajo de un borde navy de 3, que es
+            // justo lo contrario de lo que hace ese borde. Las otras hojas de
+            // la app —"Cómo se juega", "Cómo va la mesa"— no llevan ninguna,
+            // porque un modal ya se separa por el velo que oscurece lo de
+            // detrás.
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

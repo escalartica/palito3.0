@@ -7,6 +7,7 @@ import 'circle_button.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../../../core/theme/tokens/app_shape.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 /// Cabecera hero del detalle de recuerdo: foto a pantalla completa con
 /// gradiente, botón de volver, botón de editar y título superpuesto.
@@ -327,7 +328,7 @@ class _PressableHeroImageState extends State<_PressableHeroImage> {
         onTapCancel: () => setState(() => _pressed = false),
         child: AnimatedScale(
           scale: _pressed ? 0.985 : 1.0,
-          duration: AppAnimation.fast,
+          duration: AppMotion.dur(context, AppAnimation.fast),
           curve: AppAnimation.enter,
           child: widget.child,
         ),

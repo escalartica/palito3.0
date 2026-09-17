@@ -1,6 +1,6 @@
 import 'dart:math';
 
-/// Resultado puro de un giro de la ruleta de Zona Gamer: cuántos puntos
+/// Resultado puro de un giro de la ruleta de la ruleta: cuántos puntos
 /// otorga, si suma una medalla (solo "Juicio Picante"), qué texto mostrar
 /// y, en el modo "Juicio Picante", qué reto le tocó al ganador.
 ///
@@ -26,7 +26,7 @@ class GamerSpinOutcome {
   });
 }
 
-/// Lógica de juego de Zona Gamer que no depende de widgets ni de
+/// Lógica de juego de la ruleta que no depende de widgets ni de
 /// Firestore, y que por tanto se puede testear de forma aislada.
 class GamerGameLogic {
   const GamerGameLogic._();
@@ -58,7 +58,7 @@ class GamerGameLogic {
       pointsAwarded: 10,
       awardsMedal: true,
       eventDetail: 'Juicio Picante',
-      historyDetail: '🔥 Juicio Picante asignado',
+      historyDetail: '🔥 Le cae un juicio picante',
       challenge: challenge,
     );
   }

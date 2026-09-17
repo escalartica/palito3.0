@@ -83,11 +83,47 @@ class NeoPressable extends StatefulWidget {
 class _NeoPressableState extends State<NeoPressable> {
   bool _pressed = false;
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // TOCAR NO ES LA ÚNICA FORMA DE LLEGAR A UN BOTÓN
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  // La app no tenía **ni un solo estado de foco ni de hover**. Ninguno, en
+  // ninguna pantalla. Y eso deja fuera a tres tipos de uso que existen de
+  // verdad:
+  //
+  //   · **Teclado.** Un iPad con teclado, o un Mac con la PWA de escritorio
+  //     (que este proyecto sí tiene: está citado en home_page.dart). Se
+  //     tabula entre controles y no se ve cuál está seleccionado. Es
+  //     navegar a ciegas.
+  //   · **Control por botón / control por conmutador.** Quien no puede
+  //     tocar la pantalla recorre los controles uno a uno. Sin foco visible
+  //     no hay forma de saber en cuál está.
+  //   · **Ratón.** En escritorio, nada reaccionaba al pasar por encima, así
+  //     que no había manera de saber qué era pulsable antes de pulsarlo.
+  //
+  // El foco se dibuja con el amarillo de marca y por FUERA del borde, no
+  // cambiando el borde: si cambiara el borde, un botón enfocado se
+  // confundiría con uno seleccionado, que en esta app ya significa otra
+  // cosa. El hover levanta la sombra un punto — el gesto contrario al de
+  // pulsar, que la hunde.
+  bool _hovered = false;
+  bool _focused = false;
+
   bool get _isInteractive => widget.onTap != null || widget.onLongPress != null;
 
   void _setPressed(bool value) {
     if (!_isInteractive || _pressed == value) return;
     setState(() => _pressed = value);
+  }
+
+  void _setHovered(bool value) {
+    if (!_isInteractive || _hovered == value) return;
+    setState(() => _hovered = value);
+  }
+
+  void _setFocused(bool value) {
+    if (_focused == value) return;
+    setState(() => _focused = value);
   }
 
   void _handleTap() {
@@ -100,8 +136,17 @@ class _NeoPressableState extends State<NeoPressable> {
     final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     final Offset restingOffset = widget.shadowOffset;
-    final Offset currentShadowOffset = _pressed ? Offset.zero : restingOffset;
-    final Offset translation = _pressed ? restingOffset : Offset.zero;
+
+    // Pulsado: la superficie baja hasta tapar su propia sombra.
+    // Con el ratón encima: sube un punto, que es el gesto contrario.
+    final Offset currentShadowOffset = _pressed
+        ? Offset.zero
+        : (_hovered
+              ? Offset(restingOffset.dx + 1, restingOffset.dy + 1)
+              : restingOffset);
+    final Offset translation = _pressed
+        ? restingOffset
+        : (_hovered ? const Offset(-1, -1) : Offset.zero);
 
     final Widget surface = AnimatedContainer(
       // 80 ms: el mismo orden de magnitud que usa Apple en sus propios
@@ -152,18 +197,82 @@ class _NeoPressableState extends State<NeoPressable> {
     );
   }
 
-  Widget _wrapGestures(Widget surface) => GestureDetector(
-    // `opaque`: sin esto, un toque en el relleno interior del botón no
-    // contaba como toque.
-    behavior: HitTestBehavior.opaque,
-    onTap: _isInteractive ? _handleTap : null,
-    onLongPress: widget.onLongPress,
-    // Al APOYAR el dedo, no al levantarlo.
-    onTapDown: (_) => _setPressed(true),
-    onTapUp: (_) => _setPressed(false),
-    onTapCancel: () => _setPressed(false),
-    child: surface,
-  );
+  Widget _wrapGestures(Widget surface) {
+    final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    final Widget gestos = GestureDetector(
+      // `opaque`: sin esto, un toque en el relleno interior del botón no
+      // contaba como toque.
+      behavior: HitTestBehavior.opaque,
+      onTap: _isInteractive ? _handleTap : null,
+      onLongPress: widget.onLongPress,
+      // Al APOYAR el dedo, no al levantarlo.
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: surface,
+    );
+
+    // ── EL ARO DE FOCO NO PUEDE OCUPAR SITIO ──
+    //
+    // El primer intento lo dibujó con `padding: EdgeInsets.all(3)` y un
+    // borde transparente cuando no hay foco. Funcionaba… y **agrandaba seis
+    // puntos TODOS los botones de la app**, enfocados o no: la tarjeta de un
+    // recuerdo pasó de 98 a 107 de alto. Visto midiéndola en el simulador.
+    // Un indicador de foco que cambia la maquetación de la pantalla entera
+    // no es un indicador, es un efecto secundario.
+    //
+    // Con un `Stack` el tamaño lo sigue marcando el hijo sin posicionar —el
+    // botón— y el aro se pinta por fuera, desbordando. `Clip.none` es lo que
+    // se lo permite. La maquetación queda exactamente como estaba.
+    //
+    // `IgnorePointer` porque el aro cubre el botón: sin él, se comería los
+    // toques justo cuando está enfocado.
+    final Widget conFoco = Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        gestos,
+        Positioned(
+          left: -3,
+          top: -3,
+          right: -3,
+          bottom: -3,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _focused ? 1 : 0,
+              duration: reduceMotion ? Duration.zero : AppAnimation.fast,
+              curve: AppAnimation.tint,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(widget.borderRadius + 3),
+                  border: Border.all(color: AppColors.primary, width: 3),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (!_isInteractive) return conFoco;
+
+    return FocusableActionDetector(
+      onShowFocusHighlight: _setFocused,
+      onShowHoverHighlight: _setHovered,
+      mouseCursor: SystemMouseCursors.click,
+      actions: <Type, Action<Intent>>{
+        // Sin esto, el botón se puede enfocar con el teclado pero **no se
+        // puede activar**: llegas hasta él y ahí se acaba el viaje.
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            _handleTap();
+            return null;
+          },
+        ),
+      },
+      child: conFoco,
+    );
+  }
 }
 
 /// Botón de acción principal con el mismo lenguaje: rótulo, icono opcional,

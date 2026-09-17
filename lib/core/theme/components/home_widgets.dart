@@ -276,22 +276,3 @@ class HomeHero extends StatelessWidget {
     );
   }
 }
-
-class SectionHeader extends StatelessWidget {
-  final String title;
-  const SectionHeader(this.title, {super.key});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-    child: Text(
-      title.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.w900,
-        color: palitoDark,
-        letterSpacing: -0.5,
-      ),
-    ),
-  );
-}

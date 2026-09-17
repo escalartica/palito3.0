@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../../../core/theme/tokens/app_shape.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 class EnsaladillaFields implements DynamicFieldGenerator {
   @override
@@ -368,7 +369,7 @@ class EnsaladillaFields implements DynamicFieldGenerator {
           // CAMPO "OTRA"
           // =================================================================
           AnimatedSwitcher(
-            duration: AppAnimation.standard,
+            duration: AppMotion.durFromPlatform(AppAnimation.standard),
             switchInCurve: AppAnimation.enter,
             switchOutCurve: AppAnimation.exit,
             transitionBuilder: (child, animation) {

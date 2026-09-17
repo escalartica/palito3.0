@@ -10,6 +10,7 @@ import '../../../core/data/rating_scale.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../../../core/theme/tokens/app_animation.dart';
+import '../../../core/theme/components/app_motion.dart';
 
 /// Construye los [Marker] de flutter_map que se dibujan sobre el mapa de
 /// recuerdos.
@@ -148,7 +149,10 @@ class MapMarkerBuilder {
             : '${memory.restaurantName}, '
                   '${RatingScale.shortLabel(memory.rating)} estrellas',
         child: ExcludeSemantics(
-          child: GestureDetector(
+          // Una chincheta se toca con el dedo encima del propio dibujo: si
+          // no contesta nada al apoyarlo, durante un instante no sabes si el
+          // mapa te ha oído o has fallado el toque.
+          child: PressScale(
             onTap: () => onMarkerTapped(memory),
             child: _pill(
               rating: memory.rating,
@@ -262,11 +266,13 @@ class MapMarkerBuilder {
       point: point,
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(begin: 0.0, end: scale),
-        duration: AppAnimation.stagger(
-          index,
-          base: AppAnimation.fast,
-          stepMs: 30,
-          maxSteps: 8,
+        duration: AppMotion.durFromPlatform(
+          AppAnimation.stagger(
+            index,
+            base: AppAnimation.fast,
+            stepMs: 30,
+            maxSteps: 8,
+          ),
         ),
         curve: AppAnimation.pop,
         builder: (BuildContext context, double animationValue, Widget? child) {
@@ -279,7 +285,7 @@ class MapMarkerBuilder {
           button: true,
           label: memory.restaurantName,
           child: ExcludeSemantics(
-            child: GestureDetector(
+            child: PressScale(
               onTap: () => onMarkerTapped(memory),
               child: _pill(
                 rating: memory.rating,

@@ -19,6 +19,7 @@ import '../../core/theme/tokens/app_shape.dart';
 import '../../core/theme/tokens/app_animation.dart';
 import '../../core/theme/components/app_motion.dart';
 import '../../core/theme/components/category_chip.dart';
+import '../../core/theme/components/skeleton.dart';
 
 // ===========================================================================
 // PALETA (alias locales sobre AppColors, la fuente única de verdad — ver
@@ -26,6 +27,14 @@ import '../../core/theme/components/category_chip.dart';
 // ===========================================================================
 
 const Color colorBackground = AppColors.background;
+
+/// El chip que quita el filtro de categoría.
+///
+/// Es una constante porque el estado vacío filtrado DICE su nombre —«Toca
+/// «Todos» ahí arriba»— y un aviso que nombra un botón tiene que nombrar el
+/// botón que existe. Ver `SectionLabels` y `kComoCanjear`: es el tercer sitio
+/// de la app con esta forma, y el segundo ya se había roto.
+const String kFiltroTodos = 'Todos';
 const Color colorCardSurface = AppColors.surface;
 const Color colorTextMain = AppColors.textPrimary;
 const Color colorAccentCoral = AppColors.accent;
@@ -42,12 +51,34 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // =========================================================================
   // CONTROLADOR PRINCIPAL DE ENTRADA
   // =========================================================================
 
   late final AnimationController _entryController;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // LA LISTA TIENE SU PROPIO RELOJ
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  // Las tarjetas entraban escalonadas colgando de `_entryController`, que se
+  // dispara UNA vez al montar la pantalla y se queda en 1,0 para siempre.
+  // O sea que la coreografía solo existía en el primer segundo de vida de
+  // Inicio.
+  //
+  // A partir de ahí, **tocar un filtro cambiaba la lista entera de golpe**:
+  // pulsabas "Croquetas" y donde había ocho platos aparecían dos, sin un
+  // fotograma que enlazara una cosa con la otra. Eso no es un detalle
+  // estético. Es justo el momento en que hace falta que la interfaz diga
+  // "esto ha pasado PORQUE has tocado eso": sin transición, el usuario tiene
+  // que deducir la relación entre el chip que pulsó y lo que ve ahora.
+  //
+  // Con un reloj propio, la lista se vuelve a formar cada vez que cambia el
+  // filtro. El resto de la pantalla —cabecera, portada, chips— no se mueve,
+  // porque no ha cambiado: lo que se re-forma es exactamente lo que el gesto
+  // ha cambiado.
+  late final AnimationController _listController;
 
   // =========================================================================
   // ANIMACIONES
@@ -148,7 +179,15 @@ class _HomePageState extends ConsumerState<HomePage>
     // INICIAR ANIMACIÓN
     // =========================================================================
 
+    _listController = AnimationController(
+      vsync: this,
+      // Corto. Esto se repite cada vez que se toca un chip, así que no puede
+      // sentirse como una intro: tiene que sentirse como una respuesta.
+      duration: AppAnimation.slow,
+    );
+
     _entryController.forward();
+    _listController.forward();
   }
 
   // ── "Reducir movimiento" ──
@@ -163,14 +202,16 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (AppMotion.reduced(context)) {
       _entryController.value = 1.0;
+      _listController.value = 1.0;
     }
   }
 
   @override
   void dispose() {
     _entryController.dispose();
+    _listController.dispose();
     super.dispose();
   }
 
@@ -202,6 +243,15 @@ class _HomePageState extends ConsumerState<HomePage>
         .isPermissionDenied;
 
     final selectedCategory = ref.watch(selectedCategoryProvider);
+
+    // Cambiar de filtro vuelve a formar la lista. `ref.listen` y no un
+    // `if` sobre el valor: esto se dispara solo cuando el provider cambia de
+    // verdad, no en cada reconstrucción de la pantalla — que son muchas,
+    // porque aquí se vigilan los recuerdos, el diario activo y el scroll.
+    ref.listen<String>(selectedCategoryProvider, (String? _, String _) {
+      if (AppMotion.reduced(context)) return;
+      _listController.forward(from: 0);
+    });
 
     // =========================================================================
     // FILTRADO POR CATEGORÍA
@@ -419,7 +469,51 @@ class _HomePageState extends ConsumerState<HomePage>
                                       (MediaQuery.sizeOf(context).height * 0.34)
                                           .clamp(190.0, 300.0)
                                           .toDouble(),
-                                  child: HomeHero(memory: heroMemory),
+                                  // ── LA PORTADA TAMBIÉN CAMBIA AL FILTRAR ──
+                                  //
+                                  // Media pantalla respondía y la otra media
+                                  // no: la lista se recomponía al tocar un
+                                  // chip (ver `_listController`) y la
+                                  // portada, que TAMBIÉN cambia —es el mejor
+                                  // valorado de la categoría elegida—, se
+                                  // sustituía de un fotograma al siguiente.
+                                  // Dos elementos que cambian por la misma
+                                  // causa tienen que cambiar igual, o la
+                                  // causa deja de leerse.
+                                  //
+                                  // La clave es el id del recuerdo, no la
+                                  // categoría: si el mejor valorado resulta
+                                  // ser el mismo en dos categorías, la
+                                  // portada no parpadea sin motivo.
+                                  child: AnimatedSwitcher(
+                                    duration: AppMotion.dur(
+                                      context,
+                                      AppAnimation.standard,
+                                    ),
+                                    switchInCurve: AppAnimation.enter,
+                                    switchOutCurve: AppAnimation.exit,
+                                    // Cruce limpio: la que sale se va a la
+                                    // vez que entra la nueva, sin que la
+                                    // tarjeta cambie de tamaño por el camino.
+                                    layoutBuilder:
+                                        (
+                                          Widget? actual,
+                                          List<Widget> anteriores,
+                                        ) => Stack(
+                                          fit: StackFit.expand,
+                                          children: <Widget>[
+                                            ...anteriores,
+                                            ?actual,
+                                          ],
+                                        ),
+                                    child: KeyedSubtree(
+                                      // Sin `?`: este bloque entero vive
+                                      // dentro de `if (heroMemory != null)`,
+                                      // así que aquí ya está promocionado.
+                                      key: ValueKey<String>(heroMemory.id),
+                                      child: HomeHero(memory: heroMemory),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -477,7 +571,7 @@ class _HomePageState extends ConsumerState<HomePage>
                                   ),
                                   children: [
                                     _buildFilterChip(
-                                      "Todos",
+                                      kFiltroTodos,
                                       selectedCategory,
                                       ref,
                                     ),
@@ -546,6 +640,67 @@ class _HomePageState extends ConsumerState<HomePage>
                       ),
                     ),
                   ],
+                ),
+              ),
+
+              // ═══════════════════════════════════════════════════════════
+              // EL BORDE DE ARRIBA
+              // ═══════════════════════════════════════════════════════════
+              //
+              // Inicio es la única de las cuatro pestañas SIN barra de
+              // título: su cabecera —el logo, «estás viendo», la portada—
+              // forma parte del scroll y se va con él. Eso está bien; lo
+              // que no estaba bien es lo que quedaba después.
+              //
+              // Al bajar dos dedos, las tarjetas de recuerdos seguían
+              // subiendo hasta meterse **debajo del reloj, de la isla
+              // dinámica y de los iconos de wifi y batería**, que se
+              // pintaban encima del título de la tarjeta. Sobre una tarjeta
+              // blanca con borde navy, los glifos negros del sistema y el
+              // nombre del plato se comían entre ellos: no se leía ni una
+              // cosa ni la otra. Pasaba en la primera pantalla de la app, la
+              // que ve todo el mundo, y con cualquier cantidad de recuerdos.
+              //
+              // Esto es el «scroll edge effect» de iOS: una franja de la
+              // altura exacta del área del sistema, del color del fondo, con
+              // catorce puntos de degradado para que el corte no sea una
+              // línea recta —un corte duro se lee como un recorte; un
+              // desvanecido se lee como material—.
+              //
+              // Lo bueno es que EN REPOSO NO SE VE: arriba del todo lo que
+              // hay ahí es el propio fondo de la página, crema sobre crema.
+              // No hace falta escuchar el scroll, ni animar, ni guardar
+              // estado. Solo aparece cuando hay algo debajo que tapar.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Builder(
+                    builder: (BuildContext context) {
+                      final double segura = MediaQuery.viewPaddingOf(
+                        context,
+                      ).top;
+                      const double cola = 14;
+                      return Container(
+                        height: segura + cola,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: <double>[
+                              segura / (segura + cola),
+                              1.0,
+                            ],
+                            colors: <Color>[
+                              colorBackground,
+                              colorBackground.withValues(alpha: 0.0),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -647,7 +802,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         offset: ref.watch(dockVisibleProvider)
                             ? Offset.zero
                             : const Offset(0, 2),
-                        duration: AppAnimation.slow,
+                        duration: AppMotion.dur(context, AppAnimation.slow),
                         curve: AppAnimation.enter,
                         child: fabChild,
                       );
@@ -846,48 +1001,23 @@ class _HomePageState extends ConsumerState<HomePage>
     required dynamic memory,
     required int index,
   }) {
-    // Cada tarjeta tiene un retraso progresivo.
+    // Cada tarjeta entra un pelo después que la anterior, con tope: a partir
+    // de la sexta el ojo ya ha entendido el gesto y lo único que quedaría es
+    // la espera.
     //
-    // Las primeras entran ligeramente antes.
-    // Las siguientes aparecen progresivamente.
-    //
-    // Limitamos el retraso para que una lista muy larga
-    // no haga esperar demasiado al usuario.
-
-    final double start = (0.55 + (index * 0.045)).clamp(0.55, 0.82);
-
-    final double end = (start + 0.25).clamp(0.70, 1.00);
-
-    // `drive`, no `CurvedAnimation`.
-    //
-    // `CurvedAnimation` registra un oyente en el controlador padre al
-    // construirse y solo lo quita su `dispose()`. Este método se llama desde
-    // el `itemBuilder` de la lista, así que cada tarjeta que entra y sale de
-    // pantalla dejaba un oyente colgado de `_entryController`: recorrer
-    // doscientos recuerdos arriba y abajo deja cientos, y ninguno se
-    // desengancha nunca.
-    //
-    // `drive` devuelve una animación derivada que no se suscribe a nada por
-    // su cuenta: se engancha cuando alguien la escucha —el `AnimatedBuilder`
-    // de aquí abajo— y se desengancha sola cuando ese widget desaparece.
-    final Animation<double> cardAnimation = _entryController.drive(
-      CurveTween(curve: Interval(start, end, curve: AppAnimation.enter)),
+    // El escalón y ese tope viven ahora en `AppMotion.listSlot`, y el reloj
+    // es `_listController`, que se vuelve a lanzar cada vez que cambia el
+    // filtro (ver su declaración). Antes eran cuatro números escritos a mano
+    // aquí dentro, colgados del controlador de entrada de la pantalla: nadie
+    // más podía reutilizarlos y solo corrían una vez en la vida.
+    final Animation<double> cardAnimation = AppMotion.listSlot(
+      _listController,
+      index,
     );
 
-    return AnimatedBuilder(
-      animation: cardAnimation,
-      builder: (context, child) {
-        final value = cardAnimation.value;
-
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, 28 * (1 - value)),
-            child: child,
-          ),
-        );
-      },
-      child: Padding(
+    return AppMotion.listItem(
+      cardAnimation,
+      Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Dismissible(
           key: Key(memory.id),
@@ -939,7 +1069,7 @@ class _HomePageState extends ConsumerState<HomePage>
         // el estado vacío aparezca de golpe la primera vez que se ve).
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: AppAnimation.slow,
+          duration: AppMotion.dur(context, AppAnimation.slow),
           curve: AppAnimation.enter,
           builder: (context, value, child) {
             return Opacity(
@@ -1014,8 +1144,8 @@ class _HomePageState extends ConsumerState<HomePage>
                 Text(
                   isFiltered
                       ? 'Tienes recuerdos guardados, pero ninguno en esta '
-                            'categoría. Toca «Todos» ahí arriba para verlos '
-                            'todos.'
+                            'categoría. Toca «$kFiltroTodos» ahí arriba para '
+                            'verlos todos.'
                       : 'Apunta un sitio al que hayas ido: la tortilla, las '
                             'croquetas, la nota que le pondrías. Se guarda en '
                             'este diario y lo verá quien esté en él.',
@@ -1068,7 +1198,7 @@ class _HomePageState extends ConsumerState<HomePage>
       child: Center(
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: AppAnimation.slow,
+          duration: AppMotion.dur(context, AppAnimation.slow),
           curve: AppAnimation.enter,
           builder: (context, value, child) {
             return Opacity(
@@ -1170,44 +1300,33 @@ class _HomePageState extends ConsumerState<HomePage>
   // brusco de layout cuando los datos terminan de llegar.
 
   Widget _buildLoadingState() {
+    // ── EL HUECO DE LO QUE VIENE, NO UN RULETÍN ──
+    //
+    // Aquí había una tarjeta con un indicador dando vueltas y "Cargando tus
+    // recuerdos…". Eso dice que hay que esperar y nada más, y al llegar los
+    // datos la pantalla pegaba un salto: el contenido aparecía de golpe en un
+    // hueco que no existía un momento antes.
+    //
+    // Tres huecos con la forma exacta de una fila de recuerdo. Cuando llegan
+    // los datos, ocupan un sitio que ya estaba ocupado. Y la espera se
+    // percibe más corta porque la pantalla ya tiene estructura, aunque el
+    // cronómetro diga lo mismo.
+    //
+    // Tres y no cinco: son los que caben sin hacer scroll. Un esqueleto que
+    // sigue más allá de lo que se ve promete una lista larga que quizá no
+    // exista — y quien abre la app por primera vez tiene cero recuerdos.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Center(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: colorCardSurface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: colorTextMain, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: colorTextMain,
-                blurRadius: 0,
-                offset: const Offset(3, 3),
-              ),
-            ],
-          ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Semantics(
+        // El esqueleto es puramente visual: para un lector de pantalla son
+        // tres cajas grises sin nombre. Una frase y se acabó.
+        label: 'Cargando tus recuerdos',
+        child: const ExcludeSemantics(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: colorAccentCoral,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "Cargando tus recuerdos...",
-                style: GoogleFonts.outfit(
-                  color: colorTextMain,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
+            children: <Widget>[
+              MemoryRowSkeleton(),
+              MemoryRowSkeleton(),
+              MemoryRowSkeleton(),
             ],
           ),
         ),
@@ -1225,15 +1344,26 @@ class _HomePageState extends ConsumerState<HomePage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: colorTextMain,
-              letterSpacing: -0.3,
+          // `Expanded`, no `Text` a pelo. Esta fila lleva el título a un
+          // lado y el botón de ordenar al otro, y ninguno de los dos podía
+          // ceder: con el texto del sistema ampliado se desbordaba por la
+          // derecha. Quien cede es el título, que es el que se entiende a
+          // medias; el botón, no —un botón recortado no se puede pulsar con
+          // confianza—.
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: colorTextMain,
+                letterSpacing: -0.3,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
 
           // ===================================================================
           // BOTÓN DE ORDENACIÓN
@@ -1289,7 +1419,7 @@ class _HomePageState extends ConsumerState<HomePage>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AnimatedSwitcher(
-                            duration: AppAnimation.fast,
+                            duration: AppMotion.dur(context, AppAnimation.fast),
                             transitionBuilder:
                                 (Widget child, Animation<double> animation) {
                                   return AppMotion.popIn(animation, child);

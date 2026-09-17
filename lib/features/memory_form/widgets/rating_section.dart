@@ -110,6 +110,14 @@ class RatingSection extends StatelessWidget {
     return value.clamp(0.5, RatingScale.max).toDouble();
   }
 
+  /// Cómo se dice una puntuación en voz alta.
+  ///
+  /// Se usa en los tres sitios que exige el árbol de accesibilidad: dónde
+  /// estás, a dónde te lleva subir y a dónde te lleva bajar.
+  static String _dicho(double r) =>
+      '${r.toStringAsFixed(1).replaceAll('.', ',')} de 5. '
+      '${RatingScale.qualitativeLabel(r)}';
+
   void _handle(double dx, double width) {
     final double next = ratingAt(dx, width);
     if (next == rating) return;
@@ -123,7 +131,7 @@ class RatingSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const SectionLabel('Puntuación general'),
+        const SectionLabel(SectionLabels.puntuacion),
         const SizedBox(height: 8),
         NeoContainer(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -134,10 +142,35 @@ class RatingSection extends StatelessWidget {
                 // un gesto, sin tener que acertar en una estrella concreta.
                 slider: true,
                 label: 'Puntuación general',
-                value: hasInteracted
-                    ? '${rating.toStringAsFixed(1).replaceAll('.', ',')} '
-                          'de 5. ${RatingScale.qualitativeLabel(rating)}'
-                    : 'Sin puntuar',
+                // ══ ESTO REVENTABA LA APP CON VOICEOVER ENCENDIDO ══
+                //
+                // Había `value` y había `onIncrease`/`onDecrease`, pero no
+                // `increasedValue` ni `decreasedValue`. Y Flutter lo
+                // prohíbe expresamente:
+                //
+                //   A SemanticsNode with action "increase" needs to be
+                //   annotated with either both "value" and "increasedValue"
+                //   or neither
+                //
+                // El árbol de accesibilidad solo se construye cuando hay un
+                // lector de pantalla escuchando, así que probando la app a
+                // dedo no salía nunca. Con VoiceOver puesto, abrir el
+                // formulario de un recuerdo lanzaba esa aserción y detrás
+                // un `'node.built': is not true` — el árbol a medio montar.
+                //
+                // Y el motivo de que faltaran es comprensible: sin lector,
+                // «dónde estoy» es lo único que se ve. Con lector hacen
+                // falta las tres: dónde estás, a dónde te lleva subir y a
+                // dónde te lleva bajar. Son las que VoiceOver lee al hacer
+                // el gesto, y sin ellas el gesto no dice nada aunque
+                // funcione.
+                value: hasInteracted ? _dicho(rating) : 'Sin puntuar',
+                increasedValue: _dicho(
+                  (rating + 0.5).clamp(0.5, RatingScale.max).toDouble(),
+                ),
+                decreasedValue: _dicho(
+                  (rating - 0.5).clamp(0.5, RatingScale.max).toDouble(),
+                ),
                 onIncrease: rating < RatingScale.max
                     ? () => onChanged(
                         (rating + 0.5).clamp(0.5, RatingScale.max).toDouble(),

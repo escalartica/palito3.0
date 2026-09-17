@@ -42,7 +42,7 @@ void main() {
   testWidgets('el dock aparece en Inicio y tiene una pestaña de Inicio', (
     WidgetTester tester,
   ) async {
-    // Antes, Mapa, Zona Gamer y Perfil eran rutas sueltas FUERA del shell:
+    // Antes, Mapa, la ruleta y Perfil eran rutas sueltas FUERA del shell:
     // el dock solo existía en Inicio, y además no tenía ninguna pestaña de
     // Inicio, así que desde las otras pantallas no había forma evidente de
     // volver.
@@ -66,7 +66,7 @@ void main() {
     expect(dock.items.length, 4);
     expect(
       dock.items.map((DockItem i) => i.label).toList(),
-      containsAll(<String>['Inicio', 'Mapa', 'Zona Gamer', 'Perfil']),
+      containsAll(<String>['Inicio', 'Mapa', 'La ruleta', 'Perfil']),
     );
 
     // En Inicio, la pestaña seleccionada es Inicio (antes era -1: ninguna).

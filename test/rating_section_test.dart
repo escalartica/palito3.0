@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:palito_3_0/features/memory_form/widgets/rating_section.dart';
 
@@ -51,6 +52,83 @@ void main() {
 
     test('un ancho de cero no divide entre cero', () {
       expect(RatingSection.ratingAt(10, 0), 5.0);
+    });
+  });
+
+  /// ═══════════════════════════════════════════════════════════════════════
+  /// CON UN LECTOR DE PANTALLA ESCUCHANDO
+  /// ═══════════════════════════════════════════════════════════════════════
+  ///
+  /// El árbol de accesibilidad **solo se construye cuando hay alguien
+  /// escuchando**. Por eso este fallo no salía probando la app a dedo, ni en
+  /// las pruebas: las estrellas declaraban `value` y los gestos de subir y
+  /// bajar, pero no `increasedValue` ni `decreasedValue`, y Flutter lo
+  /// prohíbe —revienta con «A SemanticsNode with action "increase" needs to
+  /// be annotated with either both "value" and "increasedValue" or neither»,
+  /// y detrás un `'node.built': is not true`—.
+  ///
+  /// O sea: **abrir el formulario de un recuerdo con VoiceOver encendido
+  /// rompía la app.** Y es justo el usuario para el que se escribió ese
+  /// bloque de `Semantics`.
+  ///
+  /// `ensureSemantics()` enciende ese árbol en la prueba. Es la única forma
+  /// de que esto se note sin un iPhone y un lector de pantalla delante.
+  group('accesibilidad', () {
+    testWidgets('el árbol de accesibilidad se construye sin romperse', (
+      WidgetTester tester,
+    ) async {
+      // ── EL `handle` SE CIERRA AQUÍ DENTRO, NO EN UN `addTearDown` ──
+      //
+      // Es lo primero que se me ocurrió y está mal: `flutter_test` comprueba
+      // que no queden `SemanticsHandle` vivos **al terminar el cuerpo de la
+      // prueba**, y los `addTearDown` corren después de esa comprobación.
+      // Resultado: la prueba fallaba con «A SemanticsHandle was active at
+      // the end of the test» —un fallo mío de andamiaje— que tapaba
+      // precisamente lo que venía a medir. Un rojo que no era el rojo que
+      // buscaba.
+      //
+      // El `try/finally` es por lo mismo: si el árbol se rompe de verdad,
+      // que se lea ESE error y no el del handle sin cerrar.
+      final SemanticsHandle handle = tester.ensureSemantics();
+
+      final AnimationController controlador = AnimationController(
+        vsync: const TestVSync(),
+        duration: const Duration(milliseconds: 200),
+      );
+      addTearDown(controlador.dispose);
+
+      // Los tres estados que cambian qué gestos ofrece el nodo: sin puntuar
+      // (solo se puede subir), a medias (las dos cosas) y al máximo (solo
+      // se puede bajar).
+      try {
+        for (final (double nota, bool tocada) in <(double, bool)>[
+          (0.0, false),
+          (3.0, true),
+          (5.0, true),
+        ]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: RatingSection(
+                  rating: nota,
+                  hasInteracted: tocada,
+                  ratingAnimationController: controlador,
+                  onChanged: (double _) {},
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: 'La puntuación $nota rompe el árbol de accesibilidad.',
+          );
+        }
+      } finally {
+        handle.dispose();
+      }
     });
   });
 }

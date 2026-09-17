@@ -9,6 +9,7 @@ import '../../../core/theme/components/smart_image.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../../../core/theme/tokens/app_animation.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 /// Recuadro de foto del formulario de recuerdo: muestra la miniatura
 /// recién elegida, la foto ya guardada (vía [SmartImage]) o un estado
@@ -54,7 +55,7 @@ class PhotoSection extends StatelessWidget {
           ? 'Cambiar la foto del recuerdo'
           : 'Añadir una foto del plato o del lugar',
       child: ExcludeSemantics(
-        child: GestureDetector(
+        child: PressScale(
           onTap: () {
             HapticFeedback.selectionClick();
             onTap();
@@ -79,7 +80,7 @@ class PhotoSection extends StatelessWidget {
               ).chain(CurveTween(curve: AppAnimation.pop)),
             ),
             child: AnimatedContainer(
-              duration: AppAnimation.slow,
+              duration: AppMotion.dur(context, AppAnimation.slow),
               height: 180,
               width: double.infinity,
               decoration: BoxDecoration(
@@ -159,7 +160,7 @@ class _EmptyPhotoState extends StatelessWidget {
       children: [
         TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.85, end: 1.0),
-          duration: AppAnimation.slow,
+          duration: AppMotion.dur(context, AppAnimation.slow),
           curve: AppAnimation.pop,
           builder: (context, scale, child) {
             return Transform.scale(scale: scale, child: child);

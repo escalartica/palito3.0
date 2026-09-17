@@ -10,10 +10,45 @@ import '../../core/data/invite_policy.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/services/household_service.dart';
+import '../../core/theme/components/group_switcher.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/components/neo_pressable.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
+import '../../core/theme/components/app_feedback.dart';
+import '../../core/theme/components/app_motion.dart';
+import '../../core/theme/components/skeleton.dart';
+
+/// El camino que hay que seguir para canjear un código de invitación.
+///
+/// ══ ESTE TEXTO SE FUE DE LA REALIDAD, Y EN EL PEOR SITIO POSIBLE ══
+///
+/// Aquí ponía: tocar «Ver tus diarios y quién está en cada uno». Ese rótulo
+/// del Perfil se mejoró hace tiempo —eran once palabras y partía en dos
+/// líneas— y este texto se quedó con el viejo. O sea que el mensaje que la
+/// gente pega en un grupo de WhatsApp mandaba al invitado a buscar un botón
+/// **que no existe**, justo en el momento en que se está estrenando la app y
+/// no sabe dónde está nada.
+///
+/// Había un comentario aquí mismo avisando de que esto tenía que coincidir
+/// «PALABRA POR PALABRA» con la pantalla. No sirvió de nada, y no podía
+/// servir: un comentario le pide cuidado a quien edita ESTE fichero, y quien
+/// renombró el botón estaba editando otro. Ahora las dos etiquetas son
+/// constantes compartidas con las pantallas que las pintan (ver
+/// `group_switcher.dart`), así que renombrar una cambia también lo que se
+/// copia.
+///
+/// Y ya no se nombra el botón del Perfil, sino el titular que lleva encima:
+/// el rótulo del botón **cambia según cuántos diarios tengas**, así que quien
+/// acaba de instalar la app lee «Solo tienes tu diario privado» — que no se
+/// parece a nada de lo que se pudiera escribir aquí. El titular no cambia.
+///
+/// Es público a propósito: `test/mensaje_invitacion_test.dart` comprueba que
+/// nombra rótulos que existen de verdad.
+const String kComoCanjear =
+    'abrir la app, iniciar sesión, ir a la pestaña Perfil, tocar el botón '
+    'amarillo que hay debajo de "$kSeccionTusDiarios" y ahí '
+    '"$kEntrarConCodigo"';
 
 /// ===========================================================================
 /// INVITAR A UN GRUPO
@@ -49,15 +84,6 @@ class InvitePartnerPage extends ConsumerStatefulWidget {
 }
 
 class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
-  /// El camino que se nombra aquí tiene que coincidir PALABRA POR PALABRA con
-  /// lo que pone en pantalla (ver `ProfileGroupsSection`): si se renombra esa
-  /// fila del Perfil y no se actualiza este texto, el invitado se queda
-  /// buscando un menú que no existe. Una versión anterior decía que el código
-  /// se metía "al abrir la app por primera vez" — ese sitio nunca ha
-  /// existido.
-  static const String _howToRedeem =
-      'abrir la app, iniciar sesión, ir a la pestaña Perfil, tocar "Ver tus '
-      'diarios y quién está en cada uno" y ahí "Entrar con un código"';
 
   InviteSummary? _invite;
   String? _errorMessage;
@@ -142,14 +168,9 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
         _invite = invite;
         _copied = false;
       });
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Código nuevo listo. El anterior ya no sirve.'),
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppFeedback.success(
+          context,
+          'Código nuevo listo. El anterior ya no sirve.',
         );
     } on StateError catch (e) {
       if (!mounted) return;
@@ -175,7 +196,8 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
         ),
         content: Text(
           'El código actual dejará de funcionar al momento. Quien ya esté '
-          'dentro del grupo se queda dentro; solo deja de servir para entrar.',
+          'dentro del diario se queda dentro; solo deja de servir para '
+          'entrar.',
           style: GoogleFonts.inter(height: 1.45),
         ),
         actions: <Widget>[
@@ -195,9 +217,9 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
   }
 
   String get _shareMessage =>
-      'Te invito a mi grupo en Palito de Sabores 🍽️\n\n'
+      'Te invito a mi diario en Palito de Sabores 🍽️\n\n'
       'Código: ${_invite?.code}\n\n'
-      'Descarga la app y para usarlo tendrás que $_howToRedeem.\n'
+      'Descarga la app y para usarlo tendrás que $kComoCanjear.\n'
       '${_expiryLine(capitalized: true)}.';
 
   String _expiryLine({bool capitalized = false}) {
@@ -243,7 +265,7 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
         top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-          child: Column(
+          child: MotionColumn(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
@@ -258,7 +280,7 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
               Text(
                 'Pásales este código: sirve para varias personas, así que '
                 'puedes pegarlo en un grupo. Para usarlo tendrán que '
-                '$_howToRedeem.',
+                '$kComoCanjear.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -269,9 +291,15 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
               if (_errorMessage != null)
                 _ErrorBlock(message: _errorMessage!, onRetry: _load)
               else if (invite == null)
+                // El hueco con la forma del código que viene, no un
+                // indicador girando en mitad de la nada: así, cuando llega,
+                // ocupa un sitio que ya estaba ocupado y la pantalla no
+                // pega el salto. Las medidas salen de `_CodeBlock`.
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: Skeleton(width: 220, height: 78, radius: AppRadius.lg),
+                  ),
                 )
               else ...<Widget>[
                 _CodeBlock(code: invite.code),
@@ -292,7 +320,12 @@ class _InvitePartnerPageState extends ConsumerState<InvitePartnerPage> {
               if (invite != null) ...<Widget>[
                 NeoPrimaryButton(
                   label: _copied ? 'Copiado ✓' : 'Copiar invitación completa',
-                  icon: _copied ? Icons.check_rounded : Icons.ios_share_rounded,
+                  // `ios_share` es el glifo de COMPARTIR de iOS —la caja con
+                  // la flecha—, y este botón no comparte: copia al
+                  // portapapeles. Un icono que promete la hoja de compartir
+                  // de iOS y abre otra cosa no es un detalle: es la app
+                  // diciendo algo que no cumple, en su acción principal.
+                  icon: _copied ? Icons.check_rounded : Icons.copy_all_rounded,
                   onPressed: _isWorking ? null : () => _copy(full: true),
                 ),
                 const SizedBox(height: 10),

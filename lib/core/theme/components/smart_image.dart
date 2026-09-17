@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../tokens/app_colors.dart';
+import 'skeleton.dart';
 
 /// Gris frío neutro para el hueco de una foto que aún no ha llegado o que no
 /// existe. Deliberadamente distinto de `AppColors.surface`/`surfaceWarm`
@@ -133,15 +134,25 @@ class _SmartImageState extends State<SmartImage> {
         // seguidas y empieza a tirar cosas; en un iPhone antiguo, a
         // cerrarse. Con el tope, esa misma foto ocupa 1,8 MB.
         memCacheWidth: targetPx,
-        placeholder: (BuildContext context, String url) => Container(
-          color: _kPlaceholderBg,
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
+        // ── EL HUECO DE LA FOTO YA ES EL ESQUELETO ──
+        //
+        // Aquí había un rectángulo gris con un indicador de 20 px girando
+        // en medio. Pero este hueco **ya tiene el tamaño exacto de la foto
+        // que viene**: es literalmente el caso para el que sirve un
+        // esqueleto, y encima estaba puesto el indicador, que es para otra
+        // cosa —una acción en curso, no un contenido que llega—.
+        //
+        // Un indicador sobre un hueco del tamaño correcto es decirlo dos
+        // veces: el hueco ya dice "aquí va algo y ocupa esto". Latiendo,
+        // dice además "todavía no ha llegado", sin añadir un objeto encima.
+        //
+        // Y pasa en todas partes: la portada de Inicio, cada fila de la
+        // lista, la cabecera de la ficha, las chinchetas del mapa. Es el
+        // estado de carga que más veces se ve en la app.
+        placeholder: (BuildContext context, String url) => const Skeleton(
+          width: double.infinity,
+          height: double.infinity,
+          radius: 0,
         ),
         errorWidget: (BuildContext context, String url, Object error) {
           // Un corte de red puntual dejaba un icono naranja permanente hasta

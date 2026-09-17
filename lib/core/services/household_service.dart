@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:palito_3_0/core/data/field_limits.dart';
 import 'package:palito_3_0/core/data/invite_policy.dart';
 import 'package:palito_3_0/core/utils/app_log.dart';
 
@@ -66,7 +67,7 @@ class HouseholdService {
     bool linkAsPersonal = false,
   }) async {
     final String safeName = name.trim().isEmpty
-        ? (isPersonal ? 'Mi diario' : 'Mi grupo')
+        ? (isPersonal ? 'Mi diario' : 'Diario compartido')
         : name.trim();
 
     final DocumentReference<Map<String, dynamic>> groupRef = _firestore
@@ -127,7 +128,7 @@ class HouseholdService {
         .get();
 
     if (!groupSnap.exists) {
-      throw StateError('Ese grupo ya no existe.');
+      throw StateError('Ese diario ya no existe.');
     }
 
     if (groupSnap.data()?['isPersonal'] == true) {
@@ -431,7 +432,7 @@ class HouseholdService {
       AppLog.w('HouseholdService: no se pudo borrar la invitación gastada.');
     }
 
-    String groupName = 'tu nuevo grupo';
+    String groupName = 'tu nuevo diario';
     try {
       final DocumentSnapshot<Map<String, dynamic>> groupSnap = await _firestore
           .collection('groups')
@@ -507,6 +508,26 @@ class HouseholdService {
     final bool amLastMember = members.length == 1 && members.first == uid;
 
     if (amLastMember) {
+      // ── VACIARLO ANTES DE BORRARLO ──
+      //
+      // Firestore NO borra en cascada: al eliminar `groups/{id}` sus
+      // subcolecciones siguen ahí, con los recuerdos, las localizaciones y
+      // las puntuaciones dentro. Y quedan **inalcanzables**: las reglas
+      // piden ser miembro del grupo, y para saber si lo eres hacen un
+      // `get()` del documento del grupo, que ya no existe. O sea que nadie
+      // —ni su dueño— puede volver a leerlos ni borrarlos nunca.
+      //
+      // Importa por dos motivos. Uno, se paga: son documentos vivos en la
+      // factura de Firestore para siempre. Y dos, y más serio: "Eliminar
+      // cuenta" pasa por aquí (ver `account_deletion_service.dart`), así
+      // que lo que la app llamaba borrar la cuenta dejaba los recuerdos de
+      // esa persona en el servidor.
+      //
+      // Se hace ANTES de borrar el grupo porque después ya no habría
+      // permiso, y en el peor caso —red caída a media limpieza— es mejor un
+      // grupo borrado con restos que un usuario atrapado en un diario que
+      // no puede dejar: por eso el fallo se registra y se sigue.
+      await _purgeGroupContent(groupRef);
       await groupRef.delete();
     } else if (members.contains(uid)) {
       await removeMember(groupId: groupId, targetUid: uid);
@@ -518,6 +539,47 @@ class HouseholdService {
     }, SetOptions(merge: true));
   }
 
+  /// Borra el contenido de un diario que va a desaparecer.
+  ///
+  /// Las cuatro subcolecciones que declara `firestore.rules`. Va en lotes de
+  /// 400 —el tope de un `WriteBatch` son 500— y no revienta si una falla:
+  /// quien llama está en mitad de una salida y dejarlo a medio camino sería
+  /// peor que dejar restos.
+  Future<void> _purgeGroupContent(
+    DocumentReference<Map<String, dynamic>> groupRef,
+  ) async {
+    const List<String> subcolecciones = <String>[
+      'memories',
+      'locations',
+      'gamer_stats',
+      'game_history',
+    ];
+
+    for (final String sub in subcolecciones) {
+      try {
+        while (true) {
+          final QuerySnapshot<Map<String, dynamic>> page = await groupRef
+              .collection(sub)
+              .limit(400)
+              .get();
+
+          if (page.docs.isEmpty) break;
+
+          final WriteBatch batch = _firestore.batch();
+          for (final QueryDocumentSnapshot<Map<String, dynamic>> d
+              in page.docs) {
+            batch.delete(d.reference);
+          }
+          await batch.commit();
+
+          if (page.docs.length < 400) break;
+        }
+      } catch (e, st) {
+        AppLog.e('No se pudo vaciar $sub antes de borrar el diario', e, st);
+      }
+    }
+  }
+
   /// Cambia el nombre de un diario compartido.
   ///
   /// No existía. Un diario se llamaba para siempre como lo hubieras escrito
@@ -526,7 +588,7 @@ class HouseholdService {
   /// permitían el cambio (`validName()` en `firestore.rules`, con su tope de
   /// 60 caracteres): lo que faltaba era el botón.
   ///
-  /// El recorte a 60 se hace aquí y no solo en el campo de texto, porque el
+  /// El recorte se hace aquí y no solo en el campo de texto, porque el
   /// servidor rechaza el documento entero si se pasa y el usuario vería un
   /// "no se pudo guardar" sin motivo aparente.
   Future<void> renameGroup({
@@ -537,7 +599,9 @@ class HouseholdService {
     if (clean.isEmpty) return;
 
     await _firestore.collection('groups').doc(groupId).update(<String, dynamic>{
-      'name': clean.length > 60 ? clean.substring(0, 60) : clean,
+      'name': clean.length > FieldLimits.nombreDiario
+          ? clean.substring(0, FieldLimits.nombreDiario)
+          : clean,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

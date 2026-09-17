@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dynamic_field_factory.dart';
+import '../../../core/data/field_limits.dart';
 import '../../../core/theme/components/neo_chip.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_shape.dart';
 import '../../../core/theme/tokens/app_animation.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 class CroquetasFields implements DynamicFieldGenerator {
   // ===========================================================================
@@ -323,7 +325,7 @@ class CroquetasFields implements DynamicFieldGenerator {
               (data['sabor']?.contains('Otro') ?? false) &&
               otroController != null)
             AnimatedSize(
-              duration: AppAnimation.standard,
+              duration: AppMotion.durFromPlatform(AppAnimation.standard),
               curve: AppAnimation.enter,
               child: Padding(
                 padding: const EdgeInsets.only(top: 10),
@@ -344,7 +346,7 @@ class CroquetasFields implements DynamicFieldGenerator {
     Function(String, dynamic) onUpdate,
   ) {
     return TweenAnimationBuilder<double>(
-      duration: AppAnimation.standard,
+      duration: AppMotion.durFromPlatform(AppAnimation.standard),
       tween: Tween(begin: 0.0, end: 1.0),
       curve: AppAnimation.enter,
       builder: (context, value, child) {
@@ -531,12 +533,31 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '${variedad['sabor']} · ${variedad['valoracion']}',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                      // ── ESTE TEXTO LO ESCRIBE EL USUARIO ──
+                      //
+                      // El sabor sale de una lista corta… menos cuando eliges
+                      // «Otro», que abre un campo libre. Y ese campo no tenía
+                      // tope: «croquetas de jamón ibérico de bellota con
+                      // alioli de ajo negro» entraba entero en una pastilla
+                      // dentro de un `Wrap`, que sí tiene ancho máximo. La
+                      // fila se desbordaba —la banda amarilla y negra en
+                      // depuración, texto cortado a hueso en release— en
+                      // mitad del formulario de guardar un recuerdo.
+                      //
+                      // Ahora el campo tiene tope (ver más abajo) Y la
+                      // pastilla sabe encogerse. Las dos cosas: un tope solo
+                      // aplaza el problema al idioma que escriba palabras
+                      // más largas.
+                      Flexible(
+                        child: Text(
+                          '${variedad['sabor']} · ${variedad['valoracion']}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -599,6 +620,11 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
                     padding: const EdgeInsets.only(top: 8),
                     child: TextField(
                       controller: _otroController,
+                      // Treinta caracteres es de sobra para un sabor de
+                      // croqueta, y el contador se deja a la vista a
+                      // propósito: un campo que deja de aceptar letras sin
+                      // decir por qué se lee como que la app se ha colgado.
+                      maxLength: FieldLimits.saborCroqueta,
                       style: GoogleFonts.inter(fontSize: 13),
                       decoration: InputDecoration(
                         isDense: true,
@@ -698,7 +724,7 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xs),
       child: AnimatedContainer(
-        duration: AppAnimation.fast,
+        duration: AppMotion.dur(context, AppAnimation.fast),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? AppColors.primary : AppColors.background,
@@ -715,12 +741,18 @@ class _VariedadesBuilderState extends State<_VariedadesBuilder> {
           children: [
             Icon(icon, size: 13, color: AppColors.textPrimary),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: AppColors.textPrimary,
+            // Con el texto del sistema ampliado, 12 puntos se convierten en
+            // 37 y el rótulo deja de caber en el ancho del `Wrap`.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ],

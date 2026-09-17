@@ -14,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
 import '../../core/providers/dock_provider.dart';
+import '../../core/data/field_limits.dart';
 import '../../core/data/categories.dart';
 import '../../core/theme/tokens/app_spacing.dart';
 import '../../core/models/memory_model.dart';
@@ -28,6 +29,8 @@ import '../../features/memory_form/controllers/memory_save_controller.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/theme/tokens/app_animation.dart';
+import '../../core/theme/components/app_motion.dart';
+import '../../core/theme/components/app_feedback.dart';
 
 class MemoryFormPage extends ConsumerStatefulWidget {
   final Category? initialCategory;
@@ -273,7 +276,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     // tape el formulario. No volvía a encenderse nunca: al salir, quien
     // estaba en Inicio se quedaba sin barra hasta que hacía scroll hacia
     // arriba. Y en un diario vacío casi no hay nada que desplazar, así que
-    // el usuario quedaba encerrado en Inicio, sin acceso a Mapa, Zona Gamer
+    // el usuario quedaba encerrado en Inicio, sin acceso a Mapa, la ruleta
     // ni Perfil. El comentario de main.dart ya describía este fallo.
     //
     // Va en `dispose` y no en el botón de atrás porque de aquí se sale por
@@ -289,7 +292,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     // y reventaba en el desmontaje del árbol de widgets. Comprobado en el
     // simulador: sales del formulario y **la barra de navegación no vuelve**.
     // Quien tiene pocos recuerdos no tiene nada que desplazar en Inicio, así
-    // que se queda encerrado ahí, sin Mapa, sin Zona Gamer y sin Perfil,
+    // que se queda encerrado ahí, sin Mapa, sin ruleta y sin Perfil,
     // hasta que mata la app. La línea que arreglaba eso nunca llegaba a
     // ejecutarse: la excepción saltaba antes.
     //
@@ -353,11 +356,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
       if (!serviceEnabled) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Activa la ubicación del dispositivo."),
-            ),
-          );
+          AppFeedback.warning(context, "Activa la ubicación del dispositivo.");
         }
 
         return;
@@ -372,9 +371,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Permiso de ubicación no concedido.")),
-          );
+          AppFeedback.warning(context, "Permiso de ubicación no concedido.");
         }
 
         return;
@@ -442,18 +439,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         'lng=$lng',
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Ubicación GPS obtenida correctamente.")),
-      );
+      AppFeedback.success(context, "Ubicación GPS obtenida correctamente.");
     } catch (e, stack) {
       _log('❌ Error obteniendo ubicación GPS: $e');
 
       _logStack(stackTrace: stack);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error obteniendo ubicación GPS: $e")),
-        );
+        AppFeedback.error(context, "Error obteniendo ubicación GPS: $e");
       }
     } finally {
       // `mounted` ANTES de tocar el controlador, no después.
@@ -774,7 +767,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                       const SizedBox(height: 8),
 
                       AnimatedSwitcher(
-                        duration: AppAnimation.slow,
+                        duration: AppMotion.dur(context, AppAnimation.slow),
                         switchInCurve: AppAnimation.enter,
                         switchOutCurve: AppAnimation.exit,
                         transitionBuilder: (child, animation) {
@@ -918,14 +911,42 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           NeoContainer(
             child: TextField(
               controller: _dishController,
+              // ══ EL MISMO NÚMERO QUE EL SERVIDOR ══
+              //
+              // `firestore.rules` rechaza el recuerdo entero si el título
+              // pasa de 200 caracteres:
+              //
+              //     request.resource.data.title.size() <= 200
+              //
+              // El campo no lo sabía, así que se podía escribir un título
+              // más largo, darle a guardar y recibir un «no se pudo
+              // guardar» sin ninguna pista de qué había que arreglar —con
+              // la foto ya subida y el formulario entero relleno—.
+              //
+              // Esta lección ya estaba aprendida en otro sitio de la app:
+              // `renameGroup` recorta a 60 en el cliente por esto mismo, y
+              // lo dice en su comentario. Lo que faltaba era aplicarla aquí.
+              maxLength: FieldLimits.tituloRecuerdo,
               textCapitalization: TextCapitalization.sentences,
               style: GoogleFonts.inter(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
+              // ── EL EJEMPLO CONTRADECÍA LA CATEGORÍA ──
+              //
+              // Ponía "Ej. croquetas de rabo de toro" **siempre**, así que
+              // al elegir Tortilla, Postres o Atención el formulario te
+              // proponía croquetas. Visto en el simulador cambiando de
+              // categoría: el desplegable dice una cosa y el campo de debajo
+              // otra.
+              //
+              // No se pone un ejemplo por categoría porque `Category` solo
+              // guarda nombre e icono: habría que inventarse ocho ejemplos y
+              // mantenerlos. Un ejemplo que vale para las ocho no puede
+              // contradecir a ninguna.
               decoration: memoryFormInputDecoration(
-                "Ej. croquetas de rabo de toro — opcional",
+                "Ej. lo que pediste — opcional",
               ),
             ),
           ),
@@ -938,11 +959,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel("Restaurante / Lugar"),
+        const SectionLabel(SectionLabels.restaurante),
         const SizedBox(height: 8),
         NeoContainer(
           child: TextField(
             controller: _restaurantController,
+            // El nombre del sitio se pinta en la cabecera de la ficha, en la
+            // tarjeta de la lista y en el globo del mapa: tres huecos
+            // estrechos. 120 es largo de sobra para cualquier restaurante
+            // que exista.
+            maxLength: FieldLimits.nombreSitio,
             style: GoogleFonts.inter(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.bold,
@@ -964,7 +990,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel("¿Volverías a este lugar?"),
+        const SectionLabel(SectionLabels.volverias),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -1004,7 +1030,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: AnimatedContainer(
-        duration: AppAnimation.fast,
+        duration: AppMotion.dur(context, AppAnimation.fast),
         curve: AppAnimation.enter,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
@@ -1070,7 +1096,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Widget _buildSaveButton() {
     return AnimatedContainer(
-      duration: AppAnimation.standard,
+      duration: AppMotion.dur(context, AppAnimation.standard),
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
@@ -1112,7 +1138,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         ),
         onPressed: _isSaving ? null : _saveMemory,
         child: AnimatedSwitcher(
-          duration: AppAnimation.standard,
+          duration: AppMotion.dur(context, AppAnimation.standard),
           child: _isSaving
               ? Row(
                   key: const ValueKey('saving'),
@@ -1152,7 +1178,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   Widget _buildAnimatedSection({required int index, required Widget child}) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: AppAnimation.stagger(index, base: AppAnimation.slow),
+      duration: AppMotion.dur(context, AppAnimation.stagger(index, base: AppAnimation.slow)),
       curve: AppAnimation.enter,
       builder: (context, value, child) {
         return Opacity(
@@ -1181,17 +1207,16 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           customBorder: const CircleBorder(),
           child: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
+            // Borde navy de 2 (idioma de la app) y debajo una sombra
+            // difuminada de Material: las dos cosas a la vez en el mismo
+            // botón.
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.textPrimary, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 2,
-                  offset: Offset(0, 2),
-                ),
-              ],
+              border: Border.fromBorderSide(
+                BorderSide(color: AppColors.textPrimary, width: AppBorder.normal),
+              ),
+              boxShadow: AppShadow.sm,
             ),
             child: Icon(icon, color: AppColors.textPrimary, size: 16),
           ),
@@ -1212,12 +1237,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
 
   Future<void> _saveMemory() async {
     if (_restaurantController.text.trim().isEmpty) {
-      _showError("Restaurante / Lugar", key: _restaurantSectionKey);
+      _showError(SectionLabels.restaurante, key: _restaurantSectionKey);
       return;
     }
 
     if (_locationController.text.trim().isEmpty) {
-      _showError("Ubicación", key: _locationSectionKey);
+      _showError(SectionLabels.ubicacion, key: _locationSectionKey);
       return;
     }
 
@@ -1225,12 +1250,12 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     // puntuar, no quiere dar un 0 a propósito. Esto sí es un error de campo
     // obligatorio y va con los demás.
     if (_rating <= 0.0 && !_hasInteractedWithRating) {
-      _showError("Puntuación general", key: _ratingSectionKey);
+      _showError(SectionLabels.puntuacion, key: _ratingSectionKey);
       return;
     }
 
     if (_wouldReturnState == null) {
-      _showError("¿Volverías a este lugar?", key: _wouldReturnSectionKey);
+      _showError(SectionLabels.volverias, key: _wouldReturnSectionKey);
       return;
     }
 
@@ -1291,10 +1316,9 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                 "corregirla luego con el botón GPS)",
         ];
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Recuerdo guardado, pero ${warnings.join(' y ')}."),
-          ),
+        AppFeedback.warning(
+          context,
+          "Recuerdo guardado, pero ${warnings.join(' y ')}.",
         );
       }
     } catch (e, stack) {
@@ -1311,17 +1335,14 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
         final bool isPermissionDenied =
             e is FirebaseException && e.code == 'permission-denied';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isPermissionDenied
-                  // Ver home_page.dart: no hay ninguna "lista autorizada".
-                  ? "Ya no tienes acceso a este diario. Puede que te hayan "
-                        "quitado de él. Cambia de diario desde Inicio."
-                  : "No se pudo guardar el recuerdo. Comprueba tu conexión "
-                        "e inténtalo de nuevo.",
-            ),
-          ),
+        AppFeedback.error(
+          context,
+          isPermissionDenied
+              // Ver home_page.dart: no hay ninguna "lista autorizada".
+              ? "Ya no tienes acceso a este diario. Puede que te hayan "
+                    "quitado de él. Cambia de diario desde Inicio."
+              : "No se pudo guardar el recuerdo. Comprueba tu conexión "
+                    "e inténtalo de nuevo.",
         );
       }
 
@@ -1413,30 +1434,19 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     return discard == true;
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
-  }
+  void _showMessage(String message) => AppFeedback.warning(context, message);
 
   // ============================================================
   // ERRORES
   // ============================================================
 
   void _showError(String field, {GlobalKey? key}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        // El texto nombra el rótulo EXACTO que se ve en pantalla. Decía
-        // "Por favor, completa: Nombre de restaurante" cuando el campo se
-        // llama "Restaurante / Lugar": dos nombres para lo mismo obligan a
-        // deducir cuál es. Y "Por favor, completa:" con dos puntos es una
-        // cadena de programador, no una frase.
-        content: Text('Para guardar, rellena «$field»'),
-      ),
-    );
+    // El texto nombra el rótulo EXACTO que se ve en pantalla. Decía "Por
+    // favor, completa: Nombre de restaurante" cuando el campo se llama
+    // "Restaurante / Lugar": dos nombres para lo mismo obligan a deducir cuál
+    // es. Y "Por favor, completa:" con dos puntos es una cadena de
+    // programador, no una frase.
+    AppFeedback.warning(context, 'Para guardar, rellena «$field»');
 
     // Con 8-10 bloques de campos, el aviso solo por SnackBar obligaba a
     // buscar el campo a mano — ahora, si sabemos dónde está, hacemos
@@ -1457,7 +1467,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
       if (_formScroll.hasClients) {
         _formScroll.animateTo(
           0,
-          duration: AppAnimation.slow,
+          duration: AppMotion.dur(context, AppAnimation.slow),
           curve: AppAnimation.enter,
         );
       }
@@ -1467,7 +1477,7 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
     {
       Scrollable.ensureVisible(
         fieldContext,
-        duration: AppAnimation.slow,
+        duration: AppMotion.dur(context, AppAnimation.slow),
         curve: AppAnimation.enter,
         alignment: 0.1,
       );

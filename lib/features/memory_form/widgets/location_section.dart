@@ -6,6 +6,7 @@ import 'form_field_containers.dart';
 import '../../../core/theme/tokens/app_colors.dart';
 import '../../../core/theme/tokens/app_animation.dart';
 import '../../../core/theme/tokens/app_shape.dart';
+import '../../../../core/theme/components/app_motion.dart';
 
 /// Campo de ubicación del formulario de recuerdo: texto libre + botón de
 /// GPS. El estado de la geolocalización (coordenadas actuales, si se
@@ -32,7 +33,7 @@ class LocationSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel("Ubicación"),
+        const SectionLabel(SectionLabels.ubicacion),
         const SizedBox(height: 8),
         NeoContainer(
           child: Row(
@@ -89,7 +90,7 @@ class _GpsButton extends StatelessWidget {
       label: isGettingLocation
           ? 'Buscando tu ubicación'
           : 'Usar mi ubicación actual',
-      child: GestureDetector(
+      child: PressScale(
         // `opaque` para que el toque cuente en TODO el cuadro de 44, no solo
         // encima del dibujo del icono.
         behavior: HitTestBehavior.opaque,
@@ -109,7 +110,7 @@ class _GpsButton extends StatelessWidget {
           height: 44,
           child: Center(
             child: AnimatedContainer(
-              duration: AppAnimation.standard,
+              duration: AppMotion.dur(context, AppAnimation.standard),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 // Tinte OPACO de la paleta mientras busca, no el amarillo al

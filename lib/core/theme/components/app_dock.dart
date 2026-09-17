@@ -14,7 +14,7 @@ const Color palitoYellow = AppColors.primary;
 ///
 /// [label] es el nombre completo y es lo que lee VoiceOver/TalkBack.
 /// [shortLabel] es lo que se pinta debajo del icono cuando el nombre completo
-/// no cabe en un cuarto de pantalla ("Zona Gamer" → "Gamer"); si es null se
+/// no cabe en un cuarto de pantalla ("La ruleta" → "Ruleta"); si es null se
 /// pinta [label].
 class DockItem {
   const DockItem({required this.icon, required this.label, this.shortLabel});
@@ -33,8 +33,9 @@ class DockItem {
 /// visibilidad (la decide la pantalla que lo contiene). Solo se dibuja.
 ///
 /// LLEVA TEXTO. La versión anterior era solo de iconos: cuatro pictogramas sin
-/// una sola palabra. Un icono de mando de videoconsola no dice "Zona Gamer" a
-/// nadie que abra la app por primera vez, y era una de las causas directas de
+/// una sola palabra. Un pictograma no dice "el mapa de tus recuerdos" ni
+/// "echar a suertes quién elige" a nadie que abra la app por primera vez, y
+/// era una de las causas directas de
 /// que la navegación resultara difícil de entender. Las Human Interface
 /// Guidelines de Apple piden etiqueta en las pestañas precisamente por esto.
 class AppDock extends StatelessWidget {
@@ -83,7 +84,65 @@ class AppDock extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-        child: Row(
+        // ═══════════════════════════════════════════════════════════════════
+        // LA PASTILLA VIAJA
+        // ═══════════════════════════════════════════════════════════════════
+        //
+        // Antes cada pestaña tenía SU pastilla y se encendía o se apagaba:
+        // el amarillo desaparecía de un sitio y aparecía en otro. Dos cosas
+        // pasando a la vez que el ojo tiene que juntar por su cuenta.
+        //
+        // Ahora es una sola pastilla que se desplaza. Y eso hace dos cosas
+        // que la otra versión no hacía: enseña que las pestañas están EN
+        // FILA —cosa que cuatro iconos sueltos no dicen— y se mueve en el
+        // mismo sentido que la pantalla que entra (ver `_travelDx` en
+        // main.dart), así que el dock y el contenido cuentan lo mismo en
+        // lugar de contarlo por separado.
+        //
+        // `AnimatedAlign` y no `AnimatedPositioned`: así no hay que medir
+        // nada. La alineación va de -1 (izquierda) a +1 (derecha) y el
+        // `FractionallySizedBox` se queda con un cuarto del ancho, sea cual
+        // sea el ancho del móvil.
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: reduceMotion ? Duration.zero : AppAnimation.standard,
+                // `inOut`: esto no entra ni sale, se desplaza de un sitio a
+                // otro dentro de la pantalla. Es el caso exacto para el que
+                // existe esa curva.
+                curve: AppAnimation.inOut,
+                alignment: Alignment(
+                  items.length < 2
+                      ? 0
+                      : -1 + 2 * (currentIndex / (items.length - 1)),
+                  0,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / items.length,
+                  heightFactor: 1,
+                  // 4 arriba y abajo: el dock mide 76, menos 12 del relleno
+                  // exterior quedan 64, menos estos 8 son los 56 de alto que
+                  // tenía la pastilla de antes. La pastilla no cambia de
+                  // tamaño; lo único nuevo es que se mueve.
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: palitoYellow,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: palitoDark, width: 2),
+                        boxShadow: AppShadow.sm,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Row(
           children: List<Widget>.generate(items.length, (int index) {
             final DockItem item = items[index];
             final bool isSelected = currentIndex == index;
@@ -100,11 +159,10 @@ class AppDock extends StatelessWidget {
                     onTap(index);
                   },
                   child: Center(
-                    child: AnimatedContainer(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : AppAnimation.fast,
-                      curve: AppAnimation.enter,
+                    // Ya no pinta la pastilla: la pinta el `Stack` de arriba,
+                    // una sola para las cuatro. Aquí solo queda el contenido
+                    // y su área táctil.
+                    child: Container(
                       // 48x48 mínimo: el área táctil anterior era de 42 px de
                       // alto, por debajo del mínimo de iOS (44) y de Android
                       // (48).
@@ -116,23 +174,7 @@ class AppDock extends StatelessWidget {
                         horizontal: 6,
                         vertical: 6,
                       ),
-                      decoration: BoxDecoration(
-                        color: isSelected ? palitoYellow : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(
-                          color: isSelected ? palitoDark : Colors.transparent,
-                          width: 2,
-                        ),
-                        boxShadow: isSelected
-                            ? const <BoxShadow>[
-                                BoxShadow(
-                                  color: palitoDark,
-                                  offset: Offset(2, 2),
-                                  blurRadius: 0,
-                                ),
-                              ]
-                            : null,
-                      ),
+                      alignment: Alignment.center,
                       child: ExcludeSemantics(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -171,6 +213,8 @@ class AppDock extends StatelessWidget {
               ),
             );
           }),
+            ),
+          ],
         ),
       ),
       ),

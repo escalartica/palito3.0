@@ -288,7 +288,7 @@ class AtencionFields implements DynamicFieldGenerator {
             const SizedBox(height: 10),
 
             AnimatedSize(
-              duration: AppAnimation.standard,
+              duration: AppMotion.durFromPlatform(AppAnimation.standard),
               curve: AppAnimation.enter,
               child: Container(
                 decoration: BoxDecoration(
@@ -421,7 +421,7 @@ class AtencionFields implements DynamicFieldGenerator {
                 ),
 
                 AnimatedSwitcher(
-                  duration: AppAnimation.fast,
+                  duration: AppMotion.durFromPlatform(AppAnimation.fast),
                   transitionBuilder: (child, animation) {
                     return AppMotion.popIn(animation, child);
                   },

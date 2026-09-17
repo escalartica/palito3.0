@@ -4,16 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/data/field_limits.dart';
 import '../../core/data/invite_policy.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/household_service.dart';
+import '../../core/theme/components/group_switcher.dart';
 import '../../core/theme/components/neo_header.dart';
 import '../../core/theme/components/neo_pressable.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/providers/memory_provider.dart';
+import '../../core/theme/components/app_feedback.dart';
+import '../../core/theme/components/app_motion.dart';
 
 /// Pantalla para compartir el diario con alguien más: crear un grupo nuevo (y
 /// a continuación compartir su código de invitación) o unirse a uno existente
@@ -60,7 +64,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
 
     final String name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _errorMessage = 'Ponle un nombre a este grupo.');
+      setState(() => _errorMessage = 'Ponle un nombre a este diario.');
       return;
     }
 
@@ -85,7 +89,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       if (!mounted) return;
       setState(() {
         _errorMessage =
-            'No se pudo crear el grupo. Comprueba tu conexión e '
+            'No se pudo crear el diario. Comprueba tu conexión e '
             'inténtalo de nuevo.';
       });
     } finally {
@@ -120,14 +124,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       // parecía que el código no había funcionado.
       switchActiveGroup(ref, result.groupId);
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('Ya estás en «${result.groupName}» 🎉'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      AppFeedback.success(context, 'Ya estás en «${result.groupName}» 🎉');
 
       context.go('/');
     } on StateError catch (e) {
@@ -137,7 +134,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       if (!mounted) return;
       setState(() {
         _errorMessage =
-            'No se pudo unir al grupo. Comprueba tu conexión e '
+            'No se pudo entrar en el diario. Comprueba tu conexión e '
             'inténtalo de nuevo.';
       });
     } finally {
@@ -165,14 +162,15 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
 
   String get _title => switch (_mode) {
     _Mode.choose => '¿Con quién vas a compartir?',
-    _Mode.naming => 'Ponle un nombre a tu grupo',
-    _Mode.joining => 'Únete a un grupo',
+    _Mode.naming => 'Ponle un nombre a tu diario',
+    _Mode.joining => 'Entra en un diario',
   };
 
   String get _subtitle => switch (_mode) {
     _Mode.choose =>
-      'Crea un grupo para invitar a quien quieras, o únete a uno si ya te '
-          'han pasado un código. Tu diario personal sigue siendo solo tuyo.',
+      'Crea un diario compartido para invitar a quien quieras, o entra en '
+          'uno si ya te han pasado un código. Tu diario personal sigue '
+          'siendo solo tuyo.',
     _Mode.naming =>
       'Por ejemplo "Con Marta" o "Amigos del curro" — te ayudará a '
           'distinguirlo cuando tengas varios.',
@@ -224,7 +222,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: NeoHeader(title: 'Grupos', onBack: _isBusy ? null : _back),
+      appBar: NeoHeader(title: 'Diarios', onBack: _isBusy ? null : _back),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -232,7 +230,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
           // franja amarilla y negra de overflow.
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          child: Column(
+          child: MotionColumn(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
@@ -270,7 +268,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
       children: <Widget>[
         _ActionCard(
           icon: Icons.group_add_rounded,
-          title: 'Crear un grupo nuevo',
+          title: 'Crear un diario compartido',
           subtitle: 'Le pones nombre e invitas a quien quieras después.',
           onTap: () => setState(() {
             _errorMessage = null;
@@ -280,8 +278,8 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
         const SizedBox(height: 14),
         _ActionCard(
           icon: Icons.key_rounded,
-          title: 'Entrar con un código',
-          subtitle: 'Alguien ya te ha invitado a su grupo.',
+          title: kEntrarConCodigo,
+          subtitle: 'Alguien ya te ha invitado a su diario.',
           onTap: () => setState(() {
             _errorMessage = null;
             _mode = _Mode.joining;
@@ -299,7 +297,7 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
           controller: _nameController,
           enabled: !_isBusy,
           autofocus: true,
-          maxLength: 60,
+          maxLength: FieldLimits.nombreDiario,
           textCapitalization: TextCapitalization.sentences,
           textInputAction: TextInputAction.done,
           onChanged: (_) => _clearError(),
@@ -309,11 +307,11 @@ class _HouseholdSetupPageState extends ConsumerState<HouseholdSetupPage> {
             fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
-          decoration: _fieldDecoration(hint: 'Nombre del grupo'),
+          decoration: _fieldDecoration(hint: 'Nombre del diario'),
         ),
         const SizedBox(height: 16),
         NeoPrimaryButton(
-          label: 'Crear grupo',
+          label: 'Crear diario',
           isBusy: _isBusy,
           onPressed: _createHousehold,
         ),
