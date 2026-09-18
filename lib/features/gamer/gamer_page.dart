@@ -59,12 +59,6 @@ const _kYellow = AppColors.primary;
 const _kRed = AppColors.accent;
 const _kBg = AppColors.background;
 
-/// Naranja de insignias/historial. Acento secundario fuera de la paleta de
-/// marca (navy/amarillo/coral), reservado a iconografía de logros. Se repite
-/// en badges_modal.dart — si se necesitara en un tercer sitio, este es el
-/// candidato a subir a AppColors como token compartido.
-const _kBadgeOrange = Color(0xFFFF9F1C);
-
 /// Colores de comensal, repartidos por turnos según el orden en que se
 /// sientan. Deterministas a propósito: el mismo sitio en la mesa da siempre
 /// el mismo color, y ninguno sale de la paleta de la app.
@@ -355,10 +349,29 @@ class _GamerPageState extends ConsumerState<GamerPage>
       // reconozca como tuya antes de que nadie se plantee añadirte otra.
       _sentarALosDelDiario();
 
-      // Re-sincronizamos con Firestore al entrar a la pantalla para que
-      // Profile quede alineado con los puntos locales reales, incluso si
-      // el último guardado se hizo antes de corregir la sincronización.
-      await _syncGamerStats();
+      // PRIMERO SE LEE EL MARCADOR DEL DIARIO, Y LUEGO SE ESCRIBE.
+      //
+      // Este orden arregla una pérdida de datos, no es una optimización.
+      //
+      // Aquí decía antes que se re-sincronizaba "para que Profile quede
+      // alineado con los puntos locales reales". Eso es justo lo que
+      // estaba mal: los puntos locales viven en el almacenamiento de ESTE
+      // móvil, y `updatePlayerStats` escribe `gamerPoints` en absoluto, no
+      // sumando. Así que abrir la ruleta en un segundo teléfono —o en el
+      // mismo después de reinstalar, o de borrar los datos— sentaba a todo
+      // el mundo con 0 puntos y acto seguido escribía esos ceros encima
+      // del marcador de verdad. El diario entero se quedaba a cero, y el
+      // Perfil, que lee Firestore, mostraba 0 mientras la ruleta del otro
+      // móvil seguía enseñando los puntos de siempre. Era exactamente el
+      // desajuste que se venía notando.
+      //
+      // Firestore es la verdad compartida; el almacenamiento del móvil
+      // solo manda en los invitados, que no tienen cuenta y no existen en
+      // ningún otro sitio.
+      await _adoptarPuntosDelDiario();
+
+      // Y ahora sí: guardar en el móvil y subir, con el marcador ya bueno.
+      await _savePersistedData();
     } catch (e, st) {
       AppLog.e('Error cargando datos del Gamer', e, st);
     }
@@ -441,12 +454,66 @@ class _GamerPageState extends ConsumerState<GamerPage>
     }
 
     setState(() => _players.addAll(nuevos));
-    _savePersistedData();
+    // A propósito NO se guarda aquí. Quien llama a esto es la carga, y la
+    // carga todavía tiene que leer el marcador del diario antes de
+    // escribir nada: guardar en este punto subiría los ceros con los que
+    // se acaba de sentar a la gente. Ver `_adoptarPuntosDelDiario`.
   }
 
   /// Vincula automáticamente tu fila de la mesa la primera vez, para que tus
   /// puntos lleguen a tu cuenta sin que tengas que descubrir un gesto. Si ya
   /// hay una fila vinculada, no toca nada.
+  /// Trae de Firestore los puntos de quien tiene cuenta.
+  ///
+  /// Solo toca las filas que EXISTEN en el marcador del diario. Si el
+  /// servidor no sabe nada de alguien, lo local es lo único que hay de él
+  /// —puntos ganados sin cobertura, por ejemplo— y no se pisa. Y si la
+  /// lectura falla, no se toca nada: no saber es mejor que borrar.
+  Future<void> _adoptarPuntosDelDiario() async {
+    final GamerStats? marcador;
+    try {
+      marcador = await ref.read(gamerServiceProvider).fetchGamerStats();
+    } catch (e, st) {
+      AppLog.e('No se pudo leer el marcador del diario', e, st);
+      return;
+    }
+    if (marcador == null || !mounted) return;
+
+    bool cambio = false;
+    for (final Map<String, dynamic> jugador in _players) {
+      final String? suUid = jugador['uid']?.toString();
+      if (suUid == null || suUid.isEmpty) continue;
+      // `conoceA` y no `players.containsKey`: la fila puede estar
+      // guardada bajo una clave que no es el uid. Ver `GamerStats`.
+      if (!marcador.conoceA(suUid)) continue;
+
+      final GamerPlayerStats suyas = marcador.forUid(suUid);
+      if (jugador['points'] != suyas.gamerPoints) {
+        jugador['points'] = suyas.gamerPoints;
+        cambio = true;
+      }
+      // Las medallas NO se adoptan porque no existen en el servidor:
+      // `GamerPlayerStats` guarda puntos, decisiones, racha y logros, y
+      // nada más. O sea que las medallas siguen siendo de cada móvil, y
+      // eso es una laguna real —solo que arreglarla es añadir un campo al
+      // modelo y a las reglas, no cambiar este bucle—. Queda dicho aquí
+      // para que el siguiente que pase no crea que se olvidó.
+    }
+
+    // Y las decisiones propias, por lo mismo: el contador es local y una
+    // reinstalación lo dejaba en 0 para luego escribir ese 0 en la cuenta.
+    final String? miUid = ref.read(gamerServiceProvider).currentUid;
+    if (miUid != null && marcador.conoceA(miUid)) {
+      final int fuera = marcador.forUid(miUid).decisions;
+      if (fuera > _decisionsCount) {
+        _decisionsCount = fuera;
+        cambio = true;
+      }
+    }
+
+    if (cambio) setState(() {});
+  }
+
   void _autoLinkMyPlayer() {
     final String? uid = ref.read(gamerServiceProvider).currentUid;
     if (uid == null) return;
@@ -589,7 +656,9 @@ class _GamerPageState extends ConsumerState<GamerPage>
             score: jugador['points'] as int? ?? 0,
             decisions: soyYo ? _decisionsCount : null,
             streak: soyYo ? _decisionsCount : null,
-            unlockedChallenges: soyYo ? _palitoChallenges : const <String>[],
+            // `null`, no una lista vacía: mandar `[]` por los demás les
+        // borraba sus logros. Solo se escriben los propios.
+        unlockedChallenges: soyYo ? _palitoChallenges : null,
             displayName: jugador['name']?.toString() ?? 'Usuario',
           );
         } catch (e, st) {
@@ -1669,6 +1738,20 @@ class _GamerPageState extends ConsumerState<GamerPage>
     color: AppColors.textSecondary,
   );
 
+  // Los mismos tres, para cuando el fondo es el navy del escenario.
+  //
+  // No basta con poner el texto blanco: sobre oscuro los trazos finos se
+  // adelgazan ópticamente, así que el cuerpo sube a w600. Los alfas están
+  // elegidos por contraste medido sobre #0F172A, no a ojo: el overline queda
+  // en 8,6:1 y el cuerpo en 10:1, los dos por encima de AA a ese tamaño.
+  static TextStyle get _displayOnDark => _display.copyWith(color: Colors.white);
+  static TextStyle get _overlineOnDark =>
+      _overline.copyWith(color: Colors.white.withValues(alpha: 0.72));
+  static TextStyle get _bodyOnDark => _body.copyWith(
+    color: Colors.white.withValues(alpha: 0.80),
+    fontWeight: FontWeight.w600,
+  );
+
   /// Cambiar de diario cambia de mesa.
   ///
   /// Sin esto, el arreglo de arriba solo funcionaría al abrir la app: si
@@ -1923,7 +2006,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
 
           Container(height: AppBorder.thin, color: _kDark),
 
-          _buildTableBand(context),
+          _buildTableBand(context, modeColor),
 
           _SpinFoot(
             spinning: _isSpinning,
@@ -1948,15 +2031,35 @@ class _GamerPageState extends ConsumerState<GamerPage>
   }
 
   // ─── Escenario ──────────────────────────────────────────────────────────────
+  //
+  // POR QUÉ EL ESCENARIO ES OSCURO Y TIENE UNA CARA GRANDE EN MEDIO.
+  //
+  // Hasta aquí el escenario eran dos líneas de texto sobre blanco. Eso quería
+  // decir que durante el giro no se movía nada grande: el barrido solo existía
+  // en las fichas de 62 puntos del fondo de la tarjeta, y el premio final era
+  // una palabra creciendo un 6 %. El momento más importante de la app no tenía
+  // ni imagen, ni escala, ni luz — y por eso la pantalla se leía como una lista
+  // de cajas por muy pulida que estuviera cada caja. Ese era el fallo, y no se
+  // arregla añadiendo adornos a las cajas.
+  //
+  // Ahora el escenario es un foco encendido: navy de marca con un halo del
+  // color del modo detrás, y en el centro la cara de quien el barrido está
+  // señalando en ese instante. El barrido deja de ser un detalle del fondo y
+  // pasa a ser el espectáculo, porque la cara cambia al ritmo real del giro,
+  // que ya decelera bien (35 + paso^1,35 × 3 ms).
+  //
+  // El navy no amplía la paleta: la tarjeta de Resumen ya es navy. Blanco
+  // sobre #0F172A mide 17:1 y el amarillo de marca 11:1, así que el texto de
+  // aquí dentro cumple AA holgado.
   Widget _buildStage(BuildContext context, Color modeColor) {
     final Map<String, dynamic>? winner = _selectedWinner;
     final bool canPlay = _players.length >= 2;
 
-    // ── QUE EL RÓTULO DIGA LA VERDAD ──
-    //
-    // Decía "Todavía no hay con quién jugar" con una persona sentada, y
-    // "Sois 1 en la mesa" nunca llegaba a salir porque el umbral es 2. Son
-    // tres situaciones distintas y merecen tres frases distintas.
+    // Las fotos se leen aquí, en `build`, y no dentro del
+    // `ValueListenableBuilder`: un `ref.watch` en un rebuild que no nace de
+    // `build` revienta, y ese builder se dispara treinta veces por giro.
+    final Map<String, String> fotos = ref.watch(activeGroupProfileImagesProvider);
+
     final String overline;
     if (winner != null) {
       overline = _selectedMode == 0
@@ -1980,126 +2083,97 @@ class _GamerPageState extends ConsumerState<GamerPage>
               ? 'Falta gente'
               : (_selectedMode == 0 ? '¿Quién elige?' : '¿A quién le cae?'));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        // El halo es el color del modo mezclado con el navy, no el color del
+        // modo con alfa: así el amarillo no se apaga a gris sucio y el coral
+        // no tira a marrón. `alphaBlend` hace la mezcla una vez, opaca.
+        // Un 26 % en dos paradas daba un campo casi plano: en pantalla no
+        // se leía como luz, se leía como navy con una mancha. Tres paradas
+        // con una caída de verdad (34 % → 10 % → nada) sí hacen un foco.
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.35),
+          radius: 1.4,
+          colors: <Color>[
+            Color.alphaBlend(modeColor.withValues(alpha: 0.34), _kDark),
+            Color.alphaBlend(modeColor.withValues(alpha: 0.10), _kDark),
+            _kDark,
+          ],
+          stops: const <double>[0.0, 0.55, 1.0],
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          // ═══════════════════════════════════════════════════════════════
-          // LA RULETA GIRA AQUÍ, NO ABAJO
-          // ═══════════════════════════════════════════════════════════════
-          //
-          // ESTE ERA EL FALLO GORDO DE LA PANTALLA, y no se arreglaba con
-          // colores ni con bordes. El giro estaba bien programado —22 a 32
-          // saltos que van frenando con una potencia de 1,35, que es
-          // exactamente cómo desacelera una ruleta— pero **ese frenado no
-          // se veía en ninguna parte**. Lo único que cambiaba durante el
-          // giro era una ficha de 74 puntos dentro de una fila que se
-          // desplaza; mientras tanto, los dos elementos más grandes de la
-          // pantalla —el aro de 68 y el titular de 34— se quedaban
-          // congelados en el tenedor de la marca y en "¿Quién elige?".
-          //
-          // O sea que durante los tres segundos que dura la gracia del
-          // juego, la pantalla estaba prácticamente quieta y el nombre
-          // aparecía de golpe al final, en un sitio donde no había pasado
-          // nada. Eso es lo que hace que un juego parezca de mentira: no
-          // que esté mal dibujado, sino que la anticipación —que es el
-          // producto— no ocurra donde estás mirando.
-          //
-          // Ahora el aro y el titular SON la ruleta: van cantando a quien
-          // está encendido y frenan con ella, así que el nombre del ganador
-          // no aparece, **se para**. Es el mismo elemento, el mismo sitio y
-          // la misma tipografía desde el primer salto hasta el último: lo
-          // único que cambia es que deja de moverse.
-          //
-          // No cambia ni una regla del juego: `_selectedWinner` se sigue
-          // decidiendo exactamente igual, esto solo lo enseña.
-          //
-          // Se vuelve a pintar con el `ValueNotifier`, no con `setState`,
-          // por lo mismo que la fila de comensales: treinta reconstrucciones
-          // de la pantalla entera por giro era el tirón que se notaba.
           ValueListenableBuilder<int>(
             valueListenable: _highlightedIndex,
             builder: (BuildContext context, int highlighted, Widget? _) {
-              final Map<String, dynamic>? spotlight =
+              final Map<String, dynamic>? foco =
                   winner ??
                   (_isSpinning &&
                           highlighted >= 0 &&
                           highlighted < _players.length
                       ? _players[highlighted]
                       : null);
-
-              // Mientras gira, el titular es un nombre; parada, puede ser
-              // una pregunta. Un nombre se recorta a una línea A PROPÓSITO:
-              // si uno largo pasara a dos, la tarjeta entera daría un tirón
-              // en mitad del giro —y el `AnimatedSize` de arriba lo
-              // animaría treinta veces—. Las preguntas sí pueden partirse,
-              // que es como estaban.
-              final bool showsName = spotlight != null;
+              final bool showsName = foco != null;
               final String liveHeadline = showsName
-                  ? (spotlight['name']?.toString() ?? headline)
+                  ? (foco['name']?.toString() ?? headline)
                   : headline;
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  // ── SIN ARO ──
-                  //
-                  // Aquí había un círculo de 68 puntos que enseñaba la cara
-                  // de quien estaba señalado. Tenía sentido cuando los
-                  // comensales eran fichas de 74 en una tira al fondo: había
-                  // que traer a alguien al centro porque abajo no se veía.
-                  //
-                  // Con la mesa en el escenario, ese aro **repetía a 68
-                  // puntos la cara que ya está encendida a 62 justo debajo**.
-                  // Dos veces la misma persona en la misma tarjeta, y entre
-                  // las dos el hueco blanco que hacía que esto pareciera
-                  // vacío. El anuncio se queda; el duplicado se va.
-                  Text(overline, style: _overline, textAlign: TextAlign.center),
-                  const SizedBox(height: 6),
-                  // El remate. Ya no es una entrada desde el 90 % —el
-                  // nombre lleva ahí todo el giro—, es el asentamiento de
-                  // algo que venía con inercia: crece un pelo y encaja. La
-                  // curva `celebrate` pasa de 1 y vuelve, que es lo que
-                  // hace un objeto real al pararse.
-                  ScaleTransition(
-                    scale: winner != null && !AppMotion.reduced(context)
-                        ? Tween<double>(
-                            begin: 0.94,
-                            end: 1.0,
-                          ).animate(_winnerScaleAnimation)
-                        : const AlwaysStoppedAnimation<double>(1.0),
-                    child: Text(
-                      liveHeadline,
-                      maxLines: showsName ? 1 : null,
-                      overflow: showsName ? TextOverflow.ellipsis : null,
-                      style: _display,
-                      textAlign: TextAlign.center,
+                  // En reposo no hay foco. Un círculo vacío de 104 puntos en
+                  // mitad del escenario es el objeto más grande de la
+                  // pantalla sin decir nada: parece un hueco sin cargar, no
+                  // una pieza de diseño. El foco aparece cuando hay a quién
+                  // enfocar, y ese aparecer es parte del número: el
+                  // `AnimatedSize` de la tarjeta abre el escenario al girar.
+                  if (foco != null) ...<Widget>[
+                    _Spotlight(
+                      nombre: foco['name']?.toString() ?? '',
+                      fotoUrl: fotos[foco['uid']?.toString()],
+                      esPalito: _isPalito(foco),
+                      modeColor: modeColor,
+                      ganador: winner != null,
+                      girando: _isSpinning,
+                      pulso: _pulseAnimation,
+                      entrada: _winnerScaleAnimation,
                     ),
+                    const SizedBox(height: 18),
+                  ],
+                  Text(
+                    overline,
+                    style: _overlineOnDark,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    liveHeadline,
+                    maxLines: showsName ? 1 : null,
+                    overflow: showsName ? TextOverflow.ellipsis : null,
+                    style: _displayOnDark,
+                    textAlign: TextAlign.center,
                   ),
                 ],
               );
             },
           ),
 
-          // ── SALIDA PARA EL ESTADO VACÍO ──
-          //
-          // El elemento más grande de la pantalla decía "Añade a los
-          // comensales" **y no dejaba hacerlo**: el único botón para añadir
-          // estaba abajo del todo, fuera de pantalla, detrás del selector,
-          // del panel y del botón de girar. El protagonista de la pantalla
-          // era un callejón sin salida.
+          // ── La mesa no da para jugar todavía ──
           if (!canPlay && winner == null) ...<Widget>[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               _players.isEmpty
                   ? 'Sentad a la mesa a quien esté comiendo. Con dos ya se '
                         'puede jugar.'
                   : 'Con dos ya se puede jugar.',
-              style: _body,
+              style: _bodyOnDark,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             NeoActionButton(
               label: 'Añadir comensales',
               icon: Icons.person_add_alt_1_rounded,
@@ -2109,15 +2183,11 @@ class _GamerPageState extends ConsumerState<GamerPage>
             ),
           ],
 
-          // LO QUE ELIGE PALITO.
-          //
-          // Si el comensal que ha salido es la app, aquí va el plato, sacado
-          // de vuestro propio diario. Sin esto, la ruleta anunciaba que
-          // elegía la app y no elegía nada: el chiste se quedaba a medias.
+          // ── Lo que ha elegido Palito ──
           if (winner != null && _isPalito(winner) && _selectedMode == 0) ...<
             Widget
           >[
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             _InsetPanel(
               background: AppColors.tintPrimary,
               child: Column(
@@ -2148,13 +2218,9 @@ class _GamerPageState extends ConsumerState<GamerPage>
             ),
           ],
 
-          // El reto del juicio picante.
+          // ── El reto del juicio picante ──
           if (_selectedMode == 1 && _currentChallenge != null) ...<Widget>[
-            const SizedBox(height: 16),
-            // La tarjeta dice "toca aquí" y no era un botón para el lector
-            // de pantalla: un `GestureDetector` pelado no tiene rol, así que
-            // VoiceOver leía el reto y se callaba lo único que hay que hacer
-            // con él.
+            const SizedBox(height: 18),
             Semantics(
               button: true,
               label: 'Reto: ${_currentChallenge!}. Tocar para evaluarlo.',
@@ -2164,9 +2230,6 @@ class _GamerPageState extends ConsumerState<GamerPage>
                   child: InkWell(
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     onTap: () {
-                      // Se vuelve a leer el ganador aquí dentro en vez de
-                      // capturarlo: un campo nunca se promociona en Dart, y
-                      // entre el dibujado y el toque puede haber cambiado.
                       final Map<String, dynamic>? w = _selectedWinner;
                       final String? challenge = _currentChallenge;
                       if (w == null || challenge == null) return;
@@ -2195,15 +2258,10 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
                               Text(
-                                // Era "👆 Toca aquí para evaluar el reto".
-                                // Un emoji no es una affordance: dice dónde
-                                // tocar pero no qué pasa al tocar.
                                 'Decir si lo cumplió',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
-                                  // El coral de marca mide 3,31:1 sobre
-                                  // claro; este token, 4,70:1.
                                   color: AppColors.accentText,
                                 ),
                               ),
@@ -2223,22 +2281,20 @@ class _GamerPageState extends ConsumerState<GamerPage>
             ),
           ],
 
-          // ── AÑADIR UN RETO, DONDE SE PIENSA EN ÉL ──
-          //
-          // Este botón vivía abajo del todo de la pantalla, detrás del
-          // historial, y salía también jugando a la ruleta, donde no pinta
-          // nada. Aquí aparece solo en el juicio picante y solo mientras no
-          // hay veredicto encima: que es exactamente cuando a alguien de la
-          // mesa se le ocurre uno.
+          // ── Añadir un reto propio ──
           if (_selectedMode == 1 && winner == null && canPlay) ...<Widget>[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             TextButton.icon(
               onPressed: _showAddChallengeDialog,
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('Añadir un reto vuestro'),
+              // Blanco y no el coral del modo: es una acción secundaria y el
+              // coral sobre navy se queda en 4,9:1, justo en el filo de AA.
+              // El blanco da 17:1 y además evita meter un tercer color en un
+              // panel que ya tiene el navy y el halo del modo.
               style: TextButton.styleFrom(
                 minimumSize: const Size(0, 44),
-                foregroundColor: AppColors.accentText,
+                foregroundColor: Colors.white,
                 textStyle: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -2252,7 +2308,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
   }
 
   // ─── La banda de la mesa ────────────────────────────────────────────────────
-  Widget _buildTableBand(BuildContext context) {
+  Widget _buildTableBand(BuildContext context, Color modeColor) {
     final String? myUid = ref.watch(gamerServiceProvider).currentUid;
     // Las fotos salen del documento del diario que esta pantalla ya observa:
     // ni una lectura más. Ver `_CaraComensal`.
@@ -2264,23 +2320,18 @@ class _GamerPageState extends ConsumerState<GamerPage>
         _players.any((Map<String, dynamic> p) => p['uid'] == myUid);
 
     return Container(
-      // ── POR QUÉ AMARILLO PÁLIDO Y NO `surfaceWarm` ──
+      // ── POR QUÉ LA BANDA VOLVIÓ A SER BLANCA ──
       //
-      // El primer intento usó `surfaceWarm` (#FFFDF5) sobre blanco: un 1 %
-      // de diferencia, o sea que la banda existía en el código y no en la
-      // pantalla — quedaba más blanco con una raya encima, y la idea de
-      // "esto es la mesa" se perdía entera.
+      // Fue amarillo pálido mientras el escenario era blanco: hacía falta
+      // algo que dijera "esto es la mesa, aquello es el juego". Ahora el
+      // escenario es navy con luz propia, o sea que esa separación ya está
+      // hecha, y el amarillo solo añadía una tercera franja de color a una
+      // tarjeta que ya iba pestaña amarilla → panel oscuro → botón navy.
       //
-      // `tintPrimary` es el amarillo de marca al 15 % ya mezclado con el
-      // blanco (opaco a propósito: ver AppColors). Se ve, es de la marca, y
-      // deja a las fichas blancas leyéndose como lo que son, apoyadas
-      // encima. El navy encima mide 16,84:1.
-      //
-      // No choca con la pestaña elegida aunque las dos sean amarillas:
-      // #FFD400 contra #FFF9D9 son dos tonos claramente distintos, y en
-      // juicio picante la cabecera es coral sobre esta misma banda, que son
-      // los dos colores de la marca juntos.
-      color: AppColors.tintPrimary,
+      // Blanco es aquí el color que descansa: deja que el navy de arriba
+      // mande y que el amarillo vuelva a significar una sola cosa en esta
+      // pantalla — a quién está señalando la ruleta.
+      color: AppColors.surface,
       padding: const EdgeInsets.only(top: 16, bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2349,7 +2400,15 @@ class _GamerPageState extends ConsumerState<GamerPage>
               builder: (BuildContext context, int highlighted, Widget? _) =>
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Wrap(
+                    // `WrapAlignment.center` no hacía nada: la columna de
+                    // esta banda alinea a la izquierda, así que el `Wrap` se
+                    // ajustaba al ancho de sus propias fichas, y centrar
+                    // dentro de sí mismo no mueve nada. Con el ancho
+                    // declarado ya hay espacio que repartir, y la mesa queda
+                    // centrada bajo el escenario en vez de escorada.
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
                       alignment: WrapAlignment.center,
                       spacing: 14,
                       runSpacing: 16,
@@ -2368,6 +2427,12 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             photoUrl: fotos[player['uid']?.toString()],
                             highlighted: index == highlighted,
                             spinning: _isSpinning,
+                            accent: modeColor,
+                            // El foco de un escenario apaga lo que no
+                            // señala. Mientras gira, los demás bajan a un
+                            // 40 %: el barrido deja de competir con siete
+                            // fichas igual de fuertes.
+                            dimmed: _isSpinning && index != highlighted,
                             winner:
                                 _selectedWinner != null &&
                                 _selectedWinner!['name'] == player['name'],
@@ -2379,6 +2444,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
                           },
                         ),
                       ],
+                      ),
                     ),
                   ),
             ),
@@ -2563,6 +2629,131 @@ class _InsetPanel extends StatelessWidget {
 ///
 /// Los invitados —quien está comiendo y no tiene la app— se quedan en su
 /// inicial, que es exactamente lo que se sabe de ellos: su nombre.
+/// ===========================================================================
+/// EL FOCO
+/// ===========================================================================
+///
+/// La cara grande del escenario: la que el barrido va iluminando durante el
+/// giro y en la que aterriza el ganador.
+///
+/// POR QUÉ AQUÍ SÍ HAY REBOTE.
+///
+/// La regla del resto de la app es amortiguar del todo: nada de sobreimpulso
+/// en algo que simplemente ha aparecido, porque se lee como un tic. Aquí el
+/// gesto trae inercia — veintitantos pasos decelerando — y un frenazo seco
+/// después de eso se siente como una pared. `AppAnimation.celebrate`
+/// (Cubic 0.175, 0.885, 0.32, 1.45) es el rebote que ya estaba en los tokens
+/// y que esta pantalla nunca llegó a usar.
+///
+/// El aro que sale despedido y la escala de la cara van con `Transform`, no
+/// cambiando el tamaño de los `Container`: así el foco ocupa siempre 104
+/// puntos de alto y el texto de debajo no da botes mientras la animación
+/// corre.
+class _Spotlight extends StatelessWidget {
+  const _Spotlight({
+    required this.nombre,
+    required this.fotoUrl,
+    required this.esPalito,
+    required this.modeColor,
+    required this.ganador,
+    required this.girando,
+    required this.pulso,
+    required this.entrada,
+  });
+
+  final String nombre;
+  final String? fotoUrl;
+  final bool esPalito;
+
+  final Color modeColor;
+  final bool ganador;
+  final bool girando;
+  final Animation<double> pulso;
+  final Animation<double> entrada;
+
+  static const double _lado = 104;
+  static const double _aro = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget cara = Container(
+      width: _lado,
+      height: _lado,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: _aro),
+        // El halo no es una sombra: es la luz del foco. Por eso no lleva
+        // desplazamiento y sí difuminado, al revés que las sombras macizas
+        // de la marca.
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: modeColor.withValues(alpha: ganador ? 0.55 : 0.28),
+            blurRadius: ganador ? 32 : 16,
+            spreadRadius: ganador ? 2 : 0,
+          ),
+        ],
+      ),
+      child: _CaraComensal(
+        nombre: nombre,
+        esPalito: esPalito,
+        fotoUrl: fotoUrl,
+        lado: _lado - _aro * 2,
+        colorTexto: _kDark,
+        fondo: ganador ? modeColor : AppColors.tintPrimary,
+      ),
+    );
+
+    if (AppMotion.reduced(context)) return cara;
+
+    // Girando o en reposo: el foco respira al compás del botón y nada más.
+    if (girando || !ganador) {
+      return ScaleTransition(
+        scale: girando ? pulso : const AlwaysStoppedAnimation<double>(1.0),
+        child: cara,
+      );
+    }
+
+    // Aterrizaje.
+    return SizedBox(
+      width: _lado,
+      height: _lado,
+      child: AnimatedBuilder(
+        animation: entrada,
+        child: cara,
+        builder: (BuildContext context, Widget? child) {
+          // `celebrate` pasa de 1 antes de asentarse: la escala lo aprovecha
+          // sin recortar, y solo la opacidad se acota porque `Opacity` no
+          // admite valores fuera de 0–1.
+          final double v = entrada.value;
+          final double t = v.clamp(0.0, 1.0);
+          return Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              if (t < 0.999)
+                Opacity(
+                  opacity: (1.0 - t) * 0.7,
+                  child: Transform.scale(
+                    scale: 1.0 + t * 0.55,
+                    child: Container(
+                      width: _lado,
+                      height: _lado,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: modeColor, width: 2.5),
+                      ),
+                    ),
+                  ),
+                ),
+              Transform.scale(scale: 0.72 + 0.28 * v, child: child),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _CaraComensal extends StatelessWidget {
   const _CaraComensal({
     required this.nombre,
@@ -2596,10 +2787,25 @@ class _CaraComensal extends StatelessWidget {
             Icon(Icons.restaurant, color: colorTexto, size: lado * 0.45),
       );
     } else if (fotoUrl != null && fotoUrl!.isNotEmpty) {
-      contenido = SmartImage(
-        imagePath: fotoUrl,
-        width: lado.round(),
-        fit: BoxFit.cover,
+      // EL `SizedBox` NO ES DECORATIVO, ARREGLA UN FALLO.
+      //
+      // El `Container` de abajo lleva `alignment: center`, y un `Container`
+      // con alineación da a su hijo restricciones holgadas: la foto se
+      // pintaba a su tamaño natural —una foto de cámara— centrada y
+      // recortada por el círculo. O sea que en la mesa no se veía la cara
+      // de nadie: se veía el trozo del centro de su foto a resolución
+      // completa. `BoxFit.cover` no puede cubrir nada si no se le dice qué.
+      //
+      // Con el hueco declarado, `cover` hace su trabajo: escala la foto
+      // hasta tapar el círculo y recorta lo que sobra por el lado largo.
+      contenido = SizedBox(
+        width: lado,
+        height: lado,
+        child: SmartImage(
+          imagePath: fotoUrl,
+          width: lado.round(),
+          fit: BoxFit.cover,
+        ),
       );
     } else {
       contenido = Text(
@@ -2633,6 +2839,8 @@ class _PlayerChip extends StatelessWidget {
     required this.photoUrl,
     required this.highlighted,
     required this.spinning,
+    required this.accent,
+    required this.dimmed,
     required this.winner,
     required this.linkedToMe,
     required this.onTap,
@@ -2647,6 +2855,13 @@ class _PlayerChip extends StatelessWidget {
 
   final bool highlighted;
 
+  /// El color del modo en juego. La ficha marcada se ribetea con él, igual
+  /// que el halo del escenario: mesa y foco hablan el mismo idioma.
+  final Color accent;
+
+  /// La ruleta está señalando a otro. Esta ficha se aparta.
+  final bool dimmed;
+
   /// La ruleta está girando ahora mismo.
   final bool spinning;
 
@@ -2657,11 +2872,19 @@ class _PlayerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color playerColor = player['color'] as Color? ?? AppColors.primary;
     final String name = player['name']?.toString() ?? 'Comensal';
     final bool marked = highlighted || winner;
 
-    return Semantics(
+    return AnimatedOpacity(
+      // Sin transición mientras gira: el barrido cambia de ficha cada 35 ms
+      // y una interpolación de 160 ms las dejaría a todas a medio encender.
+      // Al parar sí se funde, para que la mesa vuelva entera sin un salto.
+      duration: spinning
+          ? Duration.zero
+          : AppMotion.dur(context, AppAnimation.fast),
+      curve: AppAnimation.tint,
+      opacity: dimmed ? 0.4 : 1.0,
+      child: Semantics(
       button: true,
       label:
           '$name${linkedToMe ? ', vinculado a tu cuenta' : ''}. '
@@ -2694,7 +2917,11 @@ class _PlayerChip extends StatelessWidget {
               // 86 y no 74: la cara pasa de 38 a 62 puntos. Es el cambio que
               // convierte una tira de cromos en una mesa con gente. Ver el
               // comentario de `_buildTableBand`.
-              width: 86,
+              // 92 y no 86: es el ancho más grande con el que siguen
+              // entrando tres fichas por fila en un iPhone de 393 puntos
+              // (3×92 + 2×14 = 304, y el hueco útil de la banda mide 313).
+              // Con 96 se caían a dos por fila.
+              width: 92,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
               decoration: BoxDecoration(
                 // Relleno sólido, no alpha-blend: el mismo patrón de
@@ -2703,7 +2930,7 @@ class _PlayerChip extends StatelessWidget {
                 color: highlighted ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(
-                  color: marked ? _kBadgeOrange : _kDark,
+                  color: marked ? accent : _kDark,
                   width: marked ? AppBorder.normal : AppBorder.thin,
                 ),
                 // SIN SOMBRA. Estas fichas están APOYADAS en la mesa, no
@@ -2745,10 +2972,24 @@ class _PlayerChip extends StatelessWidget {
                           esPalito: player['isBot'] == true,
                           fotoUrl: photoUrl,
                           lado: 62,
-                          colorTexto: highlighted ? _kDark : playerColor,
+                          // Todas las caras iguales, a propósito.
+                          //
+                          // Cada comensal tenía su pastel de la paleta de
+                          // asientos: amarillo, rosa, gris… Tres pasteles
+                          // distintos uno al lado del otro, cada uno con su
+                          // letra, no se leen como un sistema: se leen como
+                          // pegatinas. Y el gris, además, parecía un avatar
+                          // sin cargar.
+                          //
+                          // El color de asiento sigue existiendo y sigue
+                          // usándose donde sí distingue (el podio del
+                          // resumen). Aquí lo que tiene que destacar es a
+                          // quién señala la ruleta, y eso ya lo dice el
+                          // relleno amarillo de la ficha.
+                          colorTexto: _kDark,
                           fondo: highlighted
                               ? AppColors.surface
-                              : playerColor.withValues(alpha: 0.2),
+                              : AppColors.tintPrimary,
                         ),
                       ),
                       if (linkedToMe)
@@ -2777,15 +3018,52 @@ class _PlayerChip extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      color: _kDark,
+                  // UNA LÍNEA, Y QUE SE ENCOJA SI HACE FALTA.
+                  //
+                  // Primero probé dos líneas, y en el simulador se vio por
+                  // qué no vale: un nombre de usuario no tiene espacios
+                  // donde partir, así que «marialr1989» salía «marialr198»
+                  // y «9» debajo — el número cortado por la mitad. Y peor:
+                  // esa ficha crecía 14 puntos y la fila quedaba con una
+                  // ficha más alta que las otras.
+                  //
+                  // `FittedBox` en `scaleDown` deja el nombre en una línea
+                  // y solo lo encoge cuando no cabe: nunca lo agranda, así
+                  // que los nombres normales se siguen viendo a 13 puntos y
+                  // todas las fichas miden lo mismo. El alto va declarado
+                  // para que encoger no mueva nada de sitio.
+                  //
+                  // EL `SizedBox` DE DENTRO ES EL SUELO.
+                  //
+                  // `FittedBox` a secas no tiene límite: el campo admite 24
+                  // caracteres (`FieldLimits.nombreComensal`), y 24
+                  // caracteres en 80 puntos se encogen hasta 6 — completo y
+                  // también ilegible, que no es arreglarlo.
+                  //
+                  // Así que el texto se mide primero en una caja de 104
+                  // puntos, donde recorta con puntos suspensivos si no
+                  // cabe, y `FittedBox` reduce esos 104 a los 80 reales:
+                  // un factor de 0,77, o sea 10 puntos efectivos. Nunca
+                  // baja de ahí. Los nombres normales siguen a 13.
+                  SizedBox(
+                    height: 17,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: 104,
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: _kDark,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -2793,6 +3071,7 @@ class _PlayerChip extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

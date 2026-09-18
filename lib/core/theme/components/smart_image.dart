@@ -49,6 +49,12 @@ class SmartImage extends StatefulWidget {
   /// miniaturas de 60 dp pedían 120 px para un hueco de 180 y se veían
   /// blandas, mientras que la portada de Inicio pedía 1600 px para pintarse
   /// a 918 — tres veces el área necesaria, descargada y decodificada.
+  /// Pública porque el avatar del Perfil la necesita: ese usa
+  /// `CircleAvatar`, que pide un `ImageProvider` y no un widget, así que no
+  /// puede pasar por `SmartImage` pero sí debe pedir la misma miniatura.
+  static String resizedUrl(String url, int targetWidth) =>
+      _withCloudinaryResize(url, targetWidth);
+
   static String _withCloudinaryResize(String url, int targetWidth) {
     const String uploadMarker = '/image/upload/';
     final int markerIndex = url.indexOf(uploadMarker);

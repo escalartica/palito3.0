@@ -76,6 +76,12 @@ class _FakeGamerService extends GamerFirestoreService {
   Stream<GamerStats?> getGamerStatsStream() =>
       Stream<GamerStats?>.value(null);
 
+  // La ruleta lee el marcador del diario una vez al abrirse, para no pisar
+  // con los ceros de este móvil los puntos jugados en otro. Sin este
+  // `override` la prueba se iría a Firestore de verdad.
+  @override
+  Future<GamerStats?> fetchGamerStats() async => null;
+
   // `decisions` y `streak` son opcionales desde que la mesa sincroniza la
   // fila de cada comensal con cuenta: quien lleva el móvil sabe los puntos de
   // todos, pero no cuántas tiradas ha hecho cada uno por su cuenta. Este
@@ -87,7 +93,7 @@ class _FakeGamerService extends GamerFirestoreService {
     required int score,
     int? decisions,
     int? streak,
-    List<String> unlockedChallenges = const <String>[],
+    List<String>? unlockedChallenges,
     String? displayName,
   }) async {}
 

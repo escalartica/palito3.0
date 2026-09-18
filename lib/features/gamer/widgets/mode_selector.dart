@@ -36,7 +36,13 @@ class ModeSelector extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: <Widget>[
-      Row(
+      // `IntrinsicHeight` + `stretch` para que el separador de abajo mida
+      // exactamente lo que miden las pestañas. Con un alto fijo se quedaría
+      // corto en cuanto alguien suba el tamaño del texto del sistema, y esa
+      // es la primera cosa que toca quien no ve de cerca.
+      IntrinsicHeight(
+        child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           ModeTab(
             // "Quién elige", no "Ruleta": con la pestaña llamándose ya
@@ -53,6 +59,9 @@ class ModeSelector extends StatelessWidget {
             activeColor: _kYellow,
             onTap: onSelect,
           ),
+          // Con las dos pestañas casi blancas cuando ninguna está
+          // elegida, hace falta decir dónde acaba una y empieza la otra.
+          Container(width: AppBorder.thin, color: _kDark),
           ModeTab(
             label: 'Juicio picante',
             index: 1,
@@ -61,6 +70,7 @@ class ModeSelector extends StatelessWidget {
             onTap: onSelect,
           ),
         ],
+        ),
       ),
       // La línea que separa la cabecera del escenario. Navy y del mismo
       // grosor que los bordes de la app: es un borde, no un adorno.

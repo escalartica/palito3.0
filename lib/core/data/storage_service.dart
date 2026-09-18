@@ -43,7 +43,27 @@ class StorageService {
   // CONFIGURACIÓN
   // ==========================================================================
 
-  static const String _key = 'memories_data';
+  static const String _claveHeredada = 'memories_data';
+
+  /// UNA CACHÉ POR DIARIO.
+  ///
+  /// Había una sola clave para todos. Y `memoryProvider` se recrea al
+  /// cambiar de diario —observa `activeGroupIdProvider` a propósito—, así
+  /// que al entrar en otro diario lo primero que hacía era cargar esta
+  /// caché: los recuerdos del diario ANTERIOR. Durante el instante que
+  /// tarda el stream nuevo en llegar, Inicio y Mapa enseñaban contenido de
+  /// otro diario; y si en ese momento abrías uno y lo guardabas, se
+  /// copiaba al diario en el que estabas.
+  ///
+  /// Es el mismo fallo que ya se arregló en La ruleta con `_clavePartida`,
+  /// que se quedó sin arreglar aquí.
+  ///
+  /// La clave sin sufijo se conserva para quien venga de una versión
+  /// anterior: sin diario resuelto todavía, se sigue leyendo la de siempre.
+  static String _claveDe(String? groupId) =>
+      (groupId == null || groupId.isEmpty)
+      ? _claveHeredada
+      : '${_claveHeredada}_$groupId';
 
   // ==========================================================================
   // GUARDAR TODAS LAS MEMORIAS
@@ -62,7 +82,10 @@ class StorageService {
   /// El MemoryModel debe encargarse de convertir DateTime a String
   /// ISO-8601 y de convertir los campos anidados a estructuras compatibles
   /// con JSON.
-  static Future<void> saveMemories(List<MemoryModel> memories) async {
+  static Future<void> saveMemories(
+    List<MemoryModel> memories, {
+    String? groupId,
+  }) async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -127,7 +150,7 @@ class StorageService {
       // GUARDAR EN SHAREDPREFERENCES
       // ----------------------------------------------------------------------
 
-      final bool saved = await prefs.setString(_key, encodedData);
+      final bool saved = await prefs.setString(_claveDe(groupId), encodedData);
 
       if (!saved) {
         throw Exception('SharedPreferences no pudo guardar memories_data.');
@@ -172,7 +195,7 @@ class StorageService {
   ///     MÁS RECIENTE
   ///          ↓
   ///     MÁS ANTIGUA
-  static Future<List<MemoryModel>> loadMemories() async {
+  static Future<List<MemoryModel>> loadMemories({String? groupId}) async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -180,7 +203,7 @@ class StorageService {
       // OBTENER JSON
       // ----------------------------------------------------------------------
 
-      final String? encodedData = prefs.getString(_key);
+      final String? encodedData = prefs.getString(_claveDe(groupId));
 
       if (encodedData == null || encodedData.trim().isEmpty) {
         _log(
@@ -296,9 +319,9 @@ class StorageService {
   /// La lista completa se guarda posteriormente ordenada de:
   ///
   ///     más reciente → más antigua
-  static Future<void> saveMemory(MemoryModel memory) async {
+  static Future<void> saveMemory(MemoryModel memory, {String? groupId}) async {
     try {
-      final List<MemoryModel> memories = await loadMemories();
+      final List<MemoryModel> memories = await loadMemories(groupId: groupId);
 
       final int existingIndex = memories.indexWhere(
         (MemoryModel item) => item.id == memory.id,
@@ -332,7 +355,7 @@ class StorageService {
       // GUARDAR LISTA COMPLETA
       // --------------------------------------------------------------------
 
-      await saveMemories(memories);
+      await saveMemories(memories, groupId: groupId);
     } catch (e, stack) {
       _log(
         '❌ StorageService: '
@@ -352,7 +375,7 @@ class StorageService {
   /// Elimina una memoria del almacenamiento local.
   ///
   /// Si no existe, no genera error.
-  static Future<void> deleteMemory(String memoryId) async {
+  static Future<void> deleteMemory(String memoryId, {String? groupId}) async {
     try {
       final String normalizedId = memoryId.trim();
 
@@ -365,7 +388,7 @@ class StorageService {
         return;
       }
 
-      final List<MemoryModel> memories = await loadMemories();
+      final List<MemoryModel> memories = await loadMemories(groupId: groupId);
 
       final int originalLength = memories.length;
 
@@ -380,7 +403,7 @@ class StorageService {
         return;
       }
 
-      await saveMemories(memories);
+      await saveMemories(memories, groupId: groupId);
 
       _log(
         '🗑️ StorageService: '
@@ -407,8 +430,8 @@ class StorageService {
   /// Es un alias explícito de saveMemory().
   ///
   /// Si la memoria no existe, se añadirá.
-  static Future<void> updateMemory(MemoryModel memory) async {
-    await saveMemory(memory);
+  static Future<void> updateMemory(MemoryModel memory, {String? groupId}) async {
+    await saveMemory(memory, groupId: groupId);
   }
 
   // ==========================================================================
@@ -422,11 +445,11 @@ class StorageService {
   /// Este método solo elimina la copia local.
   ///
   /// NO elimina memorias de Firestore.
-  static Future<void> clearMemories() async {
+  static Future<void> clearMemories({String? groupId}) async {
     try {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      await prefs.remove(_key);
+      await prefs.remove(_claveDe(groupId));
 
       _log(
         '🧹 StorageService: '
@@ -449,9 +472,9 @@ class StorageService {
   // ==========================================================================
 
   /// Comprueba si existen memorias guardadas localmente.
-  static Future<bool> hasMemories() async {
+  static Future<bool> hasMemories({String? groupId}) async {
     try {
-      final List<MemoryModel> memories = await loadMemories();
+      final List<MemoryModel> memories = await loadMemories(groupId: groupId);
 
       return memories.isNotEmpty;
     } catch (e) {

@@ -576,11 +576,23 @@ class _CaraDeMiembro extends StatelessWidget {
           // `width` en dp: `SmartImage` lo multiplica por la densidad real y
           // le pide a Cloudinary una versión de ese tamaño, en vez de bajar
           // la foto de cámara entera para pintarla a 32 puntos.
-          : SmartImage(
-              imagePath: url,
-              width: _lado.round(),
-              fit: BoxFit.cover,
-              semanticLabel: 'Foto de $limpio',
+          // El hueco va declarado a propósito: este `Container` lleva
+          // `alignment: center`, y un `Container` con alineación da a su
+          // hijo restricciones holgadas. Sin el `SizedBox`, la foto se
+          // pintaba a su tamaño natural —el de la cámara— centrada y
+          // recortada por el círculo: no se veía la cara del miembro, se
+          // veía el trozo del centro de su foto. `cover` no puede cubrir
+          // nada si no se le dice qué hueco cubrir. Mismo fallo que había
+          // en las fichas de la ruleta.
+          : SizedBox(
+              width: _lado,
+              height: _lado,
+              child: SmartImage(
+                imagePath: url,
+                width: _lado.round(),
+                fit: BoxFit.cover,
+                semanticLabel: 'Foto de $limpio',
+              ),
             ),
     );
   }

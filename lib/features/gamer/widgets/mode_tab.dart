@@ -69,8 +69,16 @@ class ModeTab extends StatelessWidget {
             // un 1 % del blanco, o sea que no se ven. `tintMuted` es navy al
             // 10 % ya mezclado —opaco, ver AppColors— y el navy encima mide
             // 14,56:1.
+            // `tintMuted` (#E7E8EA) era el único color frío de la
+            // pantalla: todo lo demás es crema, amarillo, coral y navy, y
+            // ese gris azulado se leía como la nota apagada de arriba —
+            // más aún desde que debajo hay un panel navy con luz.
+            //
+            // `surfaceWarm` es casi blanco pero cálido, de la misma
+            // familia que el fondo de la app. La pestaña elegida sigue
+            // siendo la única con color, que es de lo que va un selector.
             decoration: BoxDecoration(
-              color: isSelected ? activeColor : AppColors.tintMuted,
+              color: isSelected ? activeColor : AppColors.surfaceWarm,
             ),
             alignment: Alignment.center,
             child: Text(

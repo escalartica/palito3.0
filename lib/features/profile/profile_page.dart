@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/household_provider.dart';
@@ -16,6 +17,7 @@ import '../../core/services/account_deletion_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/storage_image_service.dart';
 import 'widgets/profile_groups_section.dart';
+import '../../core/theme/components/smart_image.dart';
 import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/theme/tokens/app_animation.dart';
@@ -1379,25 +1381,49 @@ class _ProfileHeader extends StatelessWidget {
                       onTap: onTapImage,
                       child: Padding(
                         padding: const EdgeInsets.all(3),
+                        // EL ICONO SIEMPRE DEBAJO, AUNQUE HAYA FOTO.
+                        //
+                        // La intención era buena y estaba escrita aquí: si
+                        // la URL caduca, no hay red o las reglas de Storage
+                        // deniegan, tiene que quedar el icono y no un disco
+                        // de color liso donde no se sabe si tu foto se
+                        // perdió. Lo que estaba mal era el cómo.
+                        //
+                        // `CircleAvatar` pinta en este orden: color de
+                        // fondo → `backgroundImage` → `child` →
+                        // `foregroundImage`. O sea que `child` va ENCIMA
+                        // de `backgroundImage`, no debajo: con foto
+                        // puesta, tu cara salía con un monigote de 34
+                        // puntos pintado encima. Eso es lo que se veía en
+                        // el simulador — un borrón oscuro, no una foto.
+                        //
+                        // La foto pasa a `foregroundImage`, que sí se
+                        // pinta sobre el `child`. El icono queda debajo
+                        // como respaldo real: tapado cuando la foto carga,
+                        // visible cuando falla.
+                        //
+                        // Y de paso deja de traerse la foto original a
+                        // resolución de cámara para un círculo de 68
+                        // puntos: pide la misma miniatura de Cloudinary que
+                        // el resto de la app.
                         child: CircleAvatar(
                           radius: 34,
                           backgroundColor: config.bgCard,
-                          backgroundImage: imagePath != null
-                              ? NetworkImage(imagePath!)
+                          foregroundImage: imagePath != null
+                              ? CachedNetworkImageProvider(
+                                  SmartImage.resizedUrl(
+                                    imagePath!,
+                                    (68 *
+                                            MediaQuery.devicePixelRatioOf(
+                                              context,
+                                            ))
+                                        .round(),
+                                  ),
+                                )
                               : null,
-                          onBackgroundImageError: imagePath != null
+                          onForegroundImageError: imagePath != null
                               ? (_, _) {}
                               : null,
-                          // El icono SIEMPRE debajo, aunque haya foto.
-                          //
-                          // Antes el respaldo solo existía cuando no había
-                          // `imagePath`, así que con una URL caducada, sin
-                          // red o con las reglas de Storage denegando, el
-                          // error se tragaba en silencio y quedaba un disco
-                          // de color liso, sin nada dentro y sin forma de
-                          // saber si tu foto se había perdido. Con la foto
-                          // cargada, el icono queda tapado por ella y no se
-                          // ve; sin ella, se ve.
                           child: Icon(
                             config.icon,
                             size: 34,

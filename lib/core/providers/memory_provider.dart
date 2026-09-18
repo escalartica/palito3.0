@@ -52,6 +52,13 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
 
   final MemoryMapFirestoreService _firestoreService;
 
+  /// El diario al que pertenece esta caché local.
+  ///
+  /// Sale del propio servicio, que ya lo tiene resuelto, en vez de volver a
+  /// leer el provider: así no puede desalinearse con el sitio al que este
+  /// notifier está escribiendo de verdad.
+  String? get _diario => _firestoreService.groupId;
+
   // ==========================================================================
   // ESTADO INTERNO
   // ==========================================================================
@@ -104,7 +111,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   Future<void> _loadLocalMemories() async {
     try {
       final List<MemoryModel> localMemories =
-          await StorageService.loadMemories();
+          await StorageService.loadMemories(groupId: _diario);
 
       _log(
         '💾 MemoryNotifier: '
@@ -277,7 +284,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
       state = _normalizeMemories(updatedMemories);
 
       try {
-        await StorageService.saveMemory(newMemory);
+        await StorageService.saveMemory(newMemory, groupId: _diario);
 
         await _firestoreService.saveMemoryModel(newMemory);
       } catch (_) {
@@ -329,7 +336,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
 
       state = _normalizeMemories(updatedMemories);
 
-      await StorageService.updateMemory(updatedMemory);
+      await StorageService.updateMemory(updatedMemory, groupId: _diario);
 
       await _firestoreService.saveMemoryModel(updatedMemory);
 
@@ -371,7 +378,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
           .where((MemoryModel memory) => memory.id.trim() != normalizedId)
           .toList();
 
-      await StorageService.deleteMemory(normalizedId);
+      await StorageService.deleteMemory(normalizedId, groupId: _diario);
 
       await _firestoreService.deleteMemory(normalizedId);
 
@@ -432,7 +439,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
     try {
       state = <MemoryModel>[];
 
-      await StorageService.clearMemories();
+      await StorageService.clearMemories(groupId: _diario);
 
       _log(
         '🧹 MemoryNotifier: '
@@ -550,7 +557,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
     _pendingPersist = null;
 
     try {
-      await StorageService.saveMemories(pending);
+      await StorageService.saveMemories(pending, groupId: _diario);
 
       _log(
         '💾 MemoryNotifier: '

@@ -311,6 +311,31 @@ class GamerFirestoreService {
   //
   // ==========================================================================
 
+  /// Una lectura, una vez, del marcador del diario.
+  ///
+  /// La ruleta la necesita al abrirse: su tabla vive en el almacenamiento
+  /// del móvil, y el almacenamiento del móvil no sabe nada de lo que se ha
+  /// jugado en los otros. Sin esta lectura, entrar en la ruleta desde un
+  /// segundo teléfono pisaba el marcador con los ceros de ese teléfono.
+  /// El `stream` no sirve para eso: la carga necesita un valor ya, no una
+  /// suscripción.
+  Future<GamerStats?> fetchGamerStats() async {
+    final User? user = _auth.currentUser;
+    if (user == null) return null;
+
+    final DocumentReference<Map<String, dynamic>>? docRef =
+        _mainStatsDocumentForUid(user.uid);
+    if (docRef == null) return GamerStats.empty(currentUid: user.uid);
+
+    final DocumentSnapshot<Map<String, dynamic>> snapshot = await docRef.get();
+    if (!snapshot.exists) return GamerStats.empty(currentUid: user.uid);
+
+    return GamerStats.fromMainStats(
+      snapshot.data() ?? <String, dynamic>{},
+      currentUid: user.uid,
+    );
+  }
+
   Stream<GamerStats?> getGamerStatsStream() {
     final User? user = _auth.currentUser;
 
@@ -623,7 +648,7 @@ class GamerFirestoreService {
     required int score,
     int? decisions,
     int? streak,
-    List<String> unlockedChallenges = const <String>[],
+    List<String>? unlockedChallenges,
     String? displayName,
   }) async {
     final String normalizedPlayerKey = playerKey.trim();
@@ -645,6 +670,11 @@ class GamerFirestoreService {
       throw StateError('El usuario no pertenece a ningún grupo todavía.');
     }
 
+    // Fuera de la transacción porque el registro de después la necesita:
+    // saber en qué fila se acabó escribiendo es justo el dato que hace
+    // falta cuando alguien se queje de que sus puntos no aparecen.
+    String claveDeLaFila = normalizedPlayerKey;
+
     try {
       await _firestore.runTransaction((Transaction transaction) async {
         final DocumentSnapshot<Map<String, dynamic>> snapshot =
@@ -659,8 +689,28 @@ class GamerFirestoreService {
           players,
         );
 
+        // LA FILA DE ESTA PERSONA PUEDE NO ESTAR GUARDADA BAJO SU UID.
+        //
+        // La documentación de arriba lo dice: `playerKey` puede ser `eme`,
+        // `ceh` o cualquier clave que ya exista. Si llega un uid y en el
+        // marcador hay una fila vieja con ese uid dentro pero otra clave
+        // fuera, escribir en `updatedPlayers[uid]` crea una SEGUNDA fila
+        // de la misma persona — y `team` las suma las dos, con lo que a
+        // partir de ahí sus puntos se cuentan por duplicado.
+        claveDeLaFila = normalizedPlayerKey;
+        if (!updatedPlayers.containsKey(claveDeLaFila)) {
+          for (final MapEntry<String, dynamic> entry
+              in updatedPlayers.entries) {
+            final Map<String, dynamic> fila = _mapFromDynamic(entry.value);
+            if ((fila['uid']?.toString().trim() ?? '') == normalizedUid) {
+              claveDeLaFila = entry.key;
+              break;
+            }
+          }
+        }
+
         final Map<String, dynamic> previousPlayer = _mapFromDynamic(
-          updatedPlayers[normalizedPlayerKey],
+          updatedPlayers[claveDeLaFila],
         );
 
         final Map<String, dynamic> updatedPlayer = <String, dynamic>{
@@ -674,11 +724,21 @@ class GamerFirestoreService {
           // `previousPlayer` en vez de escribir un cero encima.
           'decisions': ?decisions,
           'streak': ?streak,
-          'unlocked_challenges': unlockedChallenges,
+          // MISMO MOTIVO QUE `decisions` Y `streak`, Y SE HABÍA QUEDADO
+          // FUERA.
+          //
+          // Esto se escribía siempre, y quien lleva la mesa mandaba una
+          // lista vacía para todos los demás: abrir La ruleta —sin llegar
+          // siquiera a girar— borraba los logros desbloqueados del resto
+          // de miembros del diario. Las reglas lo permiten, porque
+          // cualquier miembro puede escribir cualquier fila del marcador.
+          //
+          // Ahora, si no se manda nada, lo que hubiera se queda.
+          'unlocked_challenges': ?unlockedChallenges,
           'last_updated': FieldValue.serverTimestamp(),
         };
 
-        updatedPlayers[normalizedPlayerKey] = updatedPlayer;
+        updatedPlayers[claveDeLaFila] = updatedPlayer;
 
         transaction.set(docRef, <String, dynamic>{
           'users': updatedPlayers,
@@ -690,7 +750,7 @@ class GamerFirestoreService {
       _log(
         '✅ GamerFirestoreService: '
         'jugador actualizado: '
-        '$normalizedPlayerKey',
+        '$claveDeLaFila',
       );
     } catch (e, stack) {
       _log(
@@ -828,12 +888,48 @@ class GamerStats {
   final Map<String, GamerPlayerStats> players;
   final GamerPlayerStats team;
 
-  const GamerStats({required this.players, required this.team});
+  /// uid guardado DENTRO de una fila → clave del mapa donde vive esa fila.
+  ///
+  /// POR QUÉ HACE FALTA ESTE ÍNDICE.
+  ///
+  /// El comentario de arriba dice "indexadas por su uid", y no siempre es
+  /// verdad: la documentación de `updatePlayerStats` dice que `playerKey`
+  /// puede ser `eme`, `ceh` o cualquier clave que ya exista, y en diarios
+  /// con historia las hay. `_findPlayerByUid` ya buscaba bien —por clave O
+  /// por el campo `uid` de dentro—, pero `forUid` hacía `players[uid]` a
+  /// secas.
+  ///
+  /// Consecuencia: con la fila guardada como `eme`, el Perfil leía 0
+  /// mientras La ruleta seguía enseñando los puntos, y la siguiente
+  /// escritura creaba una fila nueva con el uid al lado de la vieja, con
+  /// lo que el total del equipo pasaba a contar a esa persona dos veces.
+  /// Ese era el "tengo 5 puntos en el juego y 0 en el perfil".
+  final Map<String, String> claveDelUid;
+
+  const GamerStats({
+    required this.players,
+    required this.team,
+    this.claveDelUid = const <String, String>{},
+  });
+
+  /// La clave bajo la que vive la fila de [uid], o null si no está.
+  String? claveDe(String uid) {
+    final String limpio = uid.trim();
+    if (limpio.isEmpty) return null;
+    if (players.containsKey(limpio)) return limpio;
+    return claveDelUid[limpio];
+  }
+
+  /// ¿El marcador sabe algo de esta persona? No es lo mismo que "tiene 0".
+  bool conoceA(String uid) => claveDe(uid) != null;
 
   /// Estadísticas del miembro `uid`, o un valor vacío si todavía no tiene
   /// ninguna entrada (p. ej. se acaba de unir al grupo).
   GamerPlayerStats forUid(String uid) {
-    return players[uid] ?? GamerPlayerStats.empty(uid: uid);
+    final String? clave = claveDe(uid);
+    return clave == null
+        ? GamerPlayerStats.empty(uid: uid)
+        : players[clave] ?? GamerPlayerStats.empty(uid: uid);
   }
 
   factory GamerStats.empty({String currentUid = ''}) {
@@ -912,7 +1008,18 @@ class GamerStats {
           .toList(),
     );
 
-    return GamerStats(players: players, team: team);
+    final Map<String, String> claveDelUid = <String, String>{};
+    for (final MapEntry<String, dynamic> entry in rawPlayers.entries) {
+      final Map<String, dynamic> fila = GamerFirestoreService._mapFromDynamic(
+        entry.value,
+      );
+      final String guardado = fila['uid']?.toString().trim() ?? '';
+      if (guardado.isNotEmpty && guardado != entry.key) {
+        claveDelUid[guardado] = entry.key;
+      }
+    }
+
+    return GamerStats(players: players, team: team, claveDelUid: claveDelUid);
   }
 }
 

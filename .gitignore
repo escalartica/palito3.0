@@ -63,3 +63,5 @@ scripts/*.json
 !scripts/package.json
 scripts/*serviceAccount*
 scripts/*service-account*
+
+.fuse_hidden*

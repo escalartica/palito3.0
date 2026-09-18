@@ -1311,9 +1311,23 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
           if (result.couldNotUploadPhoto)
             "no se pudo subir la foto (revisa tu conexión y vuelve a "
                 "intentarlo editando el recuerdo)",
+          // EL AVISO DECÍA MEDIA VERDAD.
+          //
+          // Decía "puedes corregirla luego con el botón GPS", como si
+          // hiciera falta hacer algo a mano. Y callaba lo que de verdad
+          // pasa: sin coordenadas, este recuerdo NO sale en el mapa. Si
+          // estabas editando uno que ya tenía chincheta, la chincheta
+          // desaparece para todo el diario y el mensaje no lo mencionaba.
+          //
+          // Lo que sí es cierto —y tranquiliza— es que se arregla solo:
+          // el mapa recorre al abrirse los recuerdos sin coordenadas y
+          // los geocodifica (ver `memory_geocoding_service`, que salta
+          // los que ya las tienen). Así que lo honesto es decir las dos
+          // cosas: ahora no sale, y no hay que hacer nada.
           if (result.couldNotGeocode)
-            "no se pudo localizar la dirección en el mapa (puedes "
-                "corregirla luego con el botón GPS)",
+            "no se pudo situar la dirección, así que de momento no sale "
+                "en el mapa — se intentará solo la próxima vez que abras "
+                "el mapa con cobertura",
         ];
 
         AppFeedback.warning(
