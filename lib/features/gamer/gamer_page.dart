@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show PathMetric;
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -2051,10 +2052,30 @@ class _GamerPageState extends ConsumerState<GamerPage>
         children: <Widget>[
           ModeSelector(
             selectedMode: _selectedMode,
+            // CAMBIAR DE MODO CIERRA LA PARTIDA ANTERIOR.
+            //
+            // El ganador se quedaba en pantalla al cambiar de pestaña, y el
+            // rótulo de arriba sí cambiaba: el resultado de un juicio
+            // picante aparecía de pronto como "LE TOCA ELEGIR PLATO A".
+            // Nadie ha tirado para eso. La app estaba reinterpretando lo
+            // que había pasado, que es una forma pequeña de mentir.
+            //
+            // Y de paso el reto desaparecía —solo se pinta en el modo
+            // picante—, así que el veredicto quedaba a medias: sin la
+            // prueba y con un titular que no era el suyo.
+            //
+            // Los puntos ganados NO se tocan: eso sí pasó, y sigue en el
+            // marcador. Lo que se cierra es la escena, no la partida.
             onSelect: (int m) {
               if (m == _selectedMode) return;
               HapticFeedback.selectionClick();
-              setState(() => _selectedMode = m);
+              setState(() {
+                _selectedMode = m;
+                _selectedWinner = null;
+                _currentChallenge = null;
+                _palitoPick = null;
+              });
+              _highlightedIndex.value = -1;
             },
           ),
 
@@ -2156,8 +2177,19 @@ class _GamerPageState extends ConsumerState<GamerPage>
         // Un 26 % en dos paradas daba un campo casi plano: en pantalla no
         // se leía como luz, se leía como navy con una mancha. Tres paradas
         // con una caída de verdad (34 % → 10 % → nada) sí hacen un foco.
+        // LA LUZ, DONDE ESTÁ EL SUJETO.
+        //
+        // El halo estaba clavado arriba. Con el escenario corto daba
+        // igual, pero ahora mide 210 puntos como mínimo y en reposo el
+        // titular queda centrado: la luz caía por encima de lo único que
+        // hay que mirar, y el foco se leía como una mancha en el techo.
+        //
+        // Con un comensal enfocado el sujeto sube —la cara va arriba y el
+        // nombre debajo— así que la luz sube con él. Es un número que
+        // cambia según lo que haya en escena, que es lo que hace cualquiera
+        // que coloque un foco de verdad.
         gradient: RadialGradient(
-          center: const Alignment(0, -0.35),
+          center: Alignment(0, winner != null || _isSpinning ? -0.45 : -0.05),
           radius: 1.4,
           colors: <Color>[
             Color.alphaBlend(modeColor.withValues(alpha: 0.34), _kDark),
@@ -2168,8 +2200,24 @@ class _GamerPageState extends ConsumerState<GamerPage>
         ),
       ),
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
-      child: Column(
+      // UN SUELO DE ALTURA, PARA QUE MANDE.
+      //
+      // En reposo el escenario son dos líneas de texto, así que medía unos
+      // 110 puntos: una franja estrecha entre la pestaña amarilla y una
+      // banda blanca mucho más alta. La zona que debe mandar era la más
+      // pequeña de las tres, y eso es lo que hacía que la pantalla se
+      // leyera como una lista de trozos en vez de como un juego.
+      //
+      // 210 es el alto al que el panel pesa más que todo lo que tiene
+      // debajo sin llegar a empujar el botón fuera de la pantalla en un
+      // iPhone SE. Es un mínimo, no un alto fijo: cuando entra el foco de
+      // 104 puntos o el panel del reto, crece con ellos, y con el texto del
+      // sistema ampliado también.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 210),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           ValueListenableBuilder<int>(
             valueListenable: _highlightedIndex,
@@ -2367,6 +2415,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
             ),
           ],
         ],
+        ),
       ),
     );
   }
@@ -2413,20 +2462,8 @@ class _GamerPageState extends ConsumerState<GamerPage>
                     style: _overline,
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _showAddPlayerDialog,
-                  icon: const Icon(Icons.add_rounded, size: 17),
-                  label: const Text('Añadir'),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 44),
-                    foregroundColor: _kDark,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    textStyle: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+                // El botón de "Añadir" que había aquí se ha ido a la
+                // propia mesa, como una silla vacía. Ver `_SillaVacia`.
               ],
             ),
           ),
@@ -2507,6 +2544,25 @@ class _GamerPageState extends ConsumerState<GamerPage>
                             );
                           },
                         ),
+                      // UNA SILLA VACÍA AL FINAL DE LA MESA.
+                      //
+                      // Con dos comensales, la banda eran dos fichas de 92
+                      // puntos centradas en 313: unos 170 puntos de blanco
+                      // vacío alrededor. Ese vacío es lo que se leía como
+                      // "sin terminar" — no las fichas, que están bien.
+                      //
+                      // La respuesta no es agrandar las fichas ni estrechar
+                      // la banda: es que ese hueco diga algo. Una silla
+                      // libre en una mesa no es un hueco, es una
+                      // invitación, y aquí además es la acción principal
+                      // cuando faltan comensales.
+                      //
+                      // Sustituye al "+ Añadir" que estaba arriba en la
+                      // cabecera: un solo sitio para añadir gente, y en el
+                      // que se mira. Se dibuja más ligera que una ficha de
+                      // verdad —sin sombra, borde discontinuo— para que
+                      // nadie la confunda con alguien sentado.
+                      _SillaVacia(onTap: _showAddPlayerDialog),
                       ],
                       ),
                     ),
@@ -2816,6 +2872,122 @@ class _Spotlight extends StatelessWidget {
       ),
     );
   }
+}
+
+/// La silla libre del final de la mesa.
+///
+/// Mide lo mismo que una ficha para que la fila no se descuadre, pero se
+/// dibuja con mucho menos peso: sin sombra, sin relleno y con el borde a
+/// trazos. Una silla vacía tiene que parecer vacía.
+class _SillaVacia extends StatelessWidget {
+  const _SillaVacia({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Sentar a alguien más a la mesa',
+      child: ExcludeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: onTap,
+            child: SizedBox(
+              width: 92,
+              child: CustomPaint(
+                painter: const _BordeATrazos(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 6,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Container(
+                        width: 62,
+                        height: 62,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.tintPrimary,
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          size: 26,
+                          color: _kDark,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 17,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Añadir',
+                            maxLines: 1,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// El borde a trazos de la silla vacía.
+///
+/// Flutter no trae bordes discontinuos, y meter un paquete entero por una
+/// línea de puntos no compensa. Son doce líneas de `Path`.
+class _BordeATrazos extends CustomPainter {
+  const _BordeATrazos();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint pincel = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..color = _kDark.withValues(alpha: 0.28);
+
+    final Path contorno = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(AppRadius.md),
+        ),
+      );
+
+    const double trazo = 5;
+    const double hueco = 4;
+
+    for (final PathMetric tramo in contorno.computeMetrics()) {
+      double recorrido = 0;
+      while (recorrido < tramo.length) {
+        final double hasta = (recorrido + trazo).clamp(0.0, tramo.length);
+        canvas.drawPath(tramo.extractPath(recorrido, hasta), pincel);
+        recorrido = hasta + hueco;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BordeATrazos oldDelegate) => false;
 }
 
 class _CaraComensal extends StatelessWidget {
