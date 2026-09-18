@@ -330,6 +330,16 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
         '$normalizedId...',
       );
 
+      // SI LA ESCRITURA FALLA, LA PANTALLA VUELVE ATRÁS.
+      //
+      // `saveMemory` ya lo hacía y aquí faltaba. La diferencia se nota:
+      // editabas sin cobertura, la escritura fallaba, y seguías viendo tu
+      // cambio aplicado como si se hubiera guardado — hasta que el
+      // servidor mandaba lo suyo y el texto cambiaba solo delante de ti.
+      //
+      // Es peor que un error: es un error que parece un acierto.
+      final List<MemoryModel> estadoAnterior = List<MemoryModel>.from(state);
+
       final List<MemoryModel> updatedMemories = state
           .map(
             (MemoryModel memory) =>
@@ -339,9 +349,14 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
 
       state = _normalizeMemories(updatedMemories);
 
-      await StorageService.updateMemory(updatedMemory, groupId: _diario);
+      try {
+        await StorageService.updateMemory(updatedMemory, groupId: _diario);
 
-      await _firestoreService.saveMemoryModel(updatedMemory, base: base);
+        await _firestoreService.saveMemoryModel(updatedMemory, base: base);
+      } catch (_) {
+        state = _normalizeMemories(estadoAnterior);
+        rethrow;
+      }
 
       _log(
         '✅ MemoryNotifier: '
@@ -377,13 +392,24 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
         'eliminando memoria $normalizedId...',
       );
 
+      // Lo mismo que en `updateMemory`, y aquí duele más: un borrado que
+      // falla y no se deshace deja el recuerdo fuera de la lista como si
+      // hubiera desaparecido. Vuelve solo al siguiente refresco, y para
+      // entonces ya has pensado que lo has perdido.
+      final List<MemoryModel> estadoAnterior = List<MemoryModel>.from(state);
+
       state = state
           .where((MemoryModel memory) => memory.id.trim() != normalizedId)
           .toList();
 
-      await StorageService.deleteMemory(normalizedId, groupId: _diario);
+      try {
+        await StorageService.deleteMemory(normalizedId, groupId: _diario);
 
-      await _firestoreService.deleteMemory(normalizedId);
+        await _firestoreService.deleteMemory(normalizedId);
+      } catch (_) {
+        state = _normalizeMemories(estadoAnterior);
+        rethrow;
+      }
 
       _log(
         '✅ MemoryNotifier: '

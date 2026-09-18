@@ -488,6 +488,21 @@ class _GamerPageState extends ConsumerState<GamerPage>
       if (!marcador.conoceA(suUid)) continue;
 
       final GamerPlayerStats suyas = marcador.forUid(suUid);
+
+      // Si en la mesa figura como "Sin nombre" pero el marcador guarda uno
+      // de verdad, gana el del marcador. Es la otra mitad del arreglo: no
+      // basta con dejar de pisar el nombre bueno, hay que recuperarlo.
+      final String enLaMesa = jugador['name']?.toString().trim() ?? '';
+      final bool mesaSinNombre =
+          enLaMesa.isEmpty || enLaMesa == AuthService.unnamedMember;
+      final String fuera = suyas.displayName.trim();
+      if (mesaSinNombre &&
+          fuera.isNotEmpty &&
+          fuera != AuthService.unnamedMember &&
+          fuera != 'Usuario') {
+        jugador['name'] = fuera;
+        cambio = true;
+      }
       if (jugador['points'] != suyas.gamerPoints) {
         jugador['points'] = suyas.gamerPoints;
         cambio = true;
@@ -543,9 +558,26 @@ class _GamerPageState extends ConsumerState<GamerPage>
   }
 
   Future<void> _savePersistedData() async {
+    final String? groupId = _diarioDeLaMesa;
+
+    // SIN DIARIO RESUELTO NO SE GUARDA NADA.
+    //
+    // `_clavePartida(base, null)` devuelve la clave heredada, la misma que
+    // guarda la mesa de quien viene de una versión anterior. Así que
+    // guardar antes de que el diario se resuelva —cosa que pasa al arrancar
+    // en frío, porque la carga se dispara en `initState`— escribía una mesa
+    // recién sembrada encima de esa herencia. Y la herencia solo se puede
+    // adoptar una vez: el diario de verdad se la encontraría ya pisada.
+    //
+    // Sincronizar tampoco tendría sentido: sin `groupId`,
+    // `updatePlayerStats` lanza porque no hay documento al que escribir.
+    //
+    // No se pierde nada: en cuanto el diario resuelve, `_cambiarDeDiario`
+    // recarga y a partir de ahí todo guardado tiene su sitio.
+    if (groupId == null || groupId.isEmpty) return;
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? groupId = _diarioDeLaMesa;
       await prefs.setInt(
         _clavePartida(_claveDecisionesHeredada, groupId),
         _decisionsCount,
@@ -583,6 +615,18 @@ class _GamerPageState extends ConsumerState<GamerPage>
     // red hacía saltar el `catch` del guardado local, que ya había terminado
     // bien. Peor aún — ver `_syncGamerStats`.
     await _syncGamerStats();
+  }
+
+  /// El nombre que se puede escribir en el marcador, o `null`.
+  ///
+  /// Devuelve `null` cuando lo único que tenemos es el relleno "Sin
+  /// nombre": eso no es un nombre, es la ausencia de uno, y escribirlo
+  /// borra el que hubiera.
+  static String? _nombreParaElMarcador(Map<String, dynamic> jugador) {
+    final String nombre = jugador['name']?.toString().trim() ?? '';
+    if (nombre.isEmpty) return null;
+    if (nombre == AuthService.unnamedMember) return null;
+    return nombre;
   }
 
   Future<void> _syncGamerStats() async {
@@ -656,12 +700,30 @@ class _GamerPageState extends ConsumerState<GamerPage>
             uid: suUid,
             score: jugador['points'] as int? ?? 0,
             decisions: soyYo ? _decisionsCount : null,
-        medals: jugador['medals'] as int? ?? 0,
+            medals: jugador['medals'] as int? ?? 0,
+            // `streak` lleva el mismo número que `decisions` y no es una
+            // racha. Se sigue escribiendo porque las versiones de la app
+            // que ya están instaladas en otros móviles leen de ahí; el
+            // Perfil de esta versión lee `decisions`, que es el campo que
+            // dice la verdad. Cuando no queden versiones viejas por ahí,
+            // esta línea se puede quitar.
             streak: soyYo ? _decisionsCount : null,
             // `null`, no una lista vacía: mandar `[]` por los demás les
-        // borraba sus logros. Solo se escriben los propios.
-        unlockedChallenges: soyYo ? _palitoChallenges : null,
-            displayName: jugador['name']?.toString() ?? 'Usuario',
+            // borraba sus logros. Solo se escriben los propios.
+            unlockedChallenges: soyYo ? _palitoChallenges : null,
+            // `null` CUANDO NO SABEMOS CÓMO SE LLAMA, no "Sin nombre".
+            //
+            // Si el perfil de miembro del diario no trae `displayName`
+            // —grupos creados antes de que ese campo existiera—, aquí
+            // llegaba el literal "Sin nombre" y se escribía ENCIMA del
+            // nombre bueno que sí había en el marcador. Y sin vuelta
+            // atrás: nadie puede reescribir el nombre de otro desde la
+            // app.
+            //
+            // Mandando `null`, `updatePlayerStats` conserva el que
+            // hubiera. Vale más un nombre viejo que un "Sin nombre"
+            // nuevo.
+            displayName: _nombreParaElMarcador(jugador),
           );
         } catch (e, st) {
           // ══ DECIRLO, UNA VEZ ══

@@ -810,7 +810,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
           constraints: const BoxConstraints(maxWidth: 640),
           child: CustomScrollView(
             slivers: [
-              _buildAppBar(context),
+              _buildAppBar(context, isMyTab ? null : config.name),
 
               // A todo el ancho a propósito: va FUERA del SliverPadding de
               // 20 de abajo. Una cinta que respeta los márgenes deja de ser
@@ -838,15 +838,47 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     // la pantalla. Parecía una fila de pestañas rota, o algo
                     // que no había terminado de cargar.
                     if (tabs.length > 1) ...<Widget>[
+                      // UNA ETIQUETA, PORQUE LA FILA NO DECÍA QUÉ ERA.
+                      //
+                      // Eran tres pastillas con nombres —el tuyo, el de
+                      // quien comparte el diario, y "Todo el diario"— y
+                      // nada que explicara qué pasa al tocarlas. Quien
+                      // llega aquí ve su propio nombre en un botón y no
+                      // sabe por qué está ahí.
+                      //
+                      // "ESTÁS VIENDO" no es un invento: es el mismo
+                      // rótulo que el selector de diarios usa en Inicio
+                      // para exactamente lo mismo — decir qué estás
+                      // mirando antes de enseñártelo. Reutilizar el idioma
+                      // de la app enseña la interfaz una vez en vez de
+                      // dos.
                       _fadeSlide(
                         _tabBarAnim,
-                        _ProfileTabBar(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4, bottom: 6),
+                              child: Text(
+                                'ESTÁS VIENDO',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.0,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            _ProfileTabBar(
                           tabs: tabs,
                           selectedIndex: safeIndex,
                           onSelect: (i) {
                             HapticFeedback.selectionClick();
                             setState(() => _selectedProfileIndex = i);
                           },
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -875,8 +907,23 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                     // después: a alguien que acaba de entrar le salen todos a
                     // cero y no le dicen nada, mientras que la pregunta de
                     // quién ve su diario la tiene desde el primer minuto.
-                    const ProfileGroupsSection(),
-                    const SizedBox(height: 28),
+                    //
+                    // SOLO EN TU PESTAÑA.
+                    //
+                    // Esta sección son TUS diarios: "Tu diario y 4
+                    // compartidos". Mirando el perfil de otra persona
+                    // aparecía igual, debajo de su nombre y su foto — como
+                    // si esos cuatro diarios fueran suyos. No lo son, y no
+                    // hay forma de saber cuáles son los de ella (ni debería
+                    // haberla: sus otros diarios no son asunto de nadie).
+                    //
+                    // Es el mismo fallo que el título que decía "Tu perfil"
+                    // sobre datos ajenos. Enseñar algo tuyo bajo el nombre
+                    // de otro no confunde un poco: confunde del todo.
+                    if (isMyTab) ...<Widget>[
+                      const ProfileGroupsSection(),
+                      const SizedBox(height: 28),
+                    ],
 
                     // ── Stats Gamer ─────────────────────────────────────────
                     _fadeSlide(
@@ -906,9 +953,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                                       displayName: config.name,
                                     )
                                   : _selectStats(gamerStats, config);
+                              // `decisions` Y NO `streak`.
+                              //
+                              // La tarjeta se titula "Decisiones" y leía
+                              // `streak`. Funcionaba de casualidad: la
+                              // ruleta escribe el mismo número en los dos
+                              // campos. Pero era un nombre que mentía, y el
+                              // día que alguien implemente una racha de
+                              // verdad esta pantalla empezaría a enseñar
+                              // otra cosa sin que nadie entienda por qué.
                               return _GamerStatsRow(
                                 pointsValue: s.gamerPoints,
-                                streakValue: s.streak,
+                                decisionsValue: s.decisions,
                               );
                             },
                           ),
@@ -1176,9 +1232,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
     );
   }
 
-  SliverAppBar _buildAppBar(BuildContext context) => SliverAppBar(
+  /// [deOtraPersona] es el nombre de quien estás mirando cuando no eres tú.
+  ///
+  /// EL TÍTULO DECÍA "TU PERFIL" SIEMPRE.
+  ///
+  /// Con un diario compartido puedes cambiar de pestaña y mirar los puntos
+  /// y la bitácora de otra persona — y la cabecera seguía diciendo "Tu
+  /// perfil" sobre datos que no son tuyos. Es exactamente la confusión que
+  /// se había descrito como "cuesta entender el perfil": la pantalla te
+  /// dice una cosa y te enseña otra.
+  SliverAppBar _buildAppBar(BuildContext context, String? deOtraPersona) =>
+      SliverAppBar(
     title: Text(
-      'Tu perfil',
+      deOtraPersona == null ? 'Tu perfil' : 'Perfil de $deOtraPersona',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: GoogleFonts.outfit(
         fontWeight: FontWeight.w900,
         color: _kDark,
@@ -1557,11 +1625,11 @@ class _ProfileHeader extends StatelessWidget {
 class _GamerStatsRow extends StatelessWidget {
   const _GamerStatsRow({
     this.pointsValue,
-    this.streakValue,
+    this.decisionsValue,
     this.hasError = false,
   });
   final int? pointsValue;
-  final int? streakValue;
+  final int? decisionsValue;
 
   /// "—" en vez de un 0 inventado: un fallo de lectura no debe parecer que
   /// el usuario ha perdido sus puntos.
@@ -1592,8 +1660,8 @@ class _GamerStatsRow extends StatelessWidget {
           // app no mide, y que además no se puede romper — una racha que
           // solo sube no es una racha. Se llama por su nombre.
           title: 'Decisiones',
-          value: hasError ? '—' : (streakValue == null ? '…' : null),
-          numericValue: hasError ? null : streakValue?.toDouble(),
+          value: hasError ? '—' : (decisionsValue == null ? '…' : null),
+          numericValue: hasError ? null : decisionsValue?.toDouble(),
           valueBuilder: hasError ? null : (v) => '${v.round()}',
           icon: Icons.local_fire_department_rounded,
           bgColor: _kRedBg,
