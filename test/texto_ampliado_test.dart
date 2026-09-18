@@ -47,7 +47,10 @@ class _FakeMemoryMapFirestoreService extends MemoryMapFirestoreService {
       Stream<List<MemoryModel>>.value(_memories);
 
   @override
-  Future<void> saveMemoryModel(MemoryModel memory) async {}
+  Future<void> saveMemoryModel(
+    MemoryModel memory, {
+    MemoryModel? base,
+  }) async {}
 
   @override
   Future<void> deleteMemory(String memoryId) async {}
@@ -93,6 +96,7 @@ class _FakeGamerService extends GamerFirestoreService {
     required int score,
     int? decisions,
     int? streak,
+    int? medals,
     List<String>? unlockedChallenges,
     String? displayName,
   }) async {}

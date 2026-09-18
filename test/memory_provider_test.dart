@@ -28,7 +28,10 @@ class _ControllableFirestoreService extends MemoryMapFirestoreService {
   Stream<List<MemoryModel>> getMemoryModelsStream() => _controller.stream;
 
   @override
-  Future<void> saveMemoryModel(MemoryModel memory) async {
+  Future<void> saveMemoryModel(
+    MemoryModel memory, {
+    MemoryModel? base,
+  }) async {
     savedMemories.add(memory);
   }
 

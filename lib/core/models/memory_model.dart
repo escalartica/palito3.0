@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
@@ -1008,6 +1010,62 @@ class MemoryModel {
   ///
   /// specificFields se mantiene sin transformar para conservar los tipos
   /// nativos compatibles con Firestore.
+  /// Solo los campos que HAN CAMBIADO respecto a [base].
+  ///
+  /// POR QUÉ NO SE ESCRIBE EL DOCUMENTO ENTERO.
+  ///
+  /// `toFirestore()` devuelve los doce campos siempre, y el guardado usa
+  /// `SetOptions(merge: true)` — que no protege de nada aquí, porque los
+  /// doce van en el mapa y un valor viejo pisa igual que uno nulo.
+  ///
+  /// El recuerdo que edita el formulario sale del estado del provider, cuyo
+  /// origen inicial es la caché del móvil. O sea: si tu pareja añadió una
+  /// foto desde el suyo y tú abres la app con mala cobertura, tocas la nota
+  /// y guardas, se escriben los doce campos con TUS valores viejos y la
+  /// foto de ella desaparece. Sin conflicto, sin aviso.
+  ///
+  /// Escribiendo solo lo que esta edición ha tocado, los campos que no has
+  /// mirado ni se mencionan en la escritura, y `merge: true` deja en paz lo
+  /// que haya en el servidor — que es justo para lo que está.
+  ///
+  /// Los mapas y listas se comparan por contenido (`DeepCollectionEquality`
+  /// a mano, con `jsonEncode`, para no añadir una dependencia por esto):
+  /// dos `List<String>` con los mismos elementos son `!=` en Dart, y
+  /// compararlas por identidad marcaría como cambiado todo cada vez.
+  Map<String, dynamic> toFirestoreDiff(MemoryModel base) {
+    final Map<String, dynamic> completo = toFirestore();
+    final Map<String, dynamic> anterior = base.toFirestore();
+
+    final Map<String, dynamic> cambios = <String, dynamic>{};
+    for (final MapEntry<String, dynamic> campo in completo.entries) {
+      final dynamic antes = anterior[campo.key];
+      final dynamic ahora = campo.value;
+
+      final bool igual = (antes is Map || antes is List ||
+              ahora is Map || ahora is List)
+          ? _mismoContenido(antes, ahora)
+          : antes == ahora;
+
+      if (!igual) cambios[campo.key] = ahora;
+    }
+
+    // El id va siempre: es lo que ata el documento a su recuerdo, y si por
+    // lo que sea faltara en el servidor esta es la ocasión de arreglarlo.
+    cambios['id'] = id;
+    return cambios;
+  }
+
+  static bool _mismoContenido(dynamic a, dynamic b) {
+    try {
+      return jsonEncode(a) == jsonEncode(b);
+    } catch (_) {
+      // Un Timestamp u otro tipo que no sepa serializarse: se compara como
+      // se pueda. Marcarlo como distinto solo provoca una escritura de más,
+      // que es el lado seguro del error.
+      return a == b;
+    }
+  }
+
   Map<String, dynamic> toFirestore() {
     return <String, dynamic>{
       'id': id,

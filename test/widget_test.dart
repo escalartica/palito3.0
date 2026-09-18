@@ -24,7 +24,10 @@ class _FakeMemoryMapFirestoreService extends MemoryMapFirestoreService {
       Stream.value(<MemoryModel>[]);
 
   @override
-  Future<void> saveMemoryModel(MemoryModel memory) async {}
+  Future<void> saveMemoryModel(
+    MemoryModel memory, {
+    MemoryModel? base,
+  }) async {}
 
   @override
   Future<void> deleteMemory(String memoryId) async {}

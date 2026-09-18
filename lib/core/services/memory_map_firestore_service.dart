@@ -693,14 +693,33 @@ class MemoryMapFirestoreService {
   // GUARDAR MEMORY MODEL
   // ==========================================================================
 
-  Future<void> saveMemoryModel(MemoryModel memory) async {
+  /// Guarda un recuerdo.
+  ///
+  /// Con [base] —el recuerdo tal y como estaba cuando se abrió el
+  /// formulario— se escriben SOLO los campos que esta edición ha tocado.
+  /// Sin ella (un recuerdo nuevo) se escribe entero, que es lo correcto
+  /// porque no hay nada que respetar todavía.
+  ///
+  /// Ver `MemoryModel.toFirestoreDiff` para el porqué: escribir los doce
+  /// campos desde la caché del móvil borraba lo que otro hubiera añadido
+  /// desde el suyo.
+  Future<void> saveMemoryModel(MemoryModel memory, {MemoryModel? base}) async {
     final String memoryId = memory.id.trim();
 
     if (memoryId.isEmpty) {
       throw ArgumentError('No se puede guardar una memoria sin ID.');
     }
 
-    await saveMemory(memoryId: memoryId, memoryData: memory.toFirestore());
+    final Map<String, dynamic> datos = base == null
+        ? memory.toFirestore()
+        : memory.toFirestoreDiff(base);
+
+    // Solo el `id`: esta edición no ha cambiado nada. No se escribe —
+    // ahorra una transacción y, sobre todo, evita mover `updatedAt` y
+    // hacer creer a los demás que hubo un cambio.
+    if (base != null && datos.length <= 1) return;
+
+    await saveMemory(memoryId: memoryId, memoryData: datos);
   }
 
   // ==========================================================================

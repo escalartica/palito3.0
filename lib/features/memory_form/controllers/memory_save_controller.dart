@@ -234,7 +234,7 @@ class MemorySaveController {
     // Firestore lleguen al try/catch de quien llama a `save`.
 
     if (existingMemory != null) {
-      await memoryNotifier.updateMemory(newMemory);
+      await memoryNotifier.updateMemory(newMemory, base: existingMemory);
     } else {
       await memoryNotifier.addMemory(newMemory);
     }

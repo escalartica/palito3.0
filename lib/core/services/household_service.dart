@@ -548,6 +548,35 @@ class HouseholdService {
   Future<void> _purgeGroupContent(
     DocumentReference<Map<String, dynamic>> groupRef,
   ) async {
+    // LOS CÓDIGOS DE INVITACIÓN TAMBIÉN, Y NO SON UNA SUBCOLECCIÓN.
+    //
+    // `invites` cuelga de la raíz, no del grupo, así que el bucle de abajo
+    // no los veía: al borrar un diario quedaban vivos hasta 30 días
+    // apuntando a un grupo que ya no existe. Quien usara uno se encontraba
+    // con «no se pudo unir, comprueba tu conexión» — un mensaje que además
+    // miente, porque la conexión estaba perfectamente.
+    //
+    // Va lo primero, antes de vaciar nada: si el borrado se corta a medias,
+    // es mejor quedarse con contenido huérfano que con una puerta abierta a
+    // un diario medio borrado.
+    try {
+      final QuerySnapshot<Map<String, dynamic>> codigos = await _firestore
+          .collection('invites')
+          .where('groupId', isEqualTo: groupRef.id)
+          .get();
+
+      if (codigos.docs.isNotEmpty) {
+        final WriteBatch batch = _firestore.batch();
+        for (final QueryDocumentSnapshot<Map<String, dynamic>> d
+            in codigos.docs) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+      }
+    } catch (e, st) {
+      AppLog.e('No se pudieron anular los códigos del diario', e, st);
+    }
+
     const List<String> subcolecciones = <String>[
       'memories',
       'locations',
@@ -647,11 +676,21 @@ class HouseholdService {
     return _firestore.collection('groups').doc(groupId).update(
       <String, dynamic>{
         'members': FieldValue.arrayUnion(<String>[uid]),
-        'memberProfiles.$uid': <String, dynamic>{
-          'displayName': displayName,
-          'photoUrl': photoUrl,
-          'joinedAt': Timestamp.now(),
-        },
+        // UNA RUTA POR CAMPO, NO EL PERFIL ENTERO.
+        //
+        // Una ruta con punto en un `update()` SUSTITUYE lo que haya en esa
+        // ruta, no lo fusiona. Escribiendo `memberProfiles.$uid` de golpe,
+        // volver a entrar a un diario del que habías salido te borraba la
+        // foto de ese diario (quien llama aquí no manda `photoUrl`) y te
+        // reescribía la fecha de entrada.
+        //
+        // Con una ruta por campo, cada uno se escribe por su cuenta y lo
+        // que no se manda se queda. `?photoUrl` omite la entrada entera
+        // cuando es nula, igual que hace `actualizarMiPerfil` unas líneas
+        // más arriba.
+        'memberProfiles.$uid.displayName': displayName,
+        'memberProfiles.$uid.photoUrl': ?photoUrl,
+        'memberProfiles.$uid.joinedAt': Timestamp.now(),
         'lastJoinCode': code,
         'updatedAt': FieldValue.serverTimestamp(),
       },

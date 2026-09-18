@@ -262,6 +262,7 @@ class GamerFirestoreService {
       streak: _parseInt(
         data['streak'] ?? data['decisions_streak'] ?? data['currentStreak'],
       ),
+      medals: _parseInt(data['medals'] ?? data['totalMedals']),
       unlockedChallenges: _parseStringList(
         data['unlocked_challenges'] ?? data['unlockedChallenges'],
       ),
@@ -417,205 +418,32 @@ class GamerFirestoreService {
           return snapshot.data();
         });
   }
-
-  // ==========================================================================
-  // ACTUALIZAR ESTADÍSTICAS DEL JUGADOR ACTUAL
-  // ==========================================================================
+  // `updateGamerStats` VIVÍA AQUÍ Y SE HA BORRADO.
   //
-  // Método compatible con el código existente.
+  // No tenía ningún llamador, y era una copia exacta del fallo que
+  // acabamos de arreglar: escribía `total_score` y `gamerPoints` en
+  // absoluto, en la RAÍZ del documento —campos compartidos por todo el
+  // diario— a partir de un marcador que el que llamara tuviera a mano.
   //
-  // Actualiza:
+  // Código muerto que hace lo correcto se borra por limpieza. Código
+  // muerto que hace algo peligroso se borra por seguridad: el día que
+  // alguien busque "cómo guardo los puntos" y encuentre dos métodos,
+  // va a elegir el de nombre más obvio. Ese era este.
   //
-  // - campos legacy en main_stats
-  // - campos normalizados del usuario actual
+  // Lo que hay que usar es `updatePlayerStats`, que escribe dentro del
+  // mapa `users` del jugador que toca y respeta lo que no se le manda.
+
+  // `_findPlayerKeyByCurrentUser` SE HA IDO CON `updateGamerStats`.
   //
-  // Si existe una estructura individual de jugadores,
-  // actualiza el jugador asociado al UID actual.
+  // Emparejaba jugadores comparando el NOMBRE VISIBLE en minúsculas. Eso
+  // es identidad frágil: dos personas que se llamen igual en el mismo
+  // diario son el mismo jugador para esa función, y cambiarte el nombre en
+  // Perfil te convertía en otro. Es la misma clase de fallo que ha costado
+  // la sincronización de puntos de hoy.
   //
-  // ==========================================================================
-
-  Future<void> updateGamerStats({
-    required int score,
-    required int streak,
-    required List<String> unlockedChallenges,
-    int? decisions,
-    String? displayName,
-  }) async {
-    final User? user = _auth.currentUser;
-
-    if (user == null) {
-      _log(
-        '⚠️ GamerFirestoreService: '
-        'no existe usuario autenticado.',
-      );
-
-      return;
-    }
-
-    final DocumentReference<Map<String, dynamic>>? docRef =
-        _mainStatsDocumentForUid(user.uid);
-
-    if (docRef == null) {
-      _log(
-        '⚠️ GamerFirestoreService: '
-        'el usuario no pertenece a ningún grupo todavía.',
-      );
-
-      return;
-    }
-
-    try {
-      await _firestore.runTransaction((Transaction transaction) async {
-        final DocumentSnapshot<Map<String, dynamic>> snapshot =
-            await transaction.get(docRef);
-
-        final Map<String, dynamic> currentData =
-            snapshot.data() ?? <String, dynamic>{};
-
-        final Map<String, dynamic> players = _extractPlayersMap(currentData);
-
-        final bool hasIndividualPlayers = players.isNotEmpty;
-
-        final int resolvedDecisions =
-            decisions ?? _parseInt(currentData['decisions'], fallback: 0);
-
-        final String resolvedDisplayName =
-            displayName?.trim().isNotEmpty == true
-            ? displayName!.trim()
-            : user.displayName?.trim().isNotEmpty == true
-            ? user.displayName!.trim()
-            : 'Usuario';
-
-        final Map<String, dynamic> legacyData = <String, dynamic>{
-          'total_score': score,
-          'gamerPoints': score,
-          'decisions_streak': streak,
-          'streak': streak,
-          'decisions': resolvedDecisions,
-          'unlocked_challenges': unlockedChallenges,
-          'displayName': resolvedDisplayName,
-          'last_updated': FieldValue.serverTimestamp(),
-        };
-
-        // ------------------------------------------------------------------
-        // ESTRUCTURA LEGACY
-        // ------------------------------------------------------------------
-
-        if (!hasIndividualPlayers) {
-          transaction.set(docRef, legacyData, SetOptions(merge: true));
-
-          return;
-        }
-
-        // ------------------------------------------------------------------
-        // ESTRUCTURA CON JUGADORES INDIVIDUALES
-        // ------------------------------------------------------------------
-
-        final Map<String, dynamic> updatedPlayers = Map<String, dynamic>.from(
-          players,
-        );
-
-        String? playerKey;
-
-        for (final MapEntry<String, dynamic> entry in updatedPlayers.entries) {
-          final String key = entry.key.toString().trim().toLowerCase();
-
-          final Map<String, dynamic> playerData = _mapFromDynamic(entry.value);
-
-          final String storedUid = playerData['uid']?.toString().trim() ?? '';
-
-          if (storedUid == user.uid || key == user.uid.toLowerCase()) {
-            playerKey = entry.key;
-            break;
-          }
-        }
-
-        // Si no encontramos el UID, intentamos localizar el jugador
-        // correspondiente al usuario actual por nombre.
-        playerKey ??= _findPlayerKeyByCurrentUser(updatedPlayers, user);
-
-        // Como último recurso, utilizamos el UID como clave.
-        playerKey ??= user.uid;
-
-        final Map<String, dynamic> existingPlayer = _mapFromDynamic(
-          updatedPlayers[playerKey],
-        );
-
-        final Map<String, dynamic> updatedPlayer = <String, dynamic>{
-          ...existingPlayer,
-          'uid': user.uid,
-          'displayName':
-              displayName ??
-              existingPlayer['displayName'] ??
-              user.displayName ??
-              'Usuario',
-          'gamerPoints': score,
-          'decisions': resolvedDecisions,
-          'streak': streak,
-          'unlocked_challenges': unlockedChallenges,
-          'last_updated': FieldValue.serverTimestamp(),
-        };
-
-        updatedPlayers[playerKey] = updatedPlayer;
-
-        transaction.set(docRef, <String, dynamic>{
-          ...legacyData,
-          'users': updatedPlayers,
-          'players': updatedPlayers,
-          'last_updated': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      });
-
-      _log(
-        '✅ GamerFirestoreService: '
-        'estadísticas Gamer actualizadas. '
-        'uid=${user.uid}, '
-        'score=$score, '
-        'streak=$streak',
-      );
-    } catch (e, stack) {
-      _log(
-        '❌ GamerFirestoreService: '
-        'error al actualizar estadísticas Gamer: '
-        '$e',
-      );
-
-      _logStack(stackTrace: stack);
-
-      rethrow;
-    }
-  }
-
-  // ==========================================================================
-  // BUSCAR CLAVE DEL JUGADOR POR DATOS DEL USUARIO ACTUAL
-  // ==========================================================================
-
-  static String? _findPlayerKeyByCurrentUser(
-    Map<String, dynamic> players,
-    User user,
-  ) {
-    final String currentDisplayName =
-        user.displayName?.trim().toLowerCase() ?? '';
-
-    if (currentDisplayName.isEmpty) {
-      return null;
-    }
-
-    for (final MapEntry<String, dynamic> entry in players.entries) {
-      final Map<String, dynamic> playerData = _mapFromDynamic(entry.value);
-
-      final String storedName =
-          playerData['displayName']?.toString().trim().toLowerCase() ??
-          playerData['name']?.toString().trim().toLowerCase() ??
-          '';
-
-      if (storedName.isNotEmpty && storedName == currentDisplayName) {
-        return entry.key;
-      }
-    }
-
-    return null;
-  }
+  // La identidad de un jugador es su uid. Para encontrar su fila está
+  // `_findPlayerByUid`, que mira por clave del mapa O por el campo `uid`
+  // guardado dentro.
 
   // ==========================================================================
   // ACTUALIZAR ESTADÍSTICAS DE UN JUGADOR CONCRETO
@@ -648,6 +476,7 @@ class GamerFirestoreService {
     required int score,
     int? decisions,
     int? streak,
+    int? medals,
     List<String>? unlockedChallenges,
     String? displayName,
   }) async {
@@ -724,6 +553,11 @@ class GamerFirestoreService {
           // `previousPlayer` en vez de escribir un cero encima.
           'decisions': ?decisions,
           'streak': ?streak,
+          // Las medallas sí las sabe quien lleva la mesa para todo el
+          // mundo, igual que los puntos: se las ha ido dando él. Va con
+          // `?` de todas formas, para que una llamada que no las mande no
+          // las ponga a cero.
+          'medals': ?medals,
           // MISMO MOTIVO QUE `decisions` Y `streak`, Y SE HABÍA QUEDADO
           // FUERA.
           //
@@ -834,6 +668,14 @@ class GamerPlayerStats {
   final int gamerPoints;
   final int decisions;
   final int streak;
+
+  /// Las medallas de los juicios picantes.
+  ///
+  /// Vivían solo en el móvil que llevaba la mesa: cambiabas de teléfono y
+  /// desaparecían, y nadie más las veía nunca. Sube con los puntos, por la
+  /// misma vía y con las mismas cautelas.
+  final int medals;
+
   final List<String> unlockedChallenges;
 
   const GamerPlayerStats({
@@ -842,6 +684,7 @@ class GamerPlayerStats {
     required this.gamerPoints,
     required this.decisions,
     required this.streak,
+    this.medals = 0,
     this.unlockedChallenges = const <String>[],
   });
 
@@ -855,6 +698,7 @@ class GamerPlayerStats {
       gamerPoints: 0,
       decisions: 0,
       streak: 0,
+      medals: 0,
       unlockedChallenges: const <String>[],
     );
   }
@@ -865,6 +709,7 @@ class GamerPlayerStats {
     int? gamerPoints,
     int? decisions,
     int? streak,
+    int? medals,
     List<String>? unlockedChallenges,
   }) {
     return GamerPlayerStats(
@@ -873,6 +718,7 @@ class GamerPlayerStats {
       gamerPoints: gamerPoints ?? this.gamerPoints,
       decisions: decisions ?? this.decisions,
       streak: streak ?? this.streak,
+      medals: medals ?? this.medals,
       unlockedChallenges: unlockedChallenges ?? this.unlockedChallenges,
     );
   }
@@ -1001,6 +847,10 @@ class GamerStats {
       streak: players.values.fold(
         0,
         (int sum, GamerPlayerStats p) => sum + p.streak,
+      ),
+      medals: players.values.fold(
+        0,
+        (int sum, GamerPlayerStats p) => sum + p.medals,
       ),
       unlockedChallenges: players.values
           .expand((GamerPlayerStats p) => p.unlockedChallenges)

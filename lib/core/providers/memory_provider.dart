@@ -313,7 +313,10 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
   // ACTUALIZAR MEMORIA
   // ==========================================================================
 
-  Future<void> updateMemory(MemoryModel updatedMemory) async {
+  /// [base] es el recuerdo tal y como estaba al abrir el formulario. Con
+  /// él, al servidor solo van los campos que esta edición ha tocado. Ver
+  /// `MemoryModel.toFirestoreDiff`.
+  Future<void> updateMemory(MemoryModel updatedMemory, {MemoryModel? base}) async {
     try {
       final String normalizedId = updatedMemory.id.trim();
 
@@ -338,7 +341,7 @@ class MemoryNotifier extends StateNotifier<List<MemoryModel>> {
 
       await StorageService.updateMemory(updatedMemory, groupId: _diario);
 
-      await _firestoreService.saveMemoryModel(updatedMemory);
+      await _firestoreService.saveMemoryModel(updatedMemory, base: base);
 
       _log(
         '✅ MemoryNotifier: '

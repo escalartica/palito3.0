@@ -492,12 +492,13 @@ class _GamerPageState extends ConsumerState<GamerPage>
         jugador['points'] = suyas.gamerPoints;
         cambio = true;
       }
-      // Las medallas NO se adoptan porque no existen en el servidor:
-      // `GamerPlayerStats` guarda puntos, decisiones, racha y logros, y
-      // nada más. O sea que las medallas siguen siendo de cada móvil, y
-      // eso es una laguna real —solo que arreglarla es añadir un campo al
-      // modelo y a las reglas, no cambiar este bucle—. Queda dicho aquí
-      // para que el siguiente que pase no crea que se olvidó.
+      // Las medallas viajan igual que los puntos desde que existen en el
+      // servidor. Antes vivían solo en el móvil que llevaba la mesa:
+      // cambiabas de teléfono y desaparecían.
+      if (jugador['medals'] != suyas.medals) {
+        jugador['medals'] = suyas.medals;
+        cambio = true;
+      }
     }
 
     // Y las decisiones propias, por lo mismo: el contador es local y una
@@ -655,6 +656,7 @@ class _GamerPageState extends ConsumerState<GamerPage>
             uid: suUid,
             score: jugador['points'] as int? ?? 0,
             decisions: soyYo ? _decisionsCount : null,
+        medals: jugador['medals'] as int? ?? 0,
             streak: soyYo ? _decisionsCount : null,
             // `null`, no una lista vacía: mandar `[]` por los demás les
         // borraba sus logros. Solo se escriben los propios.
