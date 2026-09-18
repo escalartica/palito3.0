@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:palito_3_0/firebase_options.dart';
 import 'package:palito_3_0/core/models/memory_model.dart';
@@ -36,6 +37,21 @@ final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // NADA DE BAJARSE LAS LETRAS POR INTERNET.
+  //
+  // Con esto en `false`, `google_fonts` usa SOLO los ficheros de
+  // `google_fonts/` declarados en pubspec. Si faltara alguna variante se
+  // nota aquí, en desarrollo, en vez de convertirse en un móvil ajeno que
+  // abre la app por primera vez sin cobertura y la ve en la fuente del
+  // sistema.
+  //
+  // Las variantes que usa la app están contadas: dos familias (Outfit e
+  // Inter), seis pesos cada una (400 a 900 — `w900` aparece 74 veces) y una
+  // cursiva, la de "sin descripción" de la ficha del recuerdo. No se genera
+  // ningún `TextTheme` de Google Fonts, que es por donde se suelen colar
+  // variantes que nadie pidió.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.portraitUp,

@@ -145,7 +145,36 @@ class _StatsTickerState extends State<StatsTicker>
             height: widget.height,
             color: AppColors.textPrimary,
             alignment: Alignment.centerLeft,
-            child: ListView.builder(
+              // LAS PALABRAS SE FUNDEN EN LOS BORDES, NO SE TRONCHAN.
+              //
+              // La cinta entraba y salía a hueso: en cualquier captura se
+              // leía «ERDOS ◆ NOTA MEDIA 2,8», con la palabra partida contra
+              // el borde de la pantalla. Eso no se lee como un desfile, se
+              // lee como un fallo de pintado — y es de las cosas que separan
+              // una app cuidada de una que casi lo está.
+              //
+              // El degradado va SOLO sobre el texto, no sobre el `Container`:
+              // si envolviera al contenedor se difuminaría también el navy y
+              // la banda dejaría de llegar a los extremos. `dstIn` conserva
+              // el píxel del hijo donde la máscara es opaca y lo borra donde
+              // es transparente; el fondo, que se pinta detrás, no se toca.
+              //
+              // Un 6 % por lado: suficiente para que una palabra se disuelva
+              // en vez de cortarse, y poco para no comerse lo que se lee.
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (Rect bounds) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: <Color>[
+                  Color(0x00000000),
+                  Color(0xFF000000),
+                  Color(0xFF000000),
+                  Color(0x00000000),
+                ],
+                stops: <double>[0.0, 0.06, 0.94, 1.0],
+              ).createShader(bounds),
+              child: ListView.builder(
               controller: _scroll,
               scrollDirection: Axis.horizontal,
               // Nadie la arrastra con el dedo: el gesto es el toque para
@@ -156,6 +185,7 @@ class _StatsTickerState extends State<StatsTicker>
               // cabe en pantalla.
               itemBuilder: (BuildContext context, int index) =>
                   _TickerItem(text: widget.items[index % widget.items.length]),
+            ),
             ),
               ),
             ],

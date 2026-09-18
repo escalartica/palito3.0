@@ -149,9 +149,36 @@ class MemoryCardCompact extends StatelessWidget {
                   // ("Decoración / Espacio") desbordaba la fila con la
                   // franja amarilla y negra en la lista principal de
                   // Inicio — la pantalla más vista de la app.
-                  Row(
-                    children: [
-                      Flexible(
+                  //
+                  // El `LayoutBuilder` está aquí para poder ponerle TECHO a
+                  // la fecha en proporción al ancho real de la fila. Ver el
+                  // comentario largo de más abajo: es lo que permite que la
+                  // categoría se quede con lo que sobra sin que nada
+                  // desborde cuando el texto del sistema está al 310 %.
+                  // CUANDO NO CABE EN UNA LÍNEA, SE PARTE EN DOS.
+                  //
+                  // Esta fila lleva tres cosas: la categoría, la nota y
+                  // cuándo fue. En un iPhone SE con el texto del sistema al
+                  // 310 % no caben las tres en una línea — no es cuestión de
+                  // repartir mejor el hueco, es que no hay hueco. La versión
+                  // anterior "pasaba" la prueba porque todo era flexible y
+                  // todo se recortaba: la categoría quedaba en «Pla…», la
+                  // nota en un número a medias. Pasar no es lo mismo que
+                  // funcionar.
+                  //
+                  // Así que por encima de 1,6 —el punto donde las tres dejan
+                  // de caber— la fecha se va a su propia línea y las otras
+                  // dos respiran. Es lo que haría cualquiera al maquetarlo a
+                  // mano, y es exactamente lo que pide el tamaño de letra
+                  // que ha elegido esa persona: menos apretado, no más
+                  // recortado.
+                  Builder(
+                    builder: (BuildContext context) {
+                      final double escala = MediaQuery.textScalerOf(
+                        context,
+                      ).scale(1);
+
+                      final Widget categoria = Flexible(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -173,53 +200,77 @@ class MemoryCardCompact extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ),
-                      if (RatingScale.isRated(memory.rating)) ...[
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          // Oro de estrella, deliberadamente distinto del
-                          // amarillo de marca: sobre `surfaceWarm` el
-                          // primary (#FFD400) casi desaparece por falta de
-                          // contraste con el fondo, así que la estrella
-                          // necesita su propio tono, más oscuro.
-                          color: Color(0xFFB58100),
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          RatingScale.shortLabel(memory.rating)!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            color: palitoDark,
-                          ),
-                        ),
-                      ],
+                      );
 
-                      // CUÁNDO FUE.
-                      //
-                      // No estaba en ninguna parte de la app. En un diario
-                      // de comidas, «¿fui la semana pasada o hace un año?»
-                      // es de las primeras cosas que uno quiere saber al
-                      // mirar la lista, y el único indicio de recencia era
-                      // un punto amarillo de 14 píxeles que solo dura cinco
-                      // minutos y no lleva etiqueta.
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          relativeDate(memory.date),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary,
+                      final List<Widget> nota = <Widget>[
+                        if (RatingScale.isRated(memory.rating)) ...<Widget>[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 14,
+                            color: Color(0xFFB58100),
                           ),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              RatingScale.shortLabel(memory.rating)!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: palitoDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ];
+
+                      final Widget cuando = Text(
+                        relativeDate(memory.date),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
                         ),
-                      ),
-                    ],
+                      );
+
+                      if (escala > 1.6) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Row(children: <Widget>[categoria, ...nota]),
+                            const SizedBox(height: 4),
+                            cuando,
+                          ],
+                        );
+                      }
+
+                      // En una línea, la fecha sale del reparto flexible
+                      // —así la categoría se lleva lo que sobra en vez de
+                      // la mitad justa, que es lo que dejaba «Plato Estr…»
+                      // con sitio libre al lado— pero con techo, para que
+                      // nunca empuje a las otras fuera de la fila.
+                      return LayoutBuilder(
+                        builder:
+                            (BuildContext context, BoxConstraints fila) => Row(
+                              children: <Widget>[
+                                categoria,
+                                ...nota,
+                                const SizedBox(width: 8),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: fila.maxWidth * 0.45,
+                                  ),
+                                  child: cuando,
+                                ),
+                              ],
+                            ),
+                      );
+                    },
                   ),
                 ],
               ),

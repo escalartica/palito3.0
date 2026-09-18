@@ -87,3 +87,17 @@ flutter:
   assets:
     - assets/icons/
     - assets/images/
+    # Las tipografías de la app, empaquetadas.
+    #
+    # Hasta aquí no había ninguna fuente declarada: 49 ficheros usan
+    # `GoogleFonts.outfit` y `GoogleFonts.inter`, y el paquete se las bajaba
+    # de internet la primera vez que alguien abría la app. Quien la instalara
+    # con mala cobertura la veía entera en la fuente del sistema —todos los
+    # titulares, todos los botones— sin que fallara nada ni saliera ningún
+    # aviso. Y la primera apertura es justo el momento que se paga con
+    # publicidad.
+    #
+    # El nombre de cada fichero no es decorativo: `google_fonts` empareja por
+    # `Familia-Peso.ttf` (400 es Regular, 900 es Black). Si un nombre no
+    # coincide, el paquete se lo descarga igualmente y volvemos al principio.
+    - google_fonts/
