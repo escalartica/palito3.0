@@ -733,14 +733,6 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
                       ),
                       const SizedBox(height: 20),
 
-                      // Detrás del sitio y antes de la ubicación: primero
-                      // dónde, luego qué. Es el orden en que se cuenta.
-                      _buildAnimatedSection(
-                        index: 1,
-                        child: _buildDishSection(),
-                      ),
-                      const SizedBox(height: 20),
-
                       _buildAnimatedSection(
                         index: 2,
                         child: LocationSection(
@@ -887,73 +879,32 @@ class _MemoryFormPageState extends ConsumerState<MemoryFormPage>
   // SECCIONES
   // ============================================================
 
-  /// ¿Qué comiste?
-  ///
-  /// El modelo siempre ha tenido `title` separado de `restaurantName`, y la
-  /// ficha de detalle tiene una tarjeta "LUGAR" entera escrita y
-  /// condicionada a que los dos sean distintos. No se pintaba nunca: el
-  /// formulario solo preguntaba el sitio y el controlador copiaba ese texto
-  /// a los dos campos. Por eso en el detalle salía "casa Esteban" como
-  /// titular y otra vez "casa Esteban" justo debajo, como si fuera un fallo
-  /// de dibujado.
-  ///
-  /// Con este campo la app pasa de ser una lista de nombres de bares a ser
-  /// lo que dice ser: un diario de lo que comes. Es opcional a propósito —
-  /// a veces lo que recuerdas es el sitio, no el plato— y cuando se deja en
-  /// blanco todo sigue funcionando exactamente igual que antes.
-  Widget _buildDishSection() {
-    return MergeSemantics(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const SectionLabel("¿Qué probaste?"),
-          const SizedBox(height: 8),
-          NeoContainer(
-            child: TextField(
-              controller: _dishController,
-              // ══ EL MISMO NÚMERO QUE EL SERVIDOR ══
-              //
-              // `firestore.rules` rechaza el recuerdo entero si el título
-              // pasa de 200 caracteres:
-              //
-              //     request.resource.data.title.size() <= 200
-              //
-              // El campo no lo sabía, así que se podía escribir un título
-              // más largo, darle a guardar y recibir un «no se pudo
-              // guardar» sin ninguna pista de qué había que arreglar —con
-              // la foto ya subida y el formulario entero relleno—.
-              //
-              // Esta lección ya estaba aprendida en otro sitio de la app:
-              // `renameGroup` recorta a 60 en el cliente por esto mismo, y
-              // lo dice en su comentario. Lo que faltaba era aplicarla aquí.
-              maxLength: FieldLimits.tituloRecuerdo,
-              textCapitalization: TextCapitalization.sentences,
-              style: GoogleFonts.inter(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              // ── EL EJEMPLO CONTRADECÍA LA CATEGORÍA ──
-              //
-              // Ponía "Ej. croquetas de rabo de toro" **siempre**, así que
-              // al elegir Tortilla, Postres o Atención el formulario te
-              // proponía croquetas. Visto en el simulador cambiando de
-              // categoría: el desplegable dice una cosa y el campo de debajo
-              // otra.
-              //
-              // No se pone un ejemplo por categoría porque `Category` solo
-              // guarda nombre e icono: habría que inventarse ocho ejemplos y
-              // mantenerlos. Un ejemplo que vale para las ocho no puede
-              // contradecir a ninguna.
-              decoration: memoryFormInputDecoration(
-                "Ej. lo que pediste — opcional",
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ══ POR QUÉ NO HAY UN CAMPO "¿Qué probaste?" ══
+  //
+  // Lo hubo durante unas horas y estaba mal pensado. La idea era que el
+  // titular del recuerdo fuera el plato y no el bar, porque en la ficha de
+  // detalle salía "Taperia" de titular y "Taperia" otra vez debajo.
+  //
+  // Pero la app no es un diario de platos sueltos: es una comparativa. Las
+  // ocho categorías son `gastronomicCategories`, y tres de ellas
+  // —Croquetas, Ensaladilla, Tortilla— YA dicen qué se comió. Preguntarlo
+  // después es pedir dos veces la misma respuesta. Y en Decoración /
+  // Espacio y en Atención no se prueba nada, así que la pregunta no tenía
+  // ni respuesta posible.
+  //
+  // Lo que se compara aquí es el mismo plato entre sitios: la categoría
+  // dice qué, el sitio dice dónde y la nota dice cuánto. El titular es el
+  // sitio porque el sitio es lo que cambia de un recuerdo a otro.
+  //
+  // `_dishController` sigue existiendo aunque ya no se pinte, y no es
+  // código muerto: los recuerdos guardados mientras el campo estuvo visible
+  // tienen un `title` distinto del nombre del sitio, y este controlador es
+  // lo que lo transporta intacto a través de una edición. Sin él, abrir
+  // uno de esos recuerdos y darle a guardar le borraría el titular.
+  //
+  // La duplicación de la ficha de detalle es un problema aparte y se
+  // arregla donde estaba: no repitiendo el sitio bajo el titular cuando son
+  // el mismo texto.
 
   Widget _buildRestaurantSection() {
     return Column(

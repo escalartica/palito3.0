@@ -249,7 +249,23 @@ class HeroHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (memory.restaurantName.isNotEmpty) ...[
+        // ══ EL SITIO NO SE REPITE BAJO Sí MISMO ══
+        //
+        // El titular de casi todos los recuerdos ES el nombre del sitio: la
+        // categoría ya dice qué se probó, así que lo que distingue a un
+        // recuerdo de otro es el bar. Esta línea de abajo, pensada para
+        // decir DÓNDE fue, acababa repitiendo el mismo texto siete pixels
+        // más abajo y con un icono de tienda al lado, como si fuera un
+        // fallo de dibujado: "Taperia" grande y "Taperia" pequeño.
+        //
+        // La tarjeta "LUGAR" de la ficha ya se guardaba de esto
+        // (`showRestaurantSubtitle` en `memory_detail_page.dart`). Aquí
+        // faltaba la misma comprobación. Se compara en minúsculas y sin
+        // espacios sobrantes, igual que allí, para que "Taperia " y
+        // "taperia" cuenten como el mismo sitio.
+        if (memory.restaurantName.trim().isNotEmpty &&
+            memory.restaurantName.trim().toLowerCase() !=
+                memory.title.trim().toLowerCase()) ...[
           const SizedBox(height: 6),
           Row(
             children: [

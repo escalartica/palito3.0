@@ -152,7 +152,19 @@ class _NamePageState extends ConsumerState<NamePage> {
                 ),
                 decoration: InputDecoration(
                   counterText: '',
-                  hintText: 'Por ejemplo, Sharon',
+                  // ══ UN NOMBRE QUE NO ES DE NADIE ══
+                  //
+                  // Ponía "Por ejemplo, Sharon", que es el nombre de quien
+                  // hizo la app. Esta es la PRIMERA pantalla que ve alguien
+                  // recién descargada: proponerle ahí el nombre de una
+                  // desconocida no ayuda a entender qué se pide, y además
+                  // deja un rastro personal en un producto público.
+                  //
+                  // "Tu nombre o tu apodo" dice lo mismo sin usar a nadie, y
+                  // además responde a la duda de verdad que tiene alguien
+                  // ahí parado: si hay que poner el nombre real o vale un
+                  // mote.
+                  hintText: 'Tu nombre o tu apodo',
                   errorText: _error,
                   filled: true,
                   fillColor: AppColors.surface,

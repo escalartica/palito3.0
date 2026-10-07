@@ -65,3 +65,9 @@ scripts/*serviceAccount*
 scripts/*service-account*
 
 .fuse_hidden*
+
+# Fotos de muestra para las capturas del App Store, no forman parte de la app.
+escaparate/
+
+# Salida de `flutter test` volcada a fichero para poder leerla desde aquí.
+salida_test.txt

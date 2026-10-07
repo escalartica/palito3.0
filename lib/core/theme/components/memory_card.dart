@@ -116,69 +116,96 @@ class MemoryCardCompact extends StatelessWidget {
                   // Solo aparece cuando los dos son distintos: en los
                   // recuerdos guardados antes de este cambio son iguales, y
                   // ahí sigue saliendo una sola línea, como siempre.
-                  if (memory.restaurantName.trim().isNotEmpty &&
-                      memory.restaurantName.trim().toLowerCase() !=
-                          memory.title.trim().toLowerCase()) ...<Widget>[
-                    const SizedBox(height: 2),
-                    Row(
-                      children: <Widget>[
-                        const Icon(
-                          Icons.storefront_rounded,
-                          size: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            memory.restaurantName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                  // ── DÓNDE Y CUÁNDO, EN LA MISMA LÍNEA ──
+                  //
+                  // La fecha estaba abajo, peleando por el sitio con la
+                  // categoría y la nota. Tres datos en una fila de 180
+                  // puntos no caben, y repartir mejor solo cambia a quién
+                  // se recorta: con nota puesta, «Croquetas» salía «Cr…».
+                  //
+                  // Pero es que la fecha no pertenece a esa fila. Va con el
+                  // sitio: dónde fue y cuándo fue son la misma pregunta, y
+                  // esta línea tiene hueco de sobra porque el nombre de un
+                  // bar rara vez lo llena.
+                  //
+                  // `Wrap` y no `Row`: si con el texto del sistema ampliado
+                  // dejan de caber, la fecha baja sola a la línea de abajo
+                  // en vez de desbordar. Es lo mismo que hace un párrafo, y
+                  // no hace falta medir nada para conseguirlo.
+                  const SizedBox(height: 2),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 10,
+                    runSpacing: 2,
+                    children: <Widget>[
+                      if (memory.restaurantName.trim().isNotEmpty &&
+                          memory.restaurantName.trim().toLowerCase() !=
+                              memory.title.trim().toLowerCase())
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.storefront_rounded,
+                              size: 12,
                               color: AppColors.textSecondary,
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            // ── `Flexible`, NO UN TOPE EN PUNTOS ──
+                            //
+                            // Aquí había un `ConstrainedBox(maxWidth: 150)`.
+                            // Un número fijo solo funciona mientras el hueco
+                            // sea mayor que él, y en un iPhone SE con el
+                            // texto al 310 % esta columna mide 116: el
+                            // nombre del bar pedía sus 150, nadie se los
+                            // negaba y la fila se salía 50 pixels. Lo cazan
+                            // las pruebas de texto ampliado.
+                            //
+                            // `Flexible` no necesita saber cuánto hay: coge
+                            // lo que quede después del icono, sea 116 o sea
+                            // 400, y el `ellipsis` se encarga del resto. Un
+                            // tope en puntos es una medida adivinada; esto
+                            // es la medida de verdad.
+                            Flexible(
+                              child: Text(
+                                memory.restaurantName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
+                      Text(
+                        relativeDate(memory.date),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
 
-                  const SizedBox(height: 4),
-                  // Sin `Flexible` ni `ellipsis`, una categoría larga
-                  // ("Decoración / Espacio") desbordaba la fila con la
-                  // franja amarilla y negra en la lista principal de
-                  // Inicio — la pantalla más vista de la app.
-                  //
-                  // El `LayoutBuilder` está aquí para poder ponerle TECHO a
-                  // la fecha en proporción al ancho real de la fila. Ver el
-                  // comentario largo de más abajo: es lo que permite que la
-                  // categoría se quede con lo que sobra sin que nada
-                  // desborde cuando el texto del sistema está al 310 %.
-                  // CUANDO NO CABE EN UNA LÍNEA, SE PARTE EN DOS.
-                  //
-                  // Esta fila lleva tres cosas: la categoría, la nota y
-                  // cuándo fue. En un iPhone SE con el texto del sistema al
-                  // 310 % no caben las tres en una línea — no es cuestión de
-                  // repartir mejor el hueco, es que no hay hueco. La versión
-                  // anterior "pasaba" la prueba porque todo era flexible y
-                  // todo se recortaba: la categoría quedaba en «Pla…», la
-                  // nota en un número a medias. Pasar no es lo mismo que
-                  // funcionar.
-                  //
-                  // Así que por encima de 1,6 —el punto donde las tres dejan
-                  // de caber— la fecha se va a su propia línea y las otras
-                  // dos respiran. Es lo que haría cualquiera al maquetarlo a
-                  // mano, y es exactamente lo que pide el tamaño de letra
-                  // que ha elegido esa persona: menos apretado, no más
-                  // recortado.
-                  Builder(
-                    builder: (BuildContext context) {
-                      final double escala = MediaQuery.textScalerOf(
-                        context,
-                      ).scale(1);
+                  const SizedBox(height: 6),
 
-                      final Widget categoria = Flexible(
+                  // ── QUÉ ERA Y QUÉ TAL ──
+                  //
+                  // Sin la fecha, esta fila vuelve a tener sitio para lo
+                  // suyo: la categoría entera y la nota. También en `Wrap`,
+                  // por lo mismo que arriba.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: <Widget>[
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 190),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -200,77 +227,29 @@ class MemoryCardCompact extends StatelessWidget {
                             ),
                           ),
                         ),
-                      );
-
-                      final List<Widget> nota = <Widget>[
-                        if (RatingScale.isRated(memory.rating)) ...<Widget>[
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.star_rounded,
-                            size: 14,
-                            color: Color(0xFFB58100),
-                          ),
-                          const SizedBox(width: 2),
-                          Flexible(
-                            child: Text(
+                      ),
+                      if (RatingScale.isRated(memory.rating))
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: Color(0xFFB58100),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
                               RatingScale.shortLabel(memory.rating)!,
                               maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
                                 color: palitoDark,
                               ),
                             ),
-                          ),
-                        ],
-                      ];
-
-                      final Widget cuando = Text(
-                        relativeDate(memory.date),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                        ),
-                      );
-
-                      if (escala > 1.6) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Row(children: <Widget>[categoria, ...nota]),
-                            const SizedBox(height: 4),
-                            cuando,
                           ],
-                        );
-                      }
-
-                      // En una línea, la fecha sale del reparto flexible
-                      // —así la categoría se lleva lo que sobra en vez de
-                      // la mitad justa, que es lo que dejaba «Plato Estr…»
-                      // con sitio libre al lado— pero con techo, para que
-                      // nunca empuje a las otras fuera de la fila.
-                      return LayoutBuilder(
-                        builder:
-                            (BuildContext context, BoxConstraints fila) => Row(
-                              children: <Widget>[
-                                categoria,
-                                ...nota,
-                                const SizedBox(width: 8),
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: fila.maxWidth * 0.45,
-                                  ),
-                                  child: cuando,
-                                ),
-                              ],
-                            ),
-                      );
-                    },
+                        ),
+                    ],
                   ),
                 ],
               ),
