@@ -1,5 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
+// Solo `defaultTargetPlatform`: `material.dart` no lo trae, y traer
+// `foundation.dart` entero aquí arrastra nombres que chocan con los de
+// Material.
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+
+import '../../core/utils/app_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -217,6 +225,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
 
+  // ══ CON QUÉ PUEDE ENTRAR ESTA CUENTA HOY ══
+  //
+  // No es un `Provider` de Riverpod porque no hay nada que escuchar: Firebase
+  // no emite ningún evento cuando se enlaza un proveedor nuevo. Se lee al
+  // entrar en la pantalla y se vuelve a leer después de enlazar, que son los
+  // dos únicos momentos en que puede cambiar.
+  Set<String> _proveedores = const <String>{};
+  bool _isLinking = false;
+
   // ─── Entrada escalonada ───────────────────────────────────────────────────
   // La pantalla no aparece de golpe: cada bloque tiene su propio intervalo
   // dentro de un único AnimationController, igual que en HomePage — así el
@@ -248,6 +265,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
       vsync: this,
       duration: AppAnimation.entry,
     )..forward();
+
+    // ══ POR QUÉ ESTO VA ENVUELTO EN UN try ══
+    //
+    // `proveedoresVinculados` lee `FirebaseAuth.instance`, y eso revienta con
+    // `[core/no-app]` si Firebase no está inicializado. En la app nunca pasa
+    // —`main()` lo inicializa antes de pintar nada—, pero las pruebas de
+    // widgets montan esta pantalla sin Firebase, y el 20/09 eso tumbó la
+    // prueba de accesibilidad del texto al 310 %: el Perfil no llegaba ni a
+    // dibujarse, así que la prueba no medía lo que creía medir.
+    //
+    // Un fallo aquí no puede tumbar la pantalla entera: lo único que se pierde
+    // es saber qué formas de entrar tiene ya la cuenta, y el conjunto vacío es
+    // la respuesta honesta —«no lo sé»— que hace que se ofrezcan las dos.
+    try {
+      _proveedores = ref.read(authServiceProvider).proveedoresVinculados;
+    } catch (e, st) {
+      AppLog.e('No se pudieron leer los proveedores de la cuenta', e, st);
+    }
   }
 
   // ── "Reducir movimiento" ──
@@ -442,6 +477,84 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
   }
 
   // ─── Cuenta: cerrar sesión / eliminar cuenta ────────────────────────────
+  // ══ POR QUÉ SE PUEDE AÑADIR OTRA FORMA DE ENTRAR ══
+  //
+  // La misma persona con iPhone y Android entraría con Apple en uno y con
+  // Google en el otro. Para Firebase son DOS cuentas distintas, cada una con
+  // su `uid`, y en esta app los diarios cuelgan del `uid`: en el segundo móvil
+  // no estarían sus recuerdos, ni sus grupos, ni sus puntos. Lo viviría como
+  // que la app ha perdido sus cosas.
+  //
+  // Enlazar el proveedor que falta, desde aquí y con la sesión ya iniciada,
+  // lo arregla para siempre: las dos formas de entrar llevan al mismo `uid`.
+  //
+  // No se resuelve solo con el correo, que sería lo obvio: Sign in with Apple
+  // ofrece «Ocultar mi correo» y entonces la dirección es una de
+  // `privaterelay.appleid.com` que nunca va a coincidir con la de Google.
+  // Justo quien más cuida su privacidad es quien se quedaría con dos cuentas.
+  Future<void> _handleLink(String providerId) async {
+    setState(() => _isLinking = true);
+
+    try {
+      final AuthService auth = ref.read(authServiceProvider);
+
+      final bool hecho = providerId == 'google.com'
+          ? await auth.vincularGoogle()
+          : await auth.vincularApple();
+
+      if (!mounted) return;
+
+      // `false` = cerró la ventana sin elegir. No es un error: no se dice
+      // nada y la pantalla se queda igual.
+      if (!hecho) return;
+
+      setState(() => _proveedores = auth.proveedoresVinculados);
+
+      AppFeedback.success(
+        context,
+        providerId == 'google.com'
+            ? 'Listo. Ya puedes entrar con Google en cualquier móvil.'
+            : 'Listo. Ya puedes entrar con Apple en cualquier iPhone.',
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == 'credential-already-in-use' ||
+          e.code == 'email-already-in-use') {
+        // Caso real y con datos de por medio: esa cuenta de Google (o ese
+        // Apple ID) YA es de otro usuario de Palito, con sus propios
+        // recuerdos. Enlazarla aquí significaría abandonar aquella cuenta,
+        // así que la app no lo hace sola ni lo esconde detrás de un "error".
+        AppFeedback.error(
+          context,
+          'Esa cuenta ya se usa en Palito con su propio diario. Si quieres '
+          'juntarlo todo, escríbenos desde la página de soporte.',
+        );
+        return;
+      }
+
+      if (e.code == 'provider-already-linked') {
+        setState(
+          () => _proveedores = ref
+              .read(authServiceProvider)
+              .proveedoresVinculados,
+        );
+        return;
+      }
+
+      AppFeedback.error(context, 'No se pudo añadir. Inténtalo de nuevo.');
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return;
+      if (!mounted) return;
+      AppFeedback.error(context, 'No se pudo añadir Google. ¿Hay conexión?');
+    } catch (_) {
+      if (!mounted) return;
+      AppFeedback.error(context, 'No se pudo añadir. Inténtalo de nuevo.');
+    } finally {
+      if (mounted) setState(() => _isLinking = false);
+    }
+  }
+
   Future<void> _handleSignOut() async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -1189,6 +1302,52 @@ class _ProfilePageState extends ConsumerState<ProfilePage>
                         children: [
                           const _SectionTitle('Cuenta'),
                           const SizedBox(height: 12),
+                          // Solo se ofrece lo que falta. Con las dos formas
+                          // ya puestas, esta parte desaparece entera en vez
+                          // de dejar dos botones que no hacen nada.
+                          if (!_proveedores.contains('google.com')) ...[
+                            _AccountActionTile(
+                              icon: Icons.add_rounded,
+                              leading: Image.asset(
+                                'assets/images/google_g.png',
+                                width: 22,
+                                height: 22,
+                                cacheWidth: 66,
+                                excludeFromSemantics: true,
+                              ),
+                              label: 'Añadir Google para entrar',
+                              color: _kDark,
+                              bgColor: Colors.white,
+                              isLoading: _isLinking,
+                              onTap: _isLinking || _isSigningOut ||
+                                      _isDeletingAccount
+                                  ? null
+                                  : () => _handleLink('google.com'),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          // Apple solo en iPhone: en Android
+                          // `sign_in_with_apple` necesita un Service ID y una
+                          // dirección de retorno verificada que esta app no
+                          // tiene, así que el botón solo sabe dar error. Ver
+                          // la cabecera de `sign_in_page.dart`.
+                          if (!_proveedores.contains('apple.com') &&
+                              (defaultTargetPlatform == TargetPlatform.iOS ||
+                                  defaultTargetPlatform ==
+                                      TargetPlatform.macOS)) ...[
+                            _AccountActionTile(
+                              icon: Icons.apple_rounded,
+                              label: 'Añadir Apple para entrar',
+                              color: _kDark,
+                              bgColor: Colors.white,
+                              isLoading: _isLinking,
+                              onTap: _isLinking || _isSigningOut ||
+                                      _isDeletingAccount
+                                  ? null
+                                  : () => _handleLink('apple.com'),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           _AccountActionTile(
                             icon: Icons.logout_rounded,
                             label: 'Cerrar sesión',
@@ -1861,9 +2020,16 @@ class _AccountActionTile extends StatelessWidget {
     required this.bgColor,
     required this.isLoading,
     required this.onTap,
+    this.leading,
   });
 
   final IconData icon;
+
+  /// Sustituye a [icon] cuando el símbolo no es un icono sino una imagen —la
+  /// «G» de cuatro colores de Google, que sus normas de marca no dejan
+  /// redibujar ni teñir—. Debe medir 22×22 para cuadrar con los demás.
+  final Widget? leading;
+
   final String label;
   final Color color;
   final Color bgColor;
@@ -1908,7 +2074,7 @@ class _AccountActionTile extends StatelessWidget {
                           color: color,
                         ),
                       )
-                    : Icon(icon, size: 22, color: color),
+                    : (leading ?? Icon(icon, size: 22, color: color)),
               ),
               const SizedBox(width: 12),
               // Estas etiquetas ahora llevan el nombre del grupo dentro

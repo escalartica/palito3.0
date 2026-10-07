@@ -12,7 +12,20 @@
           "package_name": "com.example.palito_3_0"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "911590606586-27l79elcc1qfan5sv846hbttkgrlkc92.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.palito_3_0",
+            "certificate_hash": "692400219ecd3cd46757388ad54cd9249cbe3990"
+          }
+        },
+        {
+          "client_id": "911590606586-rve1ffovi3s3i1vpo75i99fbhbmgshsb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAISRuQ8zQXePfKAqqwkxtm531y-DrTyVI"
@@ -20,7 +33,63 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "911590606586-rve1ffovi3s3i1vpo75i99fbhbmgshsb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "911590606586-c59bipoegmul9poj2daf17sab7kdfk0g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.palito30"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911590606586:android:a40a94abefcff539356b43",
+        "android_client_info": {
+          "package_name": "com.palito.sabores"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "911590606586-v1vb9u7orjr8jtir013q3lfffvt2rkbd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.palito.sabores",
+            "certificate_hash": "692400219ecd3cd46757388ad54cd9249cbe3990"
+          }
+        },
+        {
+          "client_id": "911590606586-rve1ffovi3s3i1vpo75i99fbhbmgshsb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAISRuQ8zQXePfKAqqwkxtm531y-DrTyVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "911590606586-rve1ffovi3s3i1vpo75i99fbhbmgshsb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "911590606586-c59bipoegmul9poj2daf17sab7kdfk0g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.palito30"
+              }
+            }
+          ]
         }
       }
     }

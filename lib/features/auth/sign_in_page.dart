@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../core/providers/auth_provider.dart';
@@ -9,10 +11,50 @@ import '../../core/theme/tokens/app_colors.dart';
 import '../../core/theme/tokens/app_shape.dart';
 import '../../core/theme/components/app_feedback.dart';
 import '../../core/theme/components/app_motion.dart';
+import 'widgets/google_sign_in_button.dart';
 
-/// Pantalla de inicio de sesión — único método: Sign in with Apple. Se
-/// muestra cuando `GoRouter`'s `redirect` detecta que no hay sesión
-/// iniciada (ver `main.dart`).
+/// Pantalla de inicio de sesión. Se muestra cuando el `redirect` de
+/// `GoRouter` detecta que no hay sesión iniciada (ver `main.dart`).
+///
+/// ══ QUÉ BOTONES SALEN EN CADA SISTEMA, Y POR QUÉ ══
+///
+/// **iPhone**: Apple primero, Google debajo.
+/// **Android**: solo Google.
+///
+/// La app nació solo con Sign in with Apple. En Android eso funciona, pero
+/// como una ventana del navegador y pidiendo una cuenta de Apple que casi
+/// nadie tiene ahí: publicar en Android sin Google era publicar una app en
+/// la que la mayoría no puede ni entrar. De ahí el botón de Google.
+///
+/// ══ POR QUÉ APPLE NO SALE EN ANDROID (20/09) ══
+///
+/// Hubo un rato en que sí salía, con este razonamiento: quien se creó la
+/// cuenta con Apple en su iPhone y luego se instala la app en un Android
+/// tiene que poder volver a SU cuenta, porque sus recuerdos cuelgan de su
+/// `uid`. El razonamiento sigue siendo bueno; el botón, no.
+///
+/// `sign_in_with_apple` en Android NO usa el sistema operativo —no hay tal
+/// cosa ahí—: abre una página web de Apple, y para eso hay que pasarle
+/// `webAuthenticationOptions` con un Service ID dado de alta en la cuenta de
+/// desarrollador de Apple y una dirección de retorno en un dominio
+/// verificado. Este código nunca lo pasó, porque se escribió para una app
+/// que solo existía en iPhone. Resultado: el botón lanzaba una excepción
+/// nada más tocarlo. Se comprobó en un OnePlus el 20/09; lo único que hacía
+/// era enseñar «No se pudo añadir, inténtelo de nuevo».
+///
+/// Un botón que solo sabe fallar es peor que no tener botón: la persona cree
+/// que la app está rota.
+///
+/// ══ CÓMO LLEGA A SU CUENTA ENTONCES QUIEN VIENE DE IPHONE ══
+///
+/// Añadiendo Google **desde el iPhone** —Perfil → «Añadir Google para
+/// entrar»—, donde la identificación de Apple sí es nativa y funciona. Luego
+/// entra con Google en el Android y cae en el mismo `uid`, con sus diarios,
+/// sus grupos y sus puntos. La línea de texto bajo el botón lo explica, para
+/// que nadie se quede mirando la pantalla sin entender por qué no está Apple.
+///
+/// Si algún día se monta el Service ID y el punto de retorno, el botón vuelve
+/// y esta explicación se borra.
 class SignInPage extends ConsumerStatefulWidget {
   const SignInPage({super.key});
 
@@ -35,7 +77,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     AppFeedback.success(context, 'Enlace copiado. Pégalo en tu navegador.');
   }
 
-  Future<void> _handleSignIn() async {
+  Future<void> _handleAppleSignIn() async {
     setState(() {
       _isSigningIn = true;
       _errorMessage = null;
@@ -83,6 +125,119 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isSigningIn = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // `signInWithGoogle` devuelve `null` cuando la persona cierra la
+      // ventana de Google sin elegir cuenta. No es un error: no se pinta
+      // nada, la pantalla se queda como estaba.
+      await ref.read(authServiceProvider).signInWithGoogle();
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _errorMessage =
+            'No se pudo iniciar sesión con Google. Comprueba que hay '
+            'conexión e inténtalo de nuevo.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage =
+            'No se pudo iniciar sesión. Comprueba tu conexión e '
+            'inténtalo de nuevo.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningIn = false);
+      }
+    }
+  }
+
+  /// Los dos botones, en el orden que toque, o la rueda mientras se entra.
+  ///
+  /// Se sustituyen los DOS por una sola rueda a propósito: con un botón
+  /// girando y el otro vivo, tocar el segundo mientras el primero está a
+  /// medias lanza dos inicios de sesión a la vez, y el segundo pisa al
+  /// primero con otra cuenta.
+  Widget _buildSignInButtons() {
+    if (_isSigningIn) {
+      return const SizedBox(
+        height: 52,
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.textPrimary),
+        ),
+      );
+    }
+
+    // Sin decoración propia (borde/sombra) alrededor del botón oficial de
+    // Apple: además de no ser coherente con las guías de Apple para este
+    // botón, competía visualmente con su propio estado de "pulsado".
+    //
+    // Se construye aunque en Android no se pinte: es un widget, no cuesta
+    // nada, y así el `return` de abajo se lee de un vistazo.
+    final Widget apple = SizedBox(
+      height: 52,
+      child: SignInWithAppleButton(
+        onPressed: _handleAppleSignIn,
+        style: SignInWithAppleButtonStyle.black,
+        // El botón oficial de Apple, no un componente de marca: se deja
+        // fuera de AppRadius a propósito.
+        borderRadius: BorderRadius.circular(14),
+      ),
+    );
+
+    final Widget google = GoogleSignInButton(onPressed: _handleGoogleSignIn);
+
+    // `defaultTargetPlatform` y no `Platform.isIOS`: `dart:io` no existe en
+    // web, y además esto sí se puede falsear en las pruebas de widgets.
+    final bool esSistemaDeApple =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    // En Android, solo Google. El porqué está en la cabecera de la clase.
+    if (!esSistemaDeApple) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          google,
+          const SizedBox(height: 16),
+          // No es decoración: sin esta frase, quien se hizo la cuenta en un
+          // iPhone abre la app en su Android, no ve Apple por ningún lado y
+          // no tiene forma de adivinar qué hacer. Le diría a cualquiera que
+          // la app ha perdido sus cosas.
+          Text(
+            '¿Te hiciste la cuenta en un iPhone con Apple? Entra en el '
+            'iPhone, ve a Perfil → «Añadir Google para entrar», y después '
+            'podrás entrar aquí con Google en tu misma cuenta.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              height: 1.45,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        apple,
+        const SizedBox(height: 12),
+        google,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,41 +257,41 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               child: SafeArea(
                 bottom: false,
                 child: Center(
-                  // El propio PNG ya es una insignia completa (esquinas
-                  // redondeadas, fondo amarillo, borde) recortada sobre
-                  // transparencia — envolverla en OTRO contenedor con su
-                  // propio fondo blanco/borde/radio la enmarcaba dos
-                  // veces, y el ligero recorte de `BoxFit.contain` (la
-                  // imagen no es perfectamente cuadrada) dejaba asomar
-                  // ese fondo blanco como un borde feo. Solo una sombra,
-                  // sin relleno ni borde propios, para que se note que
-                  // "flota" sin duplicar el marco que ya trae la imagen.
-                  // Sombra DURA, sin difuminar: es el lenguaje de toda la
-                  // app (bordes negros y sombras sólidas desplazadas). La
-                  // sombra difuminada anterior era el único elemento de
-                  // estilo "material" en una interfaz neobrutalista, y se
-                  // notaba: parecía un logo pegado encima de otra app.
-                  child: DecoratedBox(
-                    decoration: const BoxDecoration(
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: AppColors.textPrimary,
-                          offset: Offset(6, 6),
-                          blurRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      width: 124,
-                      // Sin `cacheWidth`, el PNG se descodifica a su tamaño
-                      // original en memoria para pintarlo a 124 puntos. 372 =
-                      // 124 × 3, el factor de pantalla más alto que hay en un
-                      // iPhone; por encima de eso solo se guarda memoria que
-                      // nadie va a ver.
-                      cacheWidth: 372,
-                      semanticLabel: 'Logotipo de Palito de Sabores',
-                    ),
+                  // ══ EL LOGO VA SOLO, SIN NADA DETRÁS ══
+                  //
+                  // Aquí hubo primero un contenedor con fondo blanco, borde y
+                  // radio propios. Se quitó porque el PNG YA es una insignia
+                  // completa —fondo amarillo, borde negro, esquinas
+                  // redondeadas— recortada sobre transparencia: enmarcarla
+                  // otra vez la enmarcaba dos veces.
+                  //
+                  // Quedó una sombra dura suelta, y era el mismo error un piso
+                  // más abajo. Un `BoxShadow` sin forma pinta un RECTÁNGULO
+                  // macizo del tamaño de la caja de la imagen. La insignia
+                  // tiene las esquinas redondeadas, así que ese rectángulo
+                  // asomaba por las cuatro esquinas: sobre el panel amarillo
+                  // se leía como un fondo oscuro pegado al logo. Y encima era
+                  // una sombra de más, porque el propio PNG lleva la suya
+                  // dibujada dentro.
+                  //
+                  // Se vio en el primer arranque en Android, el 20/09. En el
+                  // simulador de iPhone pasaba igual y nadie lo había mirado
+                  // de cerca — y es la primera pantalla de la app.
+                  //
+                  // Si algún día se quiere una sombra de verdad aquí, no vale
+                  // un `BoxShadow` a secas: tendría que seguir la silueta del
+                  // PNG, o el PNG tendría que venir sin su sombra y con una
+                  // forma que Flutter pueda recortar.
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 124,
+                    // Sin `cacheWidth`, el PNG se descodifica a su tamaño
+                    // original en memoria para pintarlo a 124 puntos. 372 =
+                    // 124 × 3, el factor de pantalla más alto que hay en un
+                    // móvil; por encima de eso solo se gasta memoria que nadie
+                    // va a ver.
+                    cacheWidth: 372,
+                    semanticLabel: 'Logotipo de Palito de Sabores',
                   ),
                 ),
               ),
@@ -244,26 +399,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    // Sin decoración propia (borde/sombra) alrededor del
-                    // botón oficial: además de no ser coherente con las
-                    // guías de Apple para este botón, competía visualmente
-                    // con el propio estado de "pulsado" del widget.
-                    SizedBox(
-                      height: 52,
-                      child: _isSigningIn
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.textPrimary,
-                              ),
-                            )
-                          : SignInWithAppleButton(
-                              onPressed: _handleSignIn,
-                              style: SignInWithAppleButtonStyle.black,
-                              // El botón oficial de Apple, no un componente de
-                              // marca: se deja fuera de AppRadius a propósito.
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                    ),
+                    _buildSignInButtons(),
                     const SizedBox(height: 14),
                     // La única pantalla de registro de la app no decía nada
                     // sobre la política de privacidad, y es lo primero que

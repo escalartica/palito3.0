@@ -1,4 +1,4 @@
-package com.example.palito_3_0
+package com.palito.sabores
 
 import io.flutter.embedding.android.FlutterActivity
 

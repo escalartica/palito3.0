@@ -86,5 +86,47 @@
     <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Necesitamos tu ubicación para guardar dónde probaste este plato y mostrarlo en tu mapa de recuerdos.</string>
+
+    <!-- ══ QUIÉN ES ESTA APP PARA GOOGLE, EN iOS ══
+
+         `GoogleSignIn.initialize()` necesita el identificador de cliente de
+         ESTA app. En Android se le pasa desde Dart, pero el de iOS es otro
+         distinto y no puede salir del mismo sitio sin llenar el código de
+         comprobaciones de plataforma. Así que el de iOS vive aquí, que es
+         donde el propio plugin lo busca.
+
+         Es el CLIENT_ID de GoogleService-Info.plist, copiado tal cual. Sin
+         él, `initialize()` lanza una excepción nada más tocar el botón. -->
+    <key>GIDClientID</key>
+    <string>911590606586-j7op6japcoc4ftrptdtq7ludin6nmun5.apps.googleusercontent.com</string>
+
+    <!-- ══ VUELTA DE GOOGLE AL ACCEDER ══
+
+         El acceso con Google sale de la app a Safari y tiene que poder
+         volver. Esta es la dirección por la que vuelve, y es el
+         REVERSED_CLIENT_ID de GoogleService-Info.plist tal cual, con los
+         trozos al revés.
+
+         Si falta, el acceso con Google no falla con un error claro: se abre
+         Safari, la persona elige su cuenta, y se queda ahí colgada sin
+         volver nunca a la app. Es de los síntomas más desconcertantes que
+         hay, porque parece un problema de red.
+
+         Va escrito a mano en vez de generado porque este fichero no se
+         regenera: si algún día se vuelve a descargar el
+         GoogleService-Info.plist y el CLIENT_ID cambia, hay que cambiar
+         también esta línea. Los dos tenían que decir lo mismo y nadie avisa
+         cuando dejan de hacerlo. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.googleusercontent.apps.911590606586-j7op6japcoc4ftrptdtq7ludin6nmun5</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
