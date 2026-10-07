@@ -8,9 +8,53 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- ══ POR QUÉ NO SE DECLARA CAMERA, AUNQUE LA APP HAGA FOTOS ══
+
+         Parece que falta y no falta. `image_picker` NO accede a la cámara:
+         lanza un intent `ACTION_IMAGE_CAPTURE` y es la app de cámara del
+         móvil la que hace la foto y la devuelve. Eso no necesita permiso.
+
+         Y declararlo es ACTIVAMENTE DAÑINO. La documentación de Android lo
+         dice así:
+
+             «if your app targets M and above and declares as using the
+              CAMERA permission which is not granted, then attempting to use
+              this action will result in a SecurityException»
+
+         Es decir: basta con escribir el permiso para que Android empiece a
+         exigir que se pida en tiempo de ejecución. Y esta app no lo pide en
+         ninguna parte —no usa `permission_handler` ni nada parecido—, así que
+         con el permiso declarado, tocar «hacer una foto» en el formulario de
+         recuerdo reventaba en Android. En iPhone no se nota, porque allí el
+         sistema pide el permiso solo cuando hace falta.
+
+         Estuvo declarado desde el 18/09 y se quitó el 07/10, antes de la
+         primera subida a Play. Si alguien lo vuelve a añadir «por si acaso»,
+         rompe la cámara. Solo haría falta si algún día la app pinta el visor
+         de la cámara dentro de sí misma (paquete `camera`), y entonces habría
+         que pedirlo en tiempo de ejecución además de declararlo. -->
     <!-- La app nunca usa la ubicación en segundo plano. -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        tools:node="remove"/>
+
+    <!-- ══ FUERA EL IDENTIFICADOR DE PUBLICIDAD ══
+
+         `firebase_analytics` declara por su cuenta el permiso AD_ID, que da
+         acceso al identificador de publicidad del móvil. No lo pide esta app:
+         viene dentro de la biblioteca, y sin esta línea acaba en el paquete
+         sin que nadie lo haya decidido.
+
+         Importa porque el formulario de Seguridad de los datos de Google Play
+         pregunta expresamente si la app recoge ese identificador. Si se
+         contesta que no —que es la verdad— y el paquete lo declara, Play lo
+         detecta y rechaza la publicación. Es de los motivos de rechazo más
+         frecuentes y de los más desconcertantes, porque el permiso no está
+         escrito en ninguna parte del proyecto.
+
+         Palito no tiene anuncios ni mide campañas: `firebase_analytics` solo
+         registra qué pantallas se visitan (ver el FirebaseAnalyticsObserver de
+         main.dart). Quitarlo no le resta nada. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"
         tools:node="remove"/>
 
     <application
@@ -19,7 +63,8 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
         android:fullBackupContent="false"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

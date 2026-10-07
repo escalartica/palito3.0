@@ -122,10 +122,45 @@ class AuthService {
   /// tres cosas distintas: entrar, añadir Google a una cuenta que ya existe, y
   /// demostrar que la cuenta es tuya antes de borrarla
   /// (`AccountDeletionService`).
-  Future<AuthCredential?> credencialDeGoogle() async {
+  ///
+  /// [sinPreguntar] pide a Google que resuelva en SILENCIO, sin abrir el
+  /// selector de cuentas, y solo lo abre si eso no funciona. Lo usa el borrado
+  /// de cuenta — ver el porqué justo debajo.
+  Future<AuthCredential?> credencialDeGoogle({bool sinPreguntar = false}) async {
     await _prepararGoogle();
 
-    final GoogleSignInAccount cuenta;
+    GoogleSignInAccount? cuenta;
+
+    // ══ POR QUÉ EXISTE ESTA PRIMERA VÍA, SIN SELECTOR ══
+    //
+    // Para ENTRAR hay que preguntar: puede haber ocho cuentas en el móvil y
+    // solo la persona sabe cuál quiere. Pero para REAUTENTICARSE antes de
+    // borrar la cuenta no hay nada que elegir: ya sabemos quién es, lleva la
+    // sesión iniciada, y lo único que falta es una credencial fresca que
+    // demostrárselo a Firebase.
+    //
+    // Abrir el selector ahí no solo sobra: falla. El 20/09, en un OnePlus con
+    // ocho cuentas de Google, elegir la cuenta en esa lista devolvía
+    // `[16] Cancelled by user` una y otra vez, y el borrado se quedaba sin
+    // hacer. `attemptLightweightAuthentication()` resuelve sin pantalla y sin
+    // nada que tocar.
+    //
+    // `await` sobre un valor que no es un Future devuelve el propio valor en
+    // Dart, así que esto funciona tanto si el método devuelve un Future como
+    // si devuelve null directamente.
+    if (sinPreguntar) {
+      try {
+        cuenta = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      } catch (e) {
+        // Que la vía silenciosa no salga no es un error: se cae al selector.
+        AppLog.w('Reautenticación silenciosa de Google no disponible: $e');
+        cuenta = null;
+      }
+      if (cuenta != null) {
+        return _credencialDesde(cuenta);
+      }
+    }
+
     try {
       cuenta = await GoogleSignIn.instance.authenticate();
     } on GoogleSignInException catch (e) {
@@ -153,6 +188,12 @@ class AuthService {
       rethrow;
     }
 
+    return _credencialDesde(cuenta);
+  }
+
+  /// Convierte la cuenta que devuelve Google en algo que Firebase acepte.
+  /// Lo usan los dos caminos de [credencialDeGoogle].
+  AuthCredential _credencialDesde(GoogleSignInAccount cuenta) {
     final String? idToken = cuenta.authentication.idToken;
     if (idToken == null) {
       // Sin `idToken` no hay nada que darle a Firebase. Pasa cuando falta la

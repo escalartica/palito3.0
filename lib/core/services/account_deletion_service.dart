@@ -202,7 +202,11 @@ class AccountDeletionService {
   }
 
   Future<void> _reautenticarConGoogle(User user) async {
-    final AuthCredential? credencial = await _authService.credencialDeGoogle();
+    // `sinPreguntar`: aquí no hay cuenta que elegir —ya sabemos quién es—,
+    // y abrir el selector es lo que hacía fallar el borrado. Si la vía
+    // silenciosa no sale, cae sola en el selector de siempre.
+    final AuthCredential? credencial =
+        await _authService.credencialDeGoogle(sinPreguntar: true);
 
     // `null` significa que cerró la ventana de Google sin elegir cuenta.
     // Exactamente igual que cancelar la hoja de Apple: no se ha tocado nada.
